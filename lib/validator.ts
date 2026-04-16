@@ -1,0 +1,568 @@
+/**
+ * STIX XML validator — Phase 1 of PLAN.md
+ *
+ * Runs structural + rules validation and produces ValidationIssue records.
+ * Also provides helpers for applying fixes back to XML and exporting reports.
+ */
+
+import { XMLParser, XMLBuilder } from "fast-xml-parser";
+import type {
+  ValidationIssue,
+  ValidationResult,
+  StudentRecord,
+  GateState,
+  AppliedFix,
+} from "./types";
+import defaultRules from "../config/rules.stix.default.json";
+
+export type RulesProfile = typeof defaultRules;
+
+// ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
+
+type XmlNode = Record<string, unknown>;
+
+function ensureArray<T>(x: T | T[] | null | undefined): T[] {
+  if (x === null || x === undefined) return [];
+  return Array.isArray(x) ? x : [x];
+}
+
+function str(x: unknown): string {
+  if (x === null || x === undefined) return "";
+  if (typeof x === "object") {
+    const obj = x as XmlNode;
+    if (obj["#text"] !== undefined) return String(obj["#text"]);
+    return "";
+  }
+  return String(x);
+}
+
+function getTextValue(node: unknown): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (node && typeof node === "object") {
+    const obj = node as XmlNode;
+    if (typeof obj["#text"] === "string") return obj["#text"];
+    if (typeof obj["#text"] === "number") return String(obj["#text"]);
+  }
+  return "";
+}
+
+function setTextValue(parent: XmlNode, key: string, value: string) {
+  const existing = parent[key];
+  if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) {
+    (existing as XmlNode)["#text"] = value;
+  } else {
+    parent[key] = value;
+  }
+}
+
+// ─── Core validator ───────────────────────────────────────────────────────────
+
+export function validateXml(
+  xmlText: string,
+  rules: RulesProfile = defaultRules
+): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const records: StudentRecord[] = [];
+
+  // 1. XML well-formedness
+  let doc: XmlNode;
+  try {
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "@_",
+      parseAttributeValue: false,
+      parseTagValue: false,
+      textNodeName: "#text",
+      isArray: (name) => name === "ns1:School" || name === "ns1:Student",
+    });
+    doc = parser.parse(xmlText) as XmlNode;
+  } catch (e) {
+    issues.push({
+      id: "parse-error",
+      severity: "error",
+      message: `XML parse error: ${e instanceof Error ? e.message : String(e)}`,
+      autoFixable: false,
+      ruleId: "XML_WELLFORMED",
+    });
+    return { issues, records, schoolCount: 0, studentCount: 0, gate: "BLOCKED" };
+  }
+
+  // 2. Root structure
+  const root = doc["ns1:SchoolUpload"] as XmlNode | null;
+  if (!root) {
+    issues.push({
+      id: "root-missing",
+      severity: "error",
+      message:
+        'Root element <ns1:SchoolUpload> not found. This may not be a valid STIX file.',
+      autoFixable: false,
+      ruleId: "STRUCT_ROOT",
+    });
+    return { issues, records, schoolCount: 0, studentCount: 0, gate: "BLOCKED" };
+  }
+
+  const schools = ensureArray(root["ns1:School"] as XmlNode | XmlNode[]);
+  if (schools.length === 0) {
+    issues.push({
+      id: "no-schools",
+      severity: "error",
+      message: "No <ns1:School> elements found.",
+      autoFixable: false,
+      ruleId: "STRUCT_SCHOOLS",
+    });
+    return { issues, records, schoolCount: 0, studentCount: 0, gate: "BLOCKED" };
+  }
+
+  // Alias lookups
+  const gradeAliases = rules.gradeAliases as Record<string, string>;
+  const genderAliases = rules.genderAliases as Record<string, string>;
+
+  let totalStudents = 0;
+  const seenOens = new Map<string, string>();
+  const seenNameDob = new Map<string, string>();
+
+  for (let si = 0; si < schools.length; si++) {
+    const school = schools[si];
+    const schoolName = str(school["ns1:Name"]);
+    const schoolNumber = str(school["ns1:SchoolNumber"]);
+    const schoolLabel = schoolNumber || schoolName || `School #${si + 1}`;
+
+    if (!schoolNumber) {
+      issues.push({
+        id: `school-${si}-no-number`,
+        severity: "error",
+        message: `School "${schoolName || "(unnamed)"}" is missing SchoolNumber.`,
+        schoolNumber: "",
+        autoFixable: false,
+        ruleId: "SCHOOL_NUMBER_REQUIRED",
+      });
+    }
+
+    const studentsNode = (school["ns1:Students"] ?? {}) as XmlNode;
+    const studentNodes = ensureArray(
+      studentsNode["ns1:Student"] as XmlNode | XmlNode[]
+    );
+
+    for (let pi = 0; pi < studentNodes.length; pi++) {
+      const s = studentNodes[pi];
+      const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
+      const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
+
+      const firstName = str(nameNode["ns1:First"]);
+      const middleName = str(nameNode["ns1:Middle"]);
+      const lastName = str(nameNode["ns1:Last"]);
+      const birthDate = str(s["ns1:BirthDate"]);
+      const grade = str(s["ns1:Grade"]);
+      const gender = str(s["ns1:Gender"]);
+      const oen = str(s["ns1:OEN"]);
+      const language = str(s["ns1:Language"]);
+      const city = str(addrNode["ns1:City"]);
+      const province = str(addrNode["ns1:Province"]);
+      const postalCode = str(addrNode["ns1:PostalCode"]);
+      const streetNumber = str(addrNode["ns1:StreetNumber"]);
+      const streetName = str(addrNode["ns1:StreetName"]);
+      const unit = str(addrNode["ns1:Unit"]);
+
+      const studentName =
+        [firstName, lastName].filter(Boolean).join(" ") || `Student #${pi + 1}`;
+      const recordId = `school${si}:student${pi}`;
+      totalStudents++;
+
+      const fields: Record<string, string> = {
+        SchoolName: schoolName,
+        SchoolNumber: schoolNumber,
+        FirstName: firstName,
+        MiddleName: middleName,
+        LastName: lastName,
+        BirthDate: birthDate,
+        Grade: grade,
+        Gender: gender,
+        OEN: oen,
+        Language: language,
+        City: city,
+        Province: province,
+        PostalCode: postalCode,
+        StreetNumber: streetNumber,
+        StreetName: streetName,
+        Unit: unit,
+      };
+
+      records.push({
+        id: recordId,
+        xmlPath: `ns1:SchoolUpload/ns1:School[${schoolLabel}]/ns1:Students/ns1:Student[${pi}]`,
+        fields,
+      });
+
+      const base = { recordId, schoolNumber, studentName };
+
+      // 3. Required fields
+      for (const field of rules.requiredFields) {
+        const val = fields[field] ?? "";
+        if (!val.trim()) {
+          issues.push({
+            ...base,
+            id: `${recordId}-req-${field}`,
+            severity: "error",
+            field,
+            message: `${field} is required but missing or empty.`,
+            autoFixable: false,
+            ruleId: "REQUIRED_FIELD",
+          });
+        }
+      }
+
+      // 4. Grade allowed values
+      if (grade) {
+        const normalizedGrade = grade.trim().toUpperCase();
+        if (!rules.allowedGradeValues.includes(normalizedGrade)) {
+          const alias = gradeAliases[normalizedGrade] ?? gradeAliases[grade.trim()];
+          issues.push({
+            ...base,
+            id: `${recordId}-grade-invalid`,
+            severity: "error",
+            field: "Grade",
+            message: `Grade "${grade}" is not a recognized value.`,
+            suggestedFix: alias ? alias : undefined,
+            autoFixable: !!alias,
+            ruleId: "GRADE_ALLOWED_VALUE",
+          });
+        }
+      }
+
+      // 5. Gender allowed values
+      if (gender) {
+        const normalizedGender = gender.trim().toUpperCase();
+        if (!rules.allowedGenderValues.includes(normalizedGender)) {
+          const alias = genderAliases[gender.trim()] ?? genderAliases[normalizedGender];
+          issues.push({
+            ...base,
+            id: `${recordId}-gender-invalid`,
+            severity: "error",
+            field: "Gender",
+            message: `Gender "${gender}" is not a recognized value. Use M, F, X, or U.`,
+            suggestedFix: alias ? alias : undefined,
+            autoFixable: !!alias,
+            ruleId: "GENDER_ALLOWED_VALUE",
+          });
+        }
+      }
+
+      // 6. Province allowed values
+      if (province) {
+        const normalizedProvince = province.trim().toUpperCase();
+        if (!rules.allowedProvinceValues.includes(normalizedProvince)) {
+          issues.push({
+            ...base,
+            id: `${recordId}-province-invalid`,
+            severity: "warning",
+            field: "Province",
+            message: `Province "${province}" is not a recognized Canadian province/territory code.`,
+            autoFixable: false,
+            ruleId: "PROVINCE_ALLOWED_VALUE",
+          });
+        }
+      }
+
+      // 7. BirthDate format (YYYY-MM-DD)
+      if (birthDate) {
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        if (!datePattern.test(birthDate.trim())) {
+          const d = new Date(birthDate);
+          const canNormalize = !isNaN(d.getTime());
+          issues.push({
+            ...base,
+            id: `${recordId}-birthdate-format`,
+            severity: "error",
+            field: "BirthDate",
+            message: `BirthDate "${birthDate}" is not in YYYY-MM-DD format.`,
+            suggestedFix: canNormalize ? d.toISOString().slice(0, 10) : undefined,
+            autoFixable: canNormalize,
+            ruleId: "BIRTHDATE_FORMAT",
+          });
+        } else {
+          const year = parseInt(birthDate.slice(0, 4));
+          const currentYear = new Date().getFullYear();
+          if (year < 1990 || year > currentYear - 3) {
+            issues.push({
+              ...base,
+              id: `${recordId}-birthdate-range`,
+              severity: "warning",
+              field: "BirthDate",
+              message: `BirthDate year ${year} seems unusual for school enrollment.`,
+              autoFixable: false,
+              ruleId: "BIRTHDATE_RANGE",
+            });
+          }
+        }
+      }
+
+      // 8. Postal code format
+      if (postalCode) {
+        const postalPattern = new RegExp(rules.postalCodePattern, "i");
+        if (!postalPattern.test(postalCode.trim())) {
+          issues.push({
+            ...base,
+            id: `${recordId}-postal-format`,
+            severity: "warning",
+            field: "PostalCode",
+            message: `PostalCode "${postalCode}" does not match Canadian format (A1A 1A1).`,
+            autoFixable: false,
+            ruleId: "POSTAL_CODE_FORMAT",
+          });
+        }
+      }
+
+      // 9. OEN format (9 digits) — only if present
+      if (oen) {
+        if (!/^\d{9}$/.test(oen.trim())) {
+          issues.push({
+            ...base,
+            id: `${recordId}-oen-format`,
+            severity: "error",
+            field: "OEN",
+            message: `OEN "${oen}" must be exactly 9 digits.`,
+            autoFixable: false,
+            ruleId: "OEN_FORMAT",
+          });
+        } else if (rules.duplicateDetection.checkOen) {
+          const oenKey = oen.trim();
+          if (seenOens.has(oenKey)) {
+            issues.push({
+              ...base,
+              id: `${recordId}-oen-dup`,
+              severity: "error",
+              field: "OEN",
+              message: `OEN "${oenKey}" is duplicated (also used by ${seenOens.get(oenKey)}).`,
+              autoFixable: false,
+              ruleId: "OEN_DUPLICATE",
+            });
+          } else {
+            seenOens.set(oenKey, studentName);
+          }
+        }
+      }
+
+      // 10. Field length limits
+      for (const [field, maxLen] of Object.entries(rules.fieldLengths)) {
+        const val = fields[field] ?? "";
+        if (val.length > (maxLen as number)) {
+          issues.push({
+            ...base,
+            id: `${recordId}-len-${field}`,
+            severity: "warning",
+            field,
+            message: `${field} exceeds maximum length of ${maxLen} characters (current: ${val.length}).`,
+            suggestedFix: val.slice(0, maxLen as number),
+            autoFixable: true,
+            ruleId: "FIELD_LENGTH",
+          });
+        }
+      }
+
+      // 11. Whitespace (leading/trailing) on key text fields
+      const textFields = [
+        "FirstName", "MiddleName", "LastName", "Grade", "Gender",
+        "OEN", "City", "PostalCode", "StreetName", "StreetNumber", "Unit",
+      ];
+      for (const field of textFields) {
+        const val = fields[field];
+        if (val && val !== val.trim()) {
+          issues.push({
+            ...base,
+            id: `${recordId}-ws-${field}`,
+            severity: "warning",
+            field,
+            message: `${field} has leading or trailing whitespace.`,
+            suggestedFix: val.trim(),
+            autoFixable: true,
+            ruleId: "WHITESPACE_TRIM",
+          });
+        }
+      }
+
+      // 12. Duplicate name+DOB within same school
+      if (
+        rules.duplicateDetection.checkNameDobSchool &&
+        firstName &&
+        lastName &&
+        birthDate
+      ) {
+        const dedupKey = `${firstName.toLowerCase()}|${lastName.toLowerCase()}|${birthDate}|${schoolNumber}`;
+        if (seenNameDob.has(dedupKey)) {
+          issues.push({
+            ...base,
+            id: `${recordId}-name-dob-dup`,
+            severity: "warning",
+            message: `Possible duplicate: ${studentName} (DOB ${birthDate}) appears more than once in school ${schoolLabel}.`,
+            autoFixable: false,
+            ruleId: "NAME_DOB_DUPLICATE",
+          });
+        } else {
+          seenNameDob.set(dedupKey, recordId);
+        }
+      }
+    }
+  }
+
+  const gate: GateState = issues.some((i) => i.severity === "error")
+    ? "BLOCKED"
+    : "READY";
+
+  return {
+    issues,
+    records,
+    schoolCount: schools.length,
+    studentCount: totalStudents,
+    gate,
+  };
+}
+
+// ─── Fix application ──────────────────────────────────────────────────────────
+
+/**
+ * Field-name → XML path within a student node.
+ * Name sub-fields live under ns1:Name, address sub-fields under ns1:Address.
+ */
+const FIELD_TO_XML: Record<string, { parent: "name" | "addr" | "direct"; tag: string }> = {
+  FirstName:    { parent: "name",   tag: "ns1:First" },
+  MiddleName:   { parent: "name",   tag: "ns1:Middle" },
+  LastName:     { parent: "name",   tag: "ns1:Last" },
+  BirthDate:    { parent: "direct", tag: "ns1:BirthDate" },
+  Grade:        { parent: "direct", tag: "ns1:Grade" },
+  Gender:       { parent: "direct", tag: "ns1:Gender" },
+  OEN:          { parent: "direct", tag: "ns1:OEN" },
+  Language:     { parent: "direct", tag: "ns1:Language" },
+  Class:        { parent: "direct", tag: "ns1:Class" },
+  City:         { parent: "addr",   tag: "ns1:City" },
+  Province:     { parent: "addr",   tag: "ns1:Province" },
+  PostalCode:   { parent: "addr",   tag: "ns1:PostalCode" },
+  StreetNumber: { parent: "addr",   tag: "ns1:StreetNumber" },
+  StreetName:   { parent: "addr",   tag: "ns1:StreetName" },
+  Unit:         { parent: "addr",   tag: "ns1:Unit" },
+};
+
+function applyFieldFix(studentNode: XmlNode, field: string, value: string) {
+  const mapping = FIELD_TO_XML[field];
+  if (!mapping) return;
+
+  if (mapping.parent === "name") {
+    const nameNode = (studentNode["ns1:Name"] ?? {}) as XmlNode;
+    studentNode["ns1:Name"] = nameNode;
+    setTextValue(nameNode, mapping.tag, value);
+  } else if (mapping.parent === "addr") {
+    const addrNode = (studentNode["ns1:Address"] ?? {}) as XmlNode;
+    studentNode["ns1:Address"] = addrNode;
+    setTextValue(addrNode, mapping.tag, value);
+  } else {
+    setTextValue(studentNode, mapping.tag, value);
+  }
+}
+
+/** Parse recordId → { schoolIndex, studentIndex } */
+function decodeRecordId(recordId: string): { si: number; pi: number } | null {
+  const m = recordId.match(/^school(\d+):student(\d+)$/);
+  if (!m) return null;
+  return { si: parseInt(m[1]), pi: parseInt(m[2]) };
+}
+
+/** Apply a list of AppliedFix objects to original XML and return cleaned XML string */
+export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
+  if (fixes.length === 0) return xmlText;
+
+  // Group fixes by recordId
+  const byRecord = new Map<string, AppliedFix[]>();
+  for (const fix of fixes) {
+    if (!byRecord.has(fix.recordId)) byRecord.set(fix.recordId, []);
+    byRecord.get(fix.recordId)!.push(fix);
+  }
+
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    parseAttributeValue: false,
+    parseTagValue: false,
+    textNodeName: "#text",
+    isArray: (name) => name === "ns1:School" || name === "ns1:Student",
+  });
+  const doc = parser.parse(xmlText) as XmlNode;
+  const root = doc["ns1:SchoolUpload"] as XmlNode;
+  if (!root) return xmlText;
+
+  const schools = ensureArray(root["ns1:School"] as XmlNode | XmlNode[]);
+
+  for (const [recordId, recordFixes] of byRecord) {
+    const coords = decodeRecordId(recordId);
+    if (!coords) continue;
+    const school = schools[coords.si];
+    if (!school) continue;
+    const studentsNode = (school["ns1:Students"] ?? {}) as XmlNode;
+    const studentNodes = ensureArray(studentsNode["ns1:Student"] as XmlNode | XmlNode[]);
+    const studentNode = studentNodes[coords.pi];
+    if (!studentNode) continue;
+
+    for (const fix of recordFixes) {
+      applyFieldFix(studentNode, fix.field, fix.newValue);
+    }
+  }
+
+  const builder = new XMLBuilder({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    textNodeName: "#text",
+    format: true,
+    indentBy: "  ",
+    suppressEmptyNode: false,
+  });
+
+  return `<?xml version="1.0" encoding="utf-8"?>\n` + builder.build(doc);
+}
+
+// ─── Apply fixes to in-memory records (for UI refresh without re-parsing XML) ─
+
+export function applyFixesToRecords(
+  records: StudentRecord[],
+  fixes: AppliedFix[]
+): StudentRecord[] {
+  const byRecord = new Map<string, Map<string, string>>();
+  for (const fix of fixes) {
+    if (!byRecord.has(fix.recordId)) byRecord.set(fix.recordId, new Map());
+    byRecord.get(fix.recordId)!.set(fix.field, fix.newValue);
+  }
+  return records.map((r) => {
+    const fieldFixes = byRecord.get(r.id);
+    if (!fieldFixes) return r;
+    return { ...r, fields: { ...r.fields, ...Object.fromEntries(fieldFixes) } };
+  });
+}
+
+// ─── Issue report CSV ─────────────────────────────────────────────────────────
+
+export function generateIssueReportCsv(
+  issues: ValidationIssue[],
+  appliedFixes: AppliedFix[]
+): string {
+  const fixedIds = new Set(appliedFixes.map((f) => f.issueId));
+  const escape = (v: unknown) => {
+    const s = String(v ?? "");
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  const headers = [
+    "severity", "ruleId", "studentName", "schoolNumber",
+    "field", "message", "suggestedFix", "autoFixable", "fixed",
+  ];
+  const rows = issues.map((i) => [
+    i.severity,
+    i.ruleId,
+    i.studentName ?? "",
+    i.schoolNumber ?? "",
+    i.field ?? "",
+    i.message,
+    i.suggestedFix ?? "",
+    i.autoFixable ? "yes" : "no",
+    fixedIds.has(i.id) ? "yes" : "no",
+  ]);
+  return [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
+}

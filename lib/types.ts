@@ -1,4 +1,4 @@
-export type Workflow = "clean" | "export" | "pretty";
+export type Workflow = "validate" | "clean" | "export" | "pretty";
 
 export interface CleanStats {
   phones_cleaned: number;
@@ -85,3 +85,56 @@ export interface SessionData {
   stats?: CleanStats;
   exportResult?: ExportResult;
 }
+
+// ─── Validation types (Phase 1 PLAN) ─────────────────────────────────────────
+
+export type ValidationSeverity = "error" | "warning" | "info";
+
+export type ValidationIssue = {
+  id: string;
+  severity: ValidationSeverity;
+  recordId?: string;
+  schoolNumber?: string;
+  studentName?: string;
+  field?: string;
+  message: string;
+  suggestedFix?: string;
+  autoFixable: boolean;
+  ruleId: string;
+  xmlPath?: string;
+};
+
+export type AppliedFix = {
+  issueId: string;
+  recordId: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  ruleId: string;
+  appliedAt: number;
+};
+
+export type StudentRecord = {
+  id: string;
+  xmlPath: string;
+  fields: Record<string, string>;
+};
+
+export type GateState = "READY" | "BLOCKED" | "PENDING";
+
+export type ValidationResult = {
+  issues: ValidationIssue[];
+  records: StudentRecord[];
+  schoolCount: number;
+  studentCount: number;
+  gate: GateState;
+};
+
+export type ValidateSession = {
+  fileName: string;
+  originalXml: string;
+  initialResult: ValidationResult;
+  fixes: AppliedFix[];
+  revalidatedResult?: ValidationResult;
+  finalXml?: string;
+};

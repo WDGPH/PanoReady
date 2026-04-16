@@ -1,0 +1,68 @@
+{
+  "requiredFields": ["FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber"],
+  "allowedGradeValues": [
+    "JK", "SK",
+    "GR1", "GR2", "GR3", "GR4", "GR5", "GR6",
+    "GR7", "GR8", "GR9", "GR10", "GR11", "GR12"
+  ],
+  "allowedGenderValues": ["M", "F", "X", "U"],
+  "allowedProvinceValues": [
+    "AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU",
+    "ON", "PE", "QC", "SK", "YT"
+  ],
+  "fieldLengths": {
+    "FirstName": 50,
+    "LastName": 50,
+    "MiddleName": 50,
+    "OEN": 9,
+    "PostalCode": 7,
+    "City": 50,
+    "StreetName": 80,
+    "StreetNumber": 10,
+    "Unit": 10
+  },
+  "dateFields": ["BirthDate"],
+  "postalCodePattern": "^[A-Za-z]\\d[A-Za-z]\\s?\\d[A-Za-z]\\d$",
+  "gradeAliases": {
+    "K":    "JK",
+    "KG":   "JK",
+    "JK ":  "JK",
+    "SK ":  "SK",
+    "GR01": "GR1",
+    "GR02": "GR2",
+    "GR03": "GR3",
+    "GR04": "GR4",
+    "GR05": "GR5",
+    "GR06": "GR6",
+    "GR07": "GR7",
+    "GR08": "GR8",
+    "GR09": "GR9",
+    "1":    "GR1",
+    "2":    "GR2",
+    "3":    "GR3",
+    "4":    "GR4",
+    "5":    "GR5",
+    "6":    "GR6",
+    "7":    "GR7",
+    "8":    "GR8",
+    "9":    "GR9",
+    "10":   "GR10",
+    "11":   "GR11",
+    "12":   "GR12"
+  },
+  "genderAliases": {
+    "MALE":       "M",
+    "FEMALE":     "F",
+    "NON-BINARY": "X",
+    "NONBINARY":  "X",
+    "UNKNOWN":    "U",
+    "m":          "M",
+    "f":          "F",
+    "x":          "X",
+    "u":          "U"
+  },
+  "duplicateDetection": {
+    "checkOen": true,
+    "checkNameDobSchool": true
+  }
+}
