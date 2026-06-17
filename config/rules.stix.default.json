@@ -1,28 +1,55 @@
 {
   "requiredFields": ["FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber"],
   "allowedGradeValues": [
-    "JK", "SK",
-    "GR1", "GR2", "GR3", "GR4", "GR5", "GR6",
-    "GR7", "GR8", "GR9", "GR10", "GR11", "GR12"
+    "CCL", "CCNL", "CL-CGP", "GR1", "GR10", "GR11", "GR12", "GR13", "GR2", "GR3", "GR4", "GR5", "GR6",
+    "GR7", "GR8", "GR9", "JK", "PRE", "SK", "UNIV"
   ],
-  "allowedGenderValues": ["M", "F", "X", "U"],
+  "allowedGenderValues": ["F", "M", "N", "OTHER", "UNK", "X"],
   "allowedProvinceValues": [
     "AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU",
     "ON", "PE", "QC", "SK", "YT"
+  ],
+  "allowedLanguageValues": [
+    "aa","ab","af","am","ar","as","ay","az","ba","be","bg","bh","bi","bn","bo","br","ca","co","cs","cy","da","de","dz","el","en","eo","es","et","eu","fi","fj","fo","fr","fy","ga","gaelic","gl","gn","gu","ha","he","hi","hr","hu","hy","ia","id","ie","ik","is","it","iu","ja","jv","ka","kk","kl","km","kn","ko","ks","ku","ky","la","ln","lo","lt","lv","mg","mi","mk","ml","mn","mo","mr","ms","mt","my","na","ne","nl","no","oc","or","pa","pl","ps","pt","qu","rm","rn","ro","ru","rw","sa","sd","sg","sh","si","sk","sl","sm","sn","so","sq","sr","ss","st","su","sv","sw","ta","te","tg","th","ti","tk","tl","tn","to","tr","ts","tt","tw","ug","uk","ur","uz","vi","vo","wo","xh","yi","yo","za","zh","zu"
+  ],
+  "allowedCountryValues": [
+    "AD","AE","AF","AG","AI","AL","AM","AN","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","ST","SV","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"
+  ],
+  "allowedStreetTypeValues": [
+    "ABBEY","ACRES","ALLEY","ALLÉE","AUT","AV","AVE","BAY","BEACH","BEND","BLVD","BOUL","BYPASS","BYWAY","C","CAMPUS","CAPE","CAR","CARREF","CDS","CERCLE","CH","CHASE","CIR","CIRCT","CLOSE","COMMON","CONC","COUR","COURS","COVE","CRES","CRNRS","CROIS","CROSS","CRT","CTR","CÔTE","DALE","DELL","DIVERS","DOWNS","DR","DRWY","END","ESPL","ESTATE","EXPY","EXTEN","FARM","FIELD","FOREST","FRONT","FWY","GATE","GDNS","GLADE","GLEN","GREEN","GRNDS","GROVE","HARBR","HEATH","HGHLDS","HILL","HOLLOW","HTS","HWY","IMP","INLET","ISLAND","KEY","KNOLL","LANDNG","LANE","LINE","LINK","LKOUT","LMTS","LOOP","MALL","MANOR","MAZE","MEADOW","MEWS","MONTÉE","MOOR","MOUNT","MTN","ORCH","PARADE","PARC","PASS","PATH","PINES","PK","PKY","PL","PLACE","PLAT","PLAZA","POINTE","PORT","PROM","PT","PTWAY","PVT","QUAI","QUAY","RAMP","RANG","RD","RDPT","RG","RIDGE","RISE","RLE","ROW","RTE","RUE","RUN","SENT","SQ","SRD","ST","SUBDIV","TERR","THICK","TLINE","TOWERS","TRAIL","TRNABT","TSSE","VALE","VIA","VIEW","VILLAS","VILLGE","VISTA","VOIE","WALK","WAY","WHARF","WOOD","WYND","ÉCH","ÎLE"
+  ],
+  "allowedRelationshipValues": [
+    "AUNT","COUSIN","FATHER","FOSTERPARENT","FRIEND","GRANDPARENT","LEGALGRD","MOTHER","PARENT","SIBLING","SPOUSE","STEPPARENT","UNCLE"
+  ],
+  "allowedPhoneTypeValues": [
+    "ALTERNATE","EMERGENCY","FAX","HOME","MOBILE","PAGER","UNKNOWN","WORK"
+  ],
+  "allowedStreetDirectionValues": [
+    "E","N","NE","NW","S","SE","SW","W"
+  ],
+  "allowedFullLoadTypeValues": [
+    "NO","YES"
   ],
   "fieldLengths": {
     "FirstName": 50,
     "LastName": 50,
     "MiddleName": 50,
+    "AliasFirstName": 50,
+    "AliasMiddleName": 50,
+    "AliasLastName": 50,
     "OEN": 9,
     "PostalCode": 7,
     "City": 50,
     "StreetName": 80,
-    "StreetNumber": 10,
-    "Unit": 10
+    "StreetNumber": 6,
+    "StreetNumberSuffix": 5,
+    "Unit": 5
   },
   "dateFields": ["BirthDate"],
   "postalCodePattern": "^[A-Za-z]\\d[A-Za-z]\\s?\\d[A-Za-z]\\d$",
+  "phoneConfig": {
+    "placeholderNumbers": ["519-000-0000", "000-000-0000"]
+  },
   "gradeAliases": {
     "K":    "JK",
     "KG":   "JK",
@@ -56,6 +83,9 @@
     "NON-BINARY": "X",
     "NONBINARY":  "X",
     "UNKNOWN":    "U",
+    "UNK":        "U",
+    "OTHER":      "X",
+    "N":          "N",
     "m":          "M",
     "f":          "F",
     "x":          "X",
