@@ -6,6 +6,7 @@
  */
 
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
+import { standardizeUnit } from "./cleaner";
 import type {
   ValidationIssue,
   ValidationResult,
@@ -54,6 +55,69 @@ function setTextValue(parent: XmlNode, key: string, value: string) {
   } else {
     parent[key] = value;
   }
+}
+
+// ─── Phone number validation helper ──────────────────────────────────────────
+
+const VALID_PHONE_RE = /^\d{3}-\d{3}-\d{4}$/;
+
+function checkPhone(
+  rawPhone: string,
+  fieldLabel: string,
+  placeholderPhones: Set<string>
+): { message: string; autoFixable: boolean; suggestedFix?: string } | null {
+  const trimmed = rawPhone.trim();
+
+  // Already in correct format
+  if (VALID_PHONE_RE.test(trimmed)) {
+    const areaCode = trimmed.slice(0, 3);
+    // NANP: area codes cannot start with 0 or 1
+    if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
+      return { message: `${fieldLabel} "${rawPhone}" has an invalid area code (${areaCode}).`, autoFixable: false };
+    }
+    if (placeholderPhones.has(trimmed)) {
+      return { message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`, autoFixable: false };
+    }
+    return null; // valid
+  }
+
+  // Multiple numbers
+  if (/[;\/]/.test(trimmed)) {
+    return { message: `${fieldLabel} "${rawPhone}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, autoFixable: false };
+  }
+
+  // Letters indicate appended notes, extensions, or other text (e.g., "call 1st", "ex 233", "(cell)")
+  if (/[a-z]/i.test(trimmed)) {
+    return { message: `${fieldLabel} "${rawPhone}" contains non-numeric characters or notes. Enter only the 10-digit number in XXX-XXX-XXXX format.`, autoFixable: false };
+  }
+
+  // Extract digits and attempt normalization
+  const digits = trimmed.replace(/\D/g, "");
+  let effective = digits;
+
+  // Strip leading country code 1 if exactly 11 digits
+  if (digits.length === 11 && digits.startsWith("1")) {
+    effective = digits.slice(1);
+  }
+
+  if (effective.length < 10) {
+    return { message: `${fieldLabel} "${rawPhone}" has too few digits (${effective.length}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, autoFixable: false };
+  }
+  if (effective.length > 10) {
+    return { message: `${fieldLabel} "${rawPhone}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, autoFixable: false };
+  }
+
+  const areaCode = effective.slice(0, 3);
+  const formatted = `${effective.slice(0, 3)}-${effective.slice(3, 6)}-${effective.slice(6, 10)}`;
+
+  if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
+    return { message: `${fieldLabel} "${rawPhone}" has an invalid area code (${areaCode}).`, autoFixable: false };
+  }
+  if (placeholderPhones.has(formatted)) {
+    return { message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`, autoFixable: false };
+  }
+
+  return { message: `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`, autoFixable: true, suggestedFix: formatted };
 }
 
 // ─── Core validator ───────────────────────────────────────────────────────────
@@ -144,24 +208,42 @@ export function validateXml(
       studentsNode["ns1:Student"] as XmlNode | XmlNode[]
     );
 
+    // Empty Students element — school exists but has no student records
+    if (studentNodes.length === 0) {
+      issues.push({
+        id: `school-${si}-empty-students`,
+        severity: "warning",
+        schoolNumber,
+        message: `School "${schoolLabel}" has a Students element but contains no student records.`,
+        autoFixable: false,
+        ruleId: "EMPTY_STUDENTS",
+      });
+    }
+
     for (let pi = 0; pi < studentNodes.length; pi++) {
       const s = studentNodes[pi];
       const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
+      const aliasNode = (s["ns1:AliasName"] ?? {}) as XmlNode;
       const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
 
       const firstName = str(nameNode["ns1:First"]);
       const middleName = str(nameNode["ns1:Middle"]);
       const lastName = str(nameNode["ns1:Last"]);
+      const aliasFirst = str(aliasNode["ns1:First"]);
+      const aliasMiddle = str(aliasNode["ns1:Middle"]);
+      const aliasLast = str(aliasNode["ns1:Last"]);
       const birthDate = str(s["ns1:BirthDate"]);
       const grade = str(s["ns1:Grade"]);
       const gender = str(s["ns1:Gender"]);
       const oen = str(s["ns1:OEN"]);
       const language = str(s["ns1:Language"]);
+      const contactPhone = str(s["ns1:ContactPhone"]);
       const city = str(addrNode["ns1:City"]);
       const province = str(addrNode["ns1:Province"]);
       const postalCode = str(addrNode["ns1:PostalCode"]);
       const streetNumber = str(addrNode["ns1:StreetNumber"]);
       const streetName = str(addrNode["ns1:StreetName"]);
+      const streetNumberSuffix = str(addrNode["ns1:StreetNumberSuffix"]);
       const unit = str(addrNode["ns1:Unit"]);
 
       const studentName =
@@ -175,16 +257,21 @@ export function validateXml(
         FirstName: firstName,
         MiddleName: middleName,
         LastName: lastName,
+        AliasFirstName: aliasFirst,
+        AliasMiddleName: aliasMiddle,
+        AliasLastName: aliasLast,
         BirthDate: birthDate,
         Grade: grade,
         Gender: gender,
         OEN: oen,
         Language: language,
+        ContactPhone: contactPhone,
         City: city,
         Province: province,
         PostalCode: postalCode,
         StreetNumber: streetNumber,
         StreetName: streetName,
+        StreetNumberSuffix: streetNumberSuffix,
         Unit: unit,
       };
 
@@ -346,14 +433,48 @@ export function validateXml(
       // 10. Field length limits
       for (const [field, maxLen] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
-        if (val.length > (maxLen as number)) {
+        const limit = maxLen as number;
+        if (val.length <= limit) continue;
+
+        if (field === "Unit") {
+          // Try smart abbreviation before reporting
+          const [standardized, changed] = standardizeUnit(val);
+          const canFix = changed && standardized.length <= limit;
+          issues.push({
+            ...base,
+            id: `${recordId}-len-Unit`,
+            severity: "error",
+            field,
+            message: `Unit "${val}" exceeds the ${limit}-character Panorama limit (${val.length} chars).`,
+            suggestedFix: canFix ? standardized : undefined,
+            autoFixable: canFix,
+            ruleId: "UNIT_LENGTH",
+          });
+        } else if (field === "StreetNumber") {
+          const looksLikeUnit = /^(apt\.?|unit|ph\.?)\s/i.test(val);
+          const hasLetters = /[a-z]/i.test(val);
+          const hint = looksLikeUnit
+            ? ` Value looks like a unit/apartment number — move it to the Unit field.`
+            : hasLetters
+            ? ` Value contains letters; only the numeric street number (max ${limit} chars) belongs here.`
+            : "";
+          issues.push({
+            ...base,
+            id: `${recordId}-len-StreetNumber`,
+            severity: "error",
+            field,
+            message: `StreetNumber "${val}" exceeds the ${limit}-character Panorama limit (${val.length} chars).${hint}`,
+            autoFixable: false,
+            ruleId: "STREET_NUMBER_LENGTH",
+          });
+        } else {
           issues.push({
             ...base,
             id: `${recordId}-len-${field}`,
             severity: "warning",
             field,
-            message: `${field} exceeds maximum length of ${maxLen} characters (current: ${val.length}).`,
-            suggestedFix: val.slice(0, maxLen as number),
+            message: `${field} exceeds maximum length of ${limit} characters (current: ${val.length}).`,
+            suggestedFix: val.slice(0, limit),
             autoFixable: true,
             ruleId: "FIELD_LENGTH",
           });
@@ -402,6 +523,26 @@ export function validateXml(
           seenNameDob.set(dedupKey, recordId);
         }
       }
+
+      // 13. Phone number format
+      if (contactPhone) {
+        const placeholderPhones = new Set(
+          (rules.phoneConfig?.placeholderNumbers ?? []) as string[]
+        );
+        const phoneIssue = checkPhone(contactPhone, "ContactPhone", placeholderPhones);
+        if (phoneIssue) {
+          issues.push({
+            ...base,
+            id: `${recordId}-phone`,
+            severity: "error",
+            field: "ContactPhone",
+            message: phoneIssue.message,
+            suggestedFix: phoneIssue.suggestedFix,
+            autoFixable: phoneIssue.autoFixable,
+            ruleId: "PHONE_FORMAT",
+          });
+        }
+      }
     }
   }
 
@@ -424,22 +565,27 @@ export function validateXml(
  * Field-name → XML path within a student node.
  * Name sub-fields live under ns1:Name, address sub-fields under ns1:Address.
  */
-const FIELD_TO_XML: Record<string, { parent: "name" | "addr" | "direct"; tag: string }> = {
-  FirstName:    { parent: "name",   tag: "ns1:First" },
-  MiddleName:   { parent: "name",   tag: "ns1:Middle" },
-  LastName:     { parent: "name",   tag: "ns1:Last" },
-  BirthDate:    { parent: "direct", tag: "ns1:BirthDate" },
-  Grade:        { parent: "direct", tag: "ns1:Grade" },
-  Gender:       { parent: "direct", tag: "ns1:Gender" },
-  OEN:          { parent: "direct", tag: "ns1:OEN" },
-  Language:     { parent: "direct", tag: "ns1:Language" },
-  Class:        { parent: "direct", tag: "ns1:Class" },
-  City:         { parent: "addr",   tag: "ns1:City" },
-  Province:     { parent: "addr",   tag: "ns1:Province" },
-  PostalCode:   { parent: "addr",   tag: "ns1:PostalCode" },
-  StreetNumber: { parent: "addr",   tag: "ns1:StreetNumber" },
-  StreetName:   { parent: "addr",   tag: "ns1:StreetName" },
-  Unit:         { parent: "addr",   tag: "ns1:Unit" },
+const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct"; tag: string }> = {
+  FirstName:          { parent: "name",   tag: "ns1:First" },
+  MiddleName:         { parent: "name",   tag: "ns1:Middle" },
+  LastName:           { parent: "name",   tag: "ns1:Last" },
+  AliasFirstName:     { parent: "alias",  tag: "ns1:First" },
+  AliasMiddleName:    { parent: "alias",  tag: "ns1:Middle" },
+  AliasLastName:      { parent: "alias",  tag: "ns1:Last" },
+  BirthDate:          { parent: "direct", tag: "ns1:BirthDate" },
+  Grade:              { parent: "direct", tag: "ns1:Grade" },
+  Gender:             { parent: "direct", tag: "ns1:Gender" },
+  OEN:                { parent: "direct", tag: "ns1:OEN" },
+  Language:           { parent: "direct", tag: "ns1:Language" },
+  Class:              { parent: "direct", tag: "ns1:Class" },
+  ContactPhone:       { parent: "direct", tag: "ns1:ContactPhone" },
+  City:               { parent: "addr",   tag: "ns1:City" },
+  Province:           { parent: "addr",   tag: "ns1:Province" },
+  PostalCode:         { parent: "addr",   tag: "ns1:PostalCode" },
+  StreetNumber:       { parent: "addr",   tag: "ns1:StreetNumber" },
+  StreetNumberSuffix: { parent: "addr",   tag: "ns1:StreetNumberSuffix" },
+  StreetName:         { parent: "addr",   tag: "ns1:StreetName" },
+  Unit:               { parent: "addr",   tag: "ns1:Unit" },
 };
 
 function applyFieldFix(studentNode: XmlNode, field: string, value: string) {
@@ -450,6 +596,10 @@ function applyFieldFix(studentNode: XmlNode, field: string, value: string) {
     const nameNode = (studentNode["ns1:Name"] ?? {}) as XmlNode;
     studentNode["ns1:Name"] = nameNode;
     setTextValue(nameNode, mapping.tag, value);
+  } else if (mapping.parent === "alias") {
+    const aliasNode = (studentNode["ns1:AliasName"] ?? {}) as XmlNode;
+    studentNode["ns1:AliasName"] = aliasNode;
+    setTextValue(aliasNode, mapping.tag, value);
   } else if (mapping.parent === "addr") {
     const addrNode = (studentNode["ns1:Address"] ?? {}) as XmlNode;
     studentNode["ns1:Address"] = addrNode;

@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/error-files
 /.pnp
 .pnp.*
 .yarn/*

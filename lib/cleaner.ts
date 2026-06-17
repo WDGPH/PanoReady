@@ -47,21 +47,35 @@ export function cleanPhone(text: string): string {
 export function standardizeUnit(text: string): [string, boolean, boolean] {
   if (!text) return ["", false, false];
   const raw = text;
-  const lowered = raw.toLowerCase();
+  const trimmed = raw.trim();
 
-  if (lowered.length <= 5) return [raw, false, false];
-
-  if (lowered === "basement") return ["BSMT", true, false];
-  if (lowered === "lower un" || lowered === "d lower") return ["LOWR", true, false];
-  if (lowered === "upperlev") return ["UPPR", true, false];
-  if (lowered === "main flo" || lowered === "mainfloo") return ["MAIN", true, false];
-
-  if (/\(.*\)/.test(raw)) {
-    return [raw.replace(/[()]/g, ""), true, false];
+  // Already within limit — just trim whitespace if needed
+  if (trimmed.length <= 5) {
+    return trimmed !== raw ? [trimmed, true, false] : [raw, false, false];
   }
 
-  if (/^unit \d+/.test(lowered)) {
-    return [lowered.replace("unit", "").trim(), true, false];
+  // Named floor/location designators (Panorama-safe abbreviations)
+  if (/^basem/i.test(trimmed)) return ["BSMT", true, false];
+  if (/^(lower un|lower ap|d lower|lower fl)/i.test(trimmed)) return ["LOWR", true, false];
+  if (/^(upper(lev|un|ap|fl)|upperlev)/i.test(trimmed)) return ["UPPR", true, false];
+  if (/^(main\s*flo|mainflo)/i.test(trimmed)) return ["MAIN", true, false];
+  if (/^second$/i.test(trimmed)) return ["2ND", true, false];
+  if (/^2nd\s*fl/i.test(trimmed)) return ["2F", true, false];
+  if (/^ground/i.test(trimmed)) return ["GRD", true, false];
+
+  // Parenthetical notation: "14 (B)" → "14B"
+  if (/\(/.test(trimmed)) {
+    const cleaned = trimmed.replace(/\s*\(([^)]*)\)/, "$1").replace(/\s+/g, "").trim();
+    if (cleaned.length <= 5) return [cleaned, true, false];
+    const noParens = trimmed.replace(/\s*\([^)]*\)/, "").trim();
+    if (noParens.length <= 5) return [noParens, true, false];
+  }
+
+  // "Unit X", "APT X", "Apt. X", "Ph X", "PH X" → extract identifier
+  const prefixMatch = trimmed.match(/^(?:unit|apt\.?|ph\.?)\s+(.+)$/i);
+  if (prefixMatch) {
+    const id = prefixMatch[1].trim();
+    if (id.length <= 5) return [id, true, false];
   }
 
   return [raw, false, true];
