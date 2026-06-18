@@ -327,7 +327,7 @@ export function validateXml(
             id: `${recordId}-gender-invalid`,
             severity: "error",
             field: "Gender",
-            message: `Gender "${gender}" is not a recognized value. Use M, F, X, or U.`,
+            message: `Gender "${gender}" is not a recognized value. Use M, F, Unk, Other, X, or N.`,
             suggestedFix: alias ? alias : undefined,
             autoFixable: !!alias,
             ruleId: "GENDER_ALLOWED_VALUE",
@@ -715,4 +715,93 @@ export function generateIssueReportCsv(
     fixedIds.has(i.id) ? "yes" : "no",
   ]);
   return [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
+}
+
+// ─── Reporting helpers (client-side) ────────────────────────────────────────
+
+/**
+ * Generate a school-based summary CSV from validation records.
+ * Columns: schoolNumber, schoolName, totalStudents, gradesJson, gendersJson
+ */
+export function generateSchoolSummaryCsv(records: StudentRecord[]): string {
+  const bySchool = new Map<string, { name: string; total: number; grades: Map<string, number>; genders: Map<string, number> }>();
+  for (const r of records) {
+    const sn = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim();
+    const key = sn || "(unknown)";
+    if (!bySchool.has(key)) {
+      bySchool.set(key, { name: r.fields.SchoolName || "", total: 0, grades: new Map(), genders: new Map() });
+    }
+    const entry = bySchool.get(key)!;
+    entry.total++;
+    const grade = (r.fields.Grade || "").trim();
+    const gender = (r.fields.Gender || "").trim();
+    if (grade) entry.grades.set(grade, (entry.grades.get(grade) || 0) + 1);
+    if (gender) entry.genders.set(gender, (entry.genders.get(gender) || 0) + 1);
+  }
+
+  const escape = (v: string) => (v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
+  const headers = ["schoolNumber", "schoolName", "totalStudents", "gradesJson", "gendersJson"];
+  const rows: string[] = [];
+  for (const [schoolNumber, data] of bySchool) {
+    const gradesObj: Record<string, number> = {};
+    for (const [g, c] of data.grades) gradesObj[g] = c;
+    const gendersObj: Record<string, number> = {};
+    for (const [g, c] of data.genders) gendersObj[g] = c;
+    const gradesJson = JSON.stringify(gradesObj);
+    const gendersJson = JSON.stringify(gendersObj);
+    rows.push([escape(schoolNumber), escape(data.name || ""), String(data.total), escape(gradesJson), escape(gendersJson)].join(","));
+  }
+  return [headers.join(","), ...rows].join("\n");
+}
+
+/**
+ * Generate an age-group CSV. Buckets is an array of [min,max] pairs in years, last bucket may have max=null for open-ended.
+ * Output columns: bucketLabel, count
+ */
+export function generateAgeGroupReportCsv(records: StudentRecord[], buckets?: Array<[number, number | null]>): string {
+  const defaultBuckets: Array<[number, number | null]> = [[0,4],[5,9],[10,14],[15,19],[20,null]];
+  const b = buckets ?? defaultBuckets;
+  const counts = new Array(b.length).fill(0);
+  const now = new Date();
+  for (const r of records) {
+    const bd = (r.fields.BirthDate || "").trim();
+    if (!bd) continue;
+    const m = bd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    let age: number | null = null;
+    if (m) {
+      const y = parseInt(m[1], 10);
+      const mo = parseInt(m[2], 10) - 1;
+      const d = parseInt(m[3], 10);
+      const dob = new Date(y, mo, d);
+      if (!isNaN(dob.getTime())) {
+        age = now.getFullYear() - dob.getFullYear();
+        const mDiff = now.getMonth() - dob.getMonth();
+        if (mDiff < 0 || (mDiff === 0 && now.getDate() < dob.getDate())) age--;
+      }
+    } else {
+      // try Date parse of other formats
+      const parsed = new Date(bd);
+      if (!isNaN(parsed.getTime())) {
+        age = now.getFullYear() - parsed.getFullYear();
+        const mDiff = now.getMonth() - parsed.getMonth();
+        if (mDiff < 0 || (mDiff === 0 && now.getDate() < parsed.getDate())) age--;
+      }
+    }
+    if (age === null || age < 0) continue;
+    for (let i = 0; i < b.length; i++) {
+      const [min, max] = b[i];
+      if (age >= min && (max === null || age <= max)) {
+        counts[i]++;
+        break;
+      }
+    }
+  }
+  const headers = ["bucket", "count"];
+  const rows: string[] = [];
+  for (let i = 0; i < b.length; i++) {
+    const [min, max] = b[i];
+    const label = max === null ? `${min}+` : `${min}-${max}`;
+    rows.push(`${label},${counts[i]}`);
+  }
+  return [headers.join(","), ...rows].join("\n");
 }

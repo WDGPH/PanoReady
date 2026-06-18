@@ -7,16 +7,18 @@ import {
   ArrowRight, AlertTriangle, MapPin, School,
   Download, Users, BarChart3, ShieldCheck,
   ShieldX, Search, Filter, Wrench, RefreshCw,
-  ClipboardCheck,
+  ClipboardCheck, SlidersHorizontal,
 } from "lucide-react";
 import { cleanXml, applyReviewUpdates, prettyPrintXml } from "@/lib/cleaner";
-import { processExport } from "@/lib/pullInfo";
+import { processExport, buildSchoolCounts, buildGradeCounts } from "@/lib/pullInfo";
 import { downloadText, toCsv } from "@/lib/utils";
 import {
   validateXml,
   applyValidationFixes,
   applyFixesToRecords,
   generateIssueReportCsv,
+  generateSchoolSummaryCsv,
+  generateAgeGroupReportCsv,
 } from "@/lib/validator";
 import type {
   Workflow, SessionData,
@@ -44,9 +46,8 @@ function NavBar() {
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ background: "linear-gradient(135deg,#22c55e,#14b8a6)", borderRadius: 7, padding: "3px 9px", fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: "0.05em", fontFamily: "var(--font-mono)" }}>
-            TWIG
+            PanoReady
           </span>
-          <span style={{ color: "var(--color-text-secondary)", fontSize: 14, fontWeight: 500 }}>STIX Cleaner</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--color-text-muted)", fontSize: 12 }}>
           <ShieldCheck size={13} style={{ color: "var(--color-brand-400)" }} />
@@ -241,7 +242,7 @@ function HomeView({ onDone, onValidate }: {
           <CheckCircle2 size={12} /> 100% in-browser · No server · No data upload
         </div>
         <h1 style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.1, margin: "0 0 14px" }}>
-          <span className="gradient-text">STIX XML</span> Cleaner
+          <span className="gradient-text">PanoReady</span>
         </h1>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 15, lineHeight: 1.7, margin: 0 }}>
           Clean, validate, and export Ontario school enrollment data. Student records never leave your device.
@@ -443,6 +444,59 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
     XLSX.writeFile(wb, `${baseName}_report.xlsx`);
   };
 
+  // ── Custom report filter state (export workflow only) ─────────────────────
+  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+  const [selectedGrades,  setSelectedGrades]  = useState<string[]>([]);
+  const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
+  const [minAge, setMinAge] = useState(0);
+  const [maxAge, setMaxAge] = useState(99);
+  const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
+  const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[] });
+
+  useEffect(() => {
+    const students = session.exportResult?.allStudents ?? [];
+    const schoolsSet = new Set<string>();
+    const gradesSet  = new Set<string>();
+    const gendersSet = new Set<string>();
+    let ageMin = Infinity, ageMax = -Infinity;
+    for (const s of students) {
+      if (s.SchoolName) schoolsSet.add(s.SchoolName);
+      if (s.Grade)      gradesSet.add(s.Grade);
+      if (s.Gender)     gendersSet.add(s.Gender);
+      const age = computeAge(s.BirthDate);
+      if (age !== null) { if (age < ageMin) ageMin = age; if (age > ageMax) ageMax = age; }
+    }
+    const schools = Array.from(schoolsSet).sort();
+    const grades  = Array.from(gradesSet).sort();
+    const genders = Array.from(gendersSet).sort();
+    const lo = isFinite(ageMin) ? ageMin : 0;
+    const hi = isFinite(ageMax) ? ageMax : 99;
+    setFilterOpts({ schools, grades, genders });
+    setSelectedSchools(schools);
+    setSelectedGrades(grades);
+    setSelectedGenders(genders);
+    setAgeBounds([lo, hi]);
+    setMinAge(lo);
+    setMaxAge(hi);
+  }, [session.exportResult]);
+
+  const customStudents = (session.exportResult?.allStudents ?? []).filter((s) => {
+    const age = computeAge(s.BirthDate);
+    if (s.SchoolName && !selectedSchools.includes(s.SchoolName)) return false;
+    if (s.Grade      && !selectedGrades.includes(s.Grade))       return false;
+    if (s.Gender     && !selectedGenders.includes(s.Gender))     return false;
+    if (age !== null && (age < minAge || age > maxAge))           return false;
+    return true;
+  });
+
+  const dlCustomExcel = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customStudents),                                     "Students");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSchoolCounts(customStudents) as unknown as Record<string,unknown>[]), "School_Counts");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildGradeCounts(customStudents)  as unknown as Record<string,unknown>[]), "Grade_Counts");
+    XLSX.writeFile(wb, `${baseName}_custom_report.xlsx`);
+  };
+
   return (
     <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "36px 24px 80px" }}>
       <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 22, padding: "5px 9px", gap: 5, fontSize: 13 }}>
@@ -531,6 +585,68 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
                   </div>
                 </div>
                 <button onClick={dlExcel} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Excel</button>
+              </div>
+            </div>
+
+            {/* ── Custom Filter & Export ───────────────────────────────────── */}
+            <div style={{ marginTop: 32, borderRadius: 12, border: "1px solid rgba(45,212,191,0.3)", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: "rgba(45,212,191,0.06)", borderBottom: "1px solid rgba(45,212,191,0.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ background: "rgba(45,212,191,0.15)", borderRadius: 7, padding: 7, display: "flex" }}>
+                    <SlidersHorizontal size={16} style={{ color: "var(--color-teal-400)" }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>Filter &amp; Export Custom Report</div>
+                    <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 1 }}>Narrow by school, grade, gender, or age — then download a targeted CSV or Excel</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16, background: "var(--color-surface-1)" }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <FilterCheckboxGroup
+                    label="School"
+                    options={filterOpts.schools}
+                    selected={selectedSchools}
+                    onToggle={(v) => setSelectedSchools((s) => toggleItem(s, v))}
+                    onAll={() => setSelectedSchools(filterOpts.schools)}
+                    onNone={() => setSelectedSchools([])}
+                  />
+                  <FilterCheckboxGroup
+                    label="Grade"
+                    options={filterOpts.grades}
+                    selected={selectedGrades}
+                    onToggle={(v) => setSelectedGrades((s) => toggleItem(s, v))}
+                    onAll={() => setSelectedGrades(filterOpts.grades)}
+                    onNone={() => setSelectedGrades([])}
+                  />
+                  <FilterCheckboxGroup
+                    label="Gender"
+                    options={filterOpts.genders}
+                    selected={selectedGenders}
+                    onToggle={(v) => setSelectedGenders((s) => toggleItem(s, v))}
+                    onAll={() => setSelectedGenders(filterOpts.genders)}
+                    onNone={() => setSelectedGenders([])}
+                  />
+                  <AgeRangeFilter
+                    minBound={ageBounds[0]} maxBound={ageBounds[1]}
+                    minAge={minAge} maxAge={maxAge}
+                    onChange={(min, max) => { setMinAge(min); setMaxAge(max); }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 9, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                    <span style={{ fontWeight: 800, color: "var(--color-teal-400)", fontSize: 22, lineHeight: 1 }}>{customStudents.length}</span>
+                    <span style={{ marginLeft: 6 }}>of {exp.allStudents.length} students match</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={() => dlCsv(customStudents as unknown as Record<string,unknown>[], "custom")} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Students CSV</button>
+                    <button onClick={() => dlCsv(buildSchoolCounts(customStudents) as unknown as Record<string,unknown>[], "custom_schools")} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> School Counts CSV</button>
+                    <button onClick={() => dlCsv(buildGradeCounts(customStudents) as unknown as Record<string,unknown>[], "custom_grades")} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Grade Counts CSV</button>
+                    <button onClick={dlCustomExcel} className="btn btn-primary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Excel</button>
+                  </div>
+                </div>
               </div>
             </div>
           </>
@@ -1070,6 +1186,104 @@ function ValidateRevalidateView({
   );
 }
 
+// ─── Report filter helpers ─────────────────────────────────────────────────────
+
+function computeAge(birthDate: string): number | null {
+  if (!birthDate) return null;
+  const now = new Date();
+  const m = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const dob = m
+    ? new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]))
+    : new Date(birthDate);
+  if (isNaN(dob.getTime())) return null;
+  let age = now.getFullYear() - dob.getFullYear();
+  const md = now.getMonth() - dob.getMonth();
+  if (md < 0 || (md === 0 && now.getDate() < dob.getDate())) age--;
+  return age < 0 ? null : age;
+}
+
+function toggleItem(arr: string[], val: string): string[] {
+  return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
+}
+
+function FilterCheckboxGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+  onAll,
+  onNone,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (v: string) => void;
+  onAll: () => void;
+  onNone: () => void;
+}) {
+  return (
+    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "12px 14px", flex: "1 1 150px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontWeight: 600, fontSize: 12, color: "var(--color-text-secondary)", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>{label}</span>
+        <div style={{ display: "flex", gap: 5 }}>
+          {(["All", "None"] as const).map((lbl) => (
+            <button key={lbl} onClick={lbl === "All" ? onAll : onNone} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "var(--color-surface-4)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)", cursor: "pointer" }}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ maxHeight: 150, overflowY: "auto", display: "flex", flexDirection: "column", gap: 1 }}>
+        {options.length === 0
+          ? <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>No values</span>
+          : options.map((opt) => (
+            <label key={opt} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 4px", borderRadius: 4, cursor: "pointer", fontSize: 12, color: "var(--color-text-primary)", background: selected.includes(opt) ? "rgba(34,197,94,0.08)" : "transparent" }}>
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => onToggle(opt)} style={{ accentColor: "var(--color-brand-500)", cursor: "pointer" }} />
+              {opt}
+            </label>
+          ))}
+      </div>
+      <div style={{ marginTop: 5, fontSize: 10, color: "var(--color-text-muted)" }}>{selected.length}/{options.length}</div>
+    </div>
+  );
+}
+
+function AgeRangeFilter({
+  minBound, maxBound, minAge, maxAge,
+  onChange,
+}: {
+  minBound: number; maxBound: number; minAge: number; maxAge: number;
+  onChange: (min: number, max: number) => void;
+}) {
+  return (
+    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "12px 14px", flex: "1 1 180px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontWeight: 600, fontSize: 12, color: "var(--color-text-secondary)", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>Age Range</span>
+        <button onClick={() => onChange(minBound, maxBound)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "var(--color-surface-4)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)", cursor: "pointer" }}>Reset</button>
+      </div>
+      {minBound === maxBound
+        ? <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>All students same age ({minBound})</div>
+        : <>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--color-text-muted)", marginBottom: 3 }}>
+              <span>Min age</span>
+              <span style={{ fontWeight: 700, color: "var(--color-brand-400)" }}>{minAge}</span>
+            </div>
+            <input type="range" min={minBound} max={maxBound} value={minAge} onChange={(e) => onChange(parseInt(e.target.value), Math.max(parseInt(e.target.value), maxAge))} style={{ width: "100%", accentColor: "var(--color-brand-500)" }} />
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--color-text-muted)", marginBottom: 3 }}>
+              <span>Max age</span>
+              <span style={{ fontWeight: 700, color: "var(--color-brand-400)" }}>{maxAge}</span>
+            </div>
+            <input type="range" min={minBound} max={maxBound} value={maxAge} onChange={(e) => onChange(Math.min(minAge, parseInt(e.target.value)), parseInt(e.target.value))} style={{ width: "100%", accentColor: "var(--color-brand-500)" }} />
+          </div>
+          <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-primary)", background: "var(--color-surface-3)", borderRadius: 5, padding: "3px 8px" }}>
+            {minAge === maxAge ? `Age ${minAge}` : `Ages ${minAge}–${maxAge}`}
+          </div>
+        </>}
+    </div>
+  );
+}
+
 // ─── ValidateDownloadView ─────────────────────────────────────────────────────
 // Screen 5: Download
 
@@ -1094,6 +1308,67 @@ function ValidateDownloadView({
 
   const errorCount   = result.issues.filter(i => i.severity === "error").length;
   const warningCount = result.issues.filter(i => i.severity === "warning").length;
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [showFilters, setShowFilters] = useState(true);
+  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+  const [selectedGrades,  setSelectedGrades]  = useState<string[]>([]);
+  const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
+  const [minAge, setMinAge] = useState(0);
+  const [maxAge, setMaxAge] = useState(99);
+  const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
+  const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[] });
+
+  useEffect(() => {
+    const records = result.records ?? [];
+    const schoolsSet = new Set<string>();
+    const gradesSet  = new Set<string>();
+    const gendersSet = new Set<string>();
+    let ageMin = Infinity, ageMax = -Infinity;
+    for (const r of records) {
+      const sn = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim() || "(unknown)";
+      schoolsSet.add(sn);
+      if (r.fields.Grade)  gradesSet.add(String(r.fields.Grade).trim());
+      if (r.fields.Gender) gendersSet.add(String(r.fields.Gender).trim());
+      const age = computeAge((r.fields.BirthDate || "").trim());
+      if (age !== null) { if (age < ageMin) ageMin = age; if (age > ageMax) ageMax = age; }
+    }
+    const schools = Array.from(schoolsSet).sort();
+    const grades  = Array.from(gradesSet).sort();
+    const genders = Array.from(gendersSet).sort();
+    const lo = isFinite(ageMin) ? ageMin : 0;
+    const hi = isFinite(ageMax) ? ageMax : 99;
+    setFilterOpts({ schools, grades, genders });
+    setSelectedSchools(schools);
+    setSelectedGrades(grades);
+    setSelectedGenders(genders);
+    setAgeBounds([lo, hi]);
+    setMinAge(lo);
+    setMaxAge(hi);
+  }, [result]);
+
+  const filteredRecords = (result.records ?? []).filter((r) => {
+    const sn     = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim() || "(unknown)";
+    const grade  = (r.fields.Grade  || "").trim();
+    const gender = (r.fields.Gender || "").trim();
+    const age    = computeAge((r.fields.BirthDate || "").trim());
+    if (!selectedSchools.includes(sn)) return false;
+    if (grade  && !selectedGrades.includes(grade))   return false;
+    if (gender && !selectedGenders.includes(gender)) return false;
+    if (age !== null && (age < minAge || age > maxAge)) return false;
+    return true;
+  });
+
+  const filteredIds = new Set(filteredRecords.map((r: any) => r.id));
+  const filteredIssues = result.issues.filter((i: any) => {
+    if (i.recordId && filteredIds.has(i.recordId)) return true;
+    const sn = i.schoolNumber || "";
+    return selectedSchools.includes(sn || "(unknown)");
+  });
+
+  const dlFilteredSchools = () => downloadText(generateSchoolSummaryCsv(filteredRecords), `${baseName}_filtered_schools.csv`, "text/csv");
+  const dlFilteredAges    = () => downloadText(generateAgeGroupReportCsv(filteredRecords), `${baseName}_filtered_ages.csv`, "text/csv");
+  const dlFilteredIssues  = () => downloadText(generateIssueReportCsv(filteredIssues, session.fixes), `${baseName}_filtered_issues.csv`, "text/csv");
 
   return (
     <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "36px 24px 80px" }}>
@@ -1130,9 +1405,9 @@ function ValidateDownloadView({
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 28 }}>
-        <StatCard label="Fixes Applied"    value={session.fixes.length}             accent="teal" />
-        <StatCard label="Remaining Issues" value={result.issues.length}             />
-        <StatCard label="Students"         value={result.studentCount}              accent="green" />
+        <StatCard label="Fixes Applied"    value={session.fixes.length}  accent="teal" />
+        <StatCard label="Remaining Issues" value={result.issues.length}  />
+        <StatCard label="Students"         value={result.studentCount}   accent="green" />
       </div>
 
       {/* Downloads */}
@@ -1169,6 +1444,80 @@ function ValidateDownloadView({
           </div>
           <button onClick={dlReport} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> CSV</button>
         </div>
+      </div>
+
+      {/* ── Filter & Report section ─────────────────────────────────────────── */}
+      <div style={{ marginTop: 32, borderRadius: 12, border: "1px solid rgba(45,212,191,0.3)", overflow: "hidden" }}>
+        {/* Section header */}
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: "rgba(45,212,191,0.06)", border: "none", borderBottom: showFilters ? "1px solid rgba(45,212,191,0.2)" : "none", cursor: "pointer", textAlign: "left" as const }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ background: "rgba(45,212,191,0.15)", borderRadius: 7, padding: 7, display: "flex" }}>
+              <SlidersHorizontal size={16} style={{ color: "var(--color-teal-400)" }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>Filter &amp; Export Reports</div>
+              <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 1 }}>
+                Narrow by school, grade, gender, or age — then download targeted CSVs
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--color-teal-400)", fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>
+            {showFilters ? "▲ Collapse" : "▼ Expand"}
+          </span>
+        </button>
+
+        {showFilters && (
+          <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16, background: "var(--color-surface-1)" }}>
+            {/* Filter controls */}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <FilterCheckboxGroup
+                label="School"
+                options={filterOpts.schools}
+                selected={selectedSchools}
+                onToggle={(v) => setSelectedSchools((s) => toggleItem(s, v))}
+                onAll={() => setSelectedSchools(filterOpts.schools)}
+                onNone={() => setSelectedSchools([])}
+              />
+              <FilterCheckboxGroup
+                label="Grade"
+                options={filterOpts.grades}
+                selected={selectedGrades}
+                onToggle={(v) => setSelectedGrades((s) => toggleItem(s, v))}
+                onAll={() => setSelectedGrades(filterOpts.grades)}
+                onNone={() => setSelectedGrades([])}
+              />
+              <FilterCheckboxGroup
+                label="Gender"
+                options={filterOpts.genders}
+                selected={selectedGenders}
+                onToggle={(v) => setSelectedGenders((s) => toggleItem(s, v))}
+                onAll={() => setSelectedGenders(filterOpts.genders)}
+                onNone={() => setSelectedGenders([])}
+              />
+              <AgeRangeFilter
+                minBound={ageBounds[0]} maxBound={ageBounds[1]}
+                minAge={minAge} maxAge={maxAge}
+                onChange={(min, max) => { setMinAge(min); setMaxAge(max); }}
+              />
+            </div>
+
+            {/* Result bar + export buttons */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 9, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontWeight: 800, color: "var(--color-teal-400)", fontSize: 22, lineHeight: 1 }}>{filteredRecords.length}</span>
+                <span style={{ marginLeft: 6 }}>of {result.studentCount} students match</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={dlFilteredSchools} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Schools CSV</button>
+                <button onClick={dlFilteredAges}    className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Age Groups CSV</button>
+                <button onClick={dlFilteredIssues}  className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Issues CSV</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

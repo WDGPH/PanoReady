@@ -82,14 +82,12 @@
     "FEMALE":     "F",
     "NON-BINARY": "X",
     "NONBINARY":  "X",
-    "UNKNOWN":    "U",
-    "UNK":        "U",
-    "OTHER":      "X",
-    "N":          "N",
+    "UNKNOWN":    "Unk",
+    "U":          "Unk",
     "m":          "M",
     "f":          "F",
     "x":          "X",
-    "u":          "U"
+    "u":          "Unk"
   },
   "duplicateDetection": {
     "checkOen": true,

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TWIG-STIX | School Enrollment Data Cleaner",
+  title: "PanoReady | School Enrollment Data Cleaner",
   description:
-    "Clean and process STIX XML school enrollment files. All processing happens in your browser — data never leaves your device.",
+    "Clean, validate, and export STIX XML school enrollment files. All processing happens in your browser — data never leaves your device.",
 };
 
 export default function RootLayout({

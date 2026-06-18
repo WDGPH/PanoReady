@@ -24,16 +24,7 @@ export default function NavBar() {
               fontFamily: "var(--font-mono)",
             }}
           >
-            TWIG
-          </span>
-          <span
-            style={{
-              color: "var(--color-text-secondary)",
-              fontSize: 14,
-              fontWeight: 500,
-            }}
-          >
-            STIX Cleaner
+            PanoReady
           </span>
         </Link>
 
@@ -42,7 +33,8 @@ export default function NavBar() {
           style={{ color: "var(--color-text-muted)", fontSize: 12 }}
         >
           <ShieldCheck size={14} style={{ color: "var(--color-brand-400)" }} />
-          All processing is local — data never leaves your browser
+          All data processing happens locally.
+
         </div>
       </div>
     </header>
