@@ -8,11 +8,20 @@ For background on what each rule *does*, see [validation-rules.md](validation-ru
 
 ## Quick Start
 
+The easiest path is to build a ruleset directly in the app — no JSON editing required:
+
 1. Open the **Validation ruleset** dropdown in Validate & Fix or Reports.
-2. Click **Export** — this downloads the built-in defaults as a `.json` file.
-3. Edit the file (see fields below).
-4. Click **Import** to load your edited file.
-5. Select it from the dropdown and validate as normal.
+2. Click **New** to open the in-app editor, configure each tab, and click **Save Ruleset**.
+3. The new ruleset is selected automatically. Validate as normal.
+
+To start from an existing ruleset, click **Duplicate** first, then **Edit** the copy.
+
+Alternatively, work with the JSON file directly:
+
+1. Click **Export** — downloads the built-in defaults as a `.json` file.
+2. Edit the file (see fields below).
+3. Click **Import** to load your edited file.
+4. Select it from the dropdown and validate as normal.
 
 ---
 
@@ -34,9 +43,10 @@ Every ruleset file must include these fields:
 |---|---|---|
 | `id` | Yes | Any non-empty string. Export generates a UUID; you can change it. |
 | `name` | Yes | Shown in the dropdown. Keep it short and descriptive. |
-| `description` | No | Free text — not displayed in the app, useful in the file. |
+| `description` | No | Free text — shown below the dropdown and editable in the in-app editor. |
 | `createdAt` | Yes | ISO 8601 datetime string. Used for your records only. |
 | `rules` | Yes | The ruleset body — all fields below go here. |
+| `warnings` | No | Set internally by the importer when unknown `rules` keys are detected. Safe to remove from exported files. Do not set this manually. |
 
 ---
 

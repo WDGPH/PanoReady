@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, FileUp, AlertCircle } from "lucide-react";
+import { Download, FileUp, AlertCircle, Pencil, Plus, Copy } from "lucide-react";
 import type { CustomRuleset, RulesProfile } from "@/lib/types";
 import {
   BUILTIN_ID,
@@ -14,20 +14,30 @@ import {
   setActiveRulesetId,
 } from "@/lib/rulesets";
 import { downloadText } from "@/lib/utils";
+import RulesetEditor from "./RulesetEditor";
 
 interface RulesetSelectorProps {
   onRulesChange: (rules: RulesProfile) => void;
 }
 
+/** Extract a field name from a validator error message of the form `'fieldName' …` */
+function parseErrorField(msg: string): string | null {
+  const m = msg.match(/^'([\w.]+)'/);
+  return m ? m[1] : null;
+}
+
 export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeId, setActiveId] = useState<string>(BUILTIN_ID);
-  const [rulesets, setRulesets] = useState<CustomRuleset[]>([]);
-  const [importError, setImportError] = useState<string | null>(null);
+  const [activeId, setActiveId]           = useState<string>(BUILTIN_ID);
+  const [rulesets, setRulesets]           = useState<CustomRuleset[]>([]);
+  const [importError, setImportError]     = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
+  const [editorOpen, setEditorOpen]       = useState(false);
+  const [editingRuleset, setEditingRuleset] = useState<CustomRuleset | undefined>(undefined);
 
   // Initialise from localStorage on mount (safe — this is a client component)
   useEffect(() => {
-    const id = getActiveRulesetId();
+    const id  = getActiveRulesetId();
     const all = listCustomRulesets();
     setActiveId(id);
     setRulesets(all);
@@ -44,8 +54,15 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
     onRulesChange(rules);
   }
 
+  function refreshAndSelect(id: string) {
+    const all = listCustomRulesets();
+    setRulesets(all);
+    applySelection(id, all);
+  }
+
   function handleSelect(e: React.ChangeEvent<HTMLSelectElement>) {
     setImportError(null);
+    setImportWarnings(null);
     applySelection(e.target.value, rulesets);
   }
 
@@ -55,13 +72,18 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
     // Reset so the same file can be re-imported after a fix
     e.target.value = "";
     setImportError(null);
+    setImportWarnings(null);
     try {
       const text = await file.text();
-      const rs = importRulesetFromJson(text);
-      saveCustomRuleset(rs);
-      const all = listCustomRulesets();
-      setRulesets(all);
-      applySelection(rs.id, all);
+      const rs   = importRulesetFromJson(text);
+      if (rs.warnings && rs.warnings.length > 0) {
+        setImportWarnings(rs.warnings);
+      }
+      // Strip the transient `warnings` field before persisting so it does not
+      // appear in localStorage or in subsequently exported files.
+      const { warnings: _w, ...rsToSave } = rs;
+      saveCustomRuleset(rsToSave);
+      refreshAndSelect(rsToSave.id);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
     }
@@ -70,9 +92,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
   function handleDelete() {
     if (activeId === BUILTIN_ID) return;
     deleteCustomRuleset(activeId);
-    const all = listCustomRulesets();
-    setRulesets(all);
-    applySelection(BUILTIN_ID, all);
+    refreshAndSelect(BUILTIN_ID);
   }
 
   function handleExport() {
@@ -91,12 +111,57 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
       toExport = found;
     }
     const safeName = toExport.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-    downloadText(
-      JSON.stringify(toExport, null, 2),
-      `${safeName}_ruleset.json`,
-      "application/json"
-    );
+    downloadText(JSON.stringify(toExport, null, 2), `${safeName}_ruleset.json`, "application/json");
   }
+
+  function handleNew() {
+    setImportError(null);
+    setImportWarnings(null);
+    setEditingRuleset(undefined);
+    setEditorOpen(true);
+  }
+
+  function handleEdit() {
+    if (activeId === BUILTIN_ID) return;
+    const found = rulesets.find((r) => r.id === activeId);
+    if (!found) return;
+    setImportError(null);
+    setImportWarnings(null);
+    setEditingRuleset(found);
+    setEditorOpen(true);
+  }
+
+  function handleDuplicate() {
+    const source: CustomRuleset | null =
+      activeId === BUILTIN_ID
+        ? { id: BUILTIN_ID, name: "STIX Default (built-in)", createdAt: new Date().toISOString(), rules: defaultRules }
+        : rulesets.find((r) => r.id === activeId) ?? null;
+    if (!source) return;
+    const copy: CustomRuleset = {
+      id: crypto.randomUUID(),
+      name: `Copy of ${source.name}`,
+      ...(source.description ? { description: source.description } : {}),
+      createdAt: new Date().toISOString(),
+      rules: JSON.parse(JSON.stringify(source.rules)) as RulesProfile,
+    };
+    saveCustomRuleset(copy);
+    refreshAndSelect(copy.id);
+  }
+
+  function handleEditorSave(rs: CustomRuleset) {
+    setEditorOpen(false);
+    refreshAndSelect(rs.id);
+  }
+
+  // ── Error display helpers ────────────────────────────────────────────────────
+
+  const errorField = importError ? parseErrorField(importError) : null;
+  // Strip the leading 'fieldName' token from the message body when showing inline
+  const errorBody  = importError && errorField
+    ? importError.replace(/^'[\w.]+'/, "").trimStart()
+    : importError;
+
+  // ── Styles ───────────────────────────────────────────────────────────────────
 
   const selectStyle: React.CSSProperties = {
     flex: 1,
@@ -146,9 +211,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
         <select value={activeId} onChange={handleSelect} style={selectStyle}>
           <option value={BUILTIN_ID}>STIX Default (built-in)</option>
           {rulesets.map((rs) => (
-            <option key={rs.id} value={rs.id}>
-              {rs.name}
-            </option>
+            <option key={rs.id} value={rs.id}>{rs.name}</option>
           ))}
         </select>
 
@@ -161,6 +224,11 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
           style={{ display: "none" }}
         />
 
+        <button type="button" onClick={handleNew} style={iconBtnStyle} title="Create a new ruleset">
+          <Plus size={13} />
+          New
+        </button>
+
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -171,15 +239,22 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
           Import
         </button>
 
-        <button
-          type="button"
-          onClick={handleExport}
-          style={iconBtnStyle}
-          title="Export the active ruleset as a .json file"
-        >
+        <button type="button" onClick={handleExport} style={iconBtnStyle} title="Export the active ruleset as a .json file">
           <Download size={13} />
           Export
         </button>
+
+        <button type="button" onClick={handleDuplicate} style={iconBtnStyle} title="Duplicate the active ruleset">
+          <Copy size={13} />
+          Duplicate
+        </button>
+
+        {activeId !== BUILTIN_ID && (
+          <button type="button" onClick={handleEdit} style={iconBtnStyle} title="Edit this ruleset">
+            <Pencil size={13} />
+            Edit
+          </button>
+        )}
 
         {activeId !== BUILTIN_ID && (
           <button
@@ -198,6 +273,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
         )}
       </div>
 
+      {/* Import error — field name shown as an inline badge when parseable */}
       {importError && (
         <div
           style={{
@@ -215,8 +291,44 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
         >
           <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            <strong>Import failed:</strong> {importError}
+            <strong>Import failed:</strong>{" "}
+            {errorField && (
+              <code
+                style={{
+                  background: "rgba(239,68,68,0.12)",
+                  border: "1px solid var(--color-error-border)",
+                  borderRadius: 4,
+                  padding: "1px 5px",
+                  fontSize: 11,
+                  marginRight: 5,
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                {errorField}
+              </code>
+            )}
+            {errorBody}
           </span>
+        </div>
+      )}
+
+      {/* Non-blocking import warnings */}
+      {importWarnings && importWarnings.length > 0 && (
+        <div
+          style={{
+            marginTop: 8,
+            background: "var(--color-warning-bg)",
+            border: "1px solid var(--color-warning-border)",
+            borderRadius: 7,
+            padding: "9px 12px",
+            color: "var(--color-warning-text)",
+            fontSize: 12,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Import succeeded with warnings:</div>
+          <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 2 }}>
+            {importWarnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
         </div>
       )}
 
@@ -236,6 +348,15 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
           </div>
         ) : null;
       })()}
+
+      {/* In-app editor modal */}
+      {editorOpen && (
+        <RulesetEditor
+          initial={editingRuleset}
+          onSave={handleEditorSave}
+          onClose={() => setEditorOpen(false)}
+        />
+      )}
     </div>
   );
 }

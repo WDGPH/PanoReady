@@ -25,7 +25,7 @@ import type {
   ValidateSession, ValidationIssue, AppliedFix,
   ValidationSeverity, RulesProfile,
 } from "@/lib/types";
-import { defaultRules, getActiveRules } from "@/lib/rulesets";
+import { defaultRules, getActiveRules, getActiveRulesetId, listCustomRulesets, BUILTIN_ID } from "@/lib/rulesets";
 import RulesetSelector from "@/components/RulesetSelector";
 import * as XLSX from "xlsx";
 
@@ -1409,6 +1409,15 @@ function ValidateDownloadView({
             {gate === "READY"
               ? `No blocking errors · ${warningCount > 0 ? `${warningCount} warning${warningCount !== 1 ? "s" : ""} for review` : "All clear"}`
               : `${errorCount} blocking error${errorCount !== 1 ? "s" : ""} must be resolved before submission`}
+          </div>
+          <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 4 }}>
+            {(() => {
+              const id   = getActiveRulesetId();
+              const name = id === BUILTIN_ID
+                ? "Built-in (WDG)"
+                : (listCustomRulesets().find((r) => r.id === id)?.name ?? "Built-in (WDG)");
+              return `Validated against: ${name}`;
+            })()}
           </div>
         </div>
       </div>

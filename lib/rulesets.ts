@@ -149,7 +149,22 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
     throw new Error("'rules.duplicateDetection.checkNameDobSchool' must be a boolean.");
   }
 
-  return obj as unknown as CustomRuleset;
+  const knownRulesKeys = new Set([
+    "requiredFields", "allowedGradeValues", "allowedGenderValues", "allowedProvinceValues",
+    "allowedLanguageValues", "allowedCountryValues", "allowedStreetTypeValues",
+    "allowedRelationshipValues", "allowedPhoneTypeValues", "allowedStreetDirectionValues",
+    "allowedFullLoadTypeValues", "dateFields", "fieldLengths", "postalCodePattern",
+    "gradeAliases", "genderAliases", "phoneConfig", "duplicateDetection",
+  ]);
+  const unknownKeys = Object.keys(r).filter((k) => !knownRulesKeys.has(k));
+  const warnings: string[] | undefined =
+    unknownKeys.length > 0
+      ? unknownKeys.map((k) => `Unknown field in rules: '${k}' — will be ignored`)
+      : undefined;
+
+  const result = obj as unknown as CustomRuleset;
+  if (warnings) result.warnings = warnings;
+  return result;
 }
 
 // ── Schema guard helpers ──────────────────────────────────────────────────────

@@ -115,6 +115,7 @@ export interface CustomRuleset {
   description?: string;
   createdAt: string; // ISO 8601
   rules: RulesProfile;
+  warnings?: string[];
 }
 
 // ─── Validation types (Phase 1 PLAN) ─────────────────────────────────────────
