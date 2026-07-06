@@ -86,6 +86,37 @@ export interface SessionData {
   exportResult?: ExportResult;
 }
 
+// ─── Rules & Ruleset types ────────────────────────────────────────────────────
+
+export interface RulesProfile {
+  requiredFields: string[];
+  allowedGradeValues: string[];
+  allowedGenderValues: string[];
+  allowedProvinceValues: string[];
+  allowedLanguageValues: string[];
+  allowedCountryValues: string[];
+  allowedStreetTypeValues: string[];
+  allowedRelationshipValues: string[];
+  allowedPhoneTypeValues: string[];
+  allowedStreetDirectionValues: string[];
+  allowedFullLoadTypeValues: string[];
+  fieldLengths: Record<string, number>;
+  dateFields: string[];
+  postalCodePattern: string;
+  phoneConfig: { placeholderNumbers: string[] };
+  gradeAliases: Record<string, string>;
+  genderAliases: Record<string, string>;
+  duplicateDetection: { checkOen: boolean; checkNameDobSchool: boolean };
+}
+
+export interface CustomRuleset {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string; // ISO 8601
+  rules: RulesProfile;
+}
+
 // ─── Validation types (Phase 1 PLAN) ─────────────────────────────────────────
 
 export type ValidationSeverity = "error" | "warning" | "info";

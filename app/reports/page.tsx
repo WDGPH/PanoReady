@@ -7,6 +7,9 @@ import {
   generateAgeGroupReportCsv,
   generateIssueReportCsv,
 } from "../../lib/validator";
+import type { RulesProfile } from "../../lib/types";
+import { defaultRules, getActiveRules } from "../../lib/rulesets";
+import RulesetSelector from "../../components/RulesetSelector";
 
 function computeAge(birthDate: string): number | null {
   if (!birthDate) return null;
@@ -309,6 +312,7 @@ function AgeRangeFilter({
 
 export default function ReportsPage() {
   const [xml, setXml] = useState("");
+  const [activeRules, setActiveRules] = useState<RulesProfile>(defaultRules);
   const [rawRecords, setRawRecords] = useState<any[] | null>(null);
   const [rawIssues, setRawIssues] = useState<any[] | null>(null);
   const [summary, setSummary] = useState<{
@@ -330,6 +334,8 @@ export default function ReportsPage() {
   const [maxAge, setMaxAge] = useState(99);
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
 
+  useEffect(() => { setActiveRules(getActiveRules()); }, []);
+
   const [options, setOptions] = useState({
     schools: [] as string[],
     grades: [] as string[],
@@ -345,7 +351,7 @@ export default function ReportsPage() {
 
   function runValidation() {
     try {
-      const result = validateXml(xml);
+      const result = validateXml(xml, activeRules);
       setRawRecords(result.records);
       setRawIssues(result.issues);
       setSummary({
@@ -549,6 +555,10 @@ export default function ReportsPage() {
           }}
           placeholder="…or paste STIX XML here"
         />
+        <div style={{ marginTop: 14, marginBottom: 2 }}>
+          <RulesetSelector onRulesChange={setActiveRules} />
+        </div>
+
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button
             onClick={runValidation}

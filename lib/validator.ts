@@ -13,10 +13,9 @@ import type {
   StudentRecord,
   GateState,
   AppliedFix,
+  RulesProfile,
 } from "./types";
 import defaultRules from "../config/rules.stix.default.json";
-
-export type RulesProfile = typeof defaultRules;
 
 // ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
 

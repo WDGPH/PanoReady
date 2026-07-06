@@ -23,8 +23,10 @@ import {
 import type {
   Workflow, SessionData,
   ValidateSession, ValidationIssue, AppliedFix,
-  ValidationSeverity,
+  ValidationSeverity, RulesProfile,
 } from "@/lib/types";
+import { defaultRules, getActiveRules } from "@/lib/rulesets";
+import RulesetSelector from "@/components/RulesetSelector";
 import * as XLSX from "xlsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -124,6 +126,9 @@ function HomeView({ onDone, onValidate }: {
   const [dragging, setDragging]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [activeRules, setActiveRules] = useState<RulesProfile>(defaultRules);
+
+  useEffect(() => { setActiveRules(getActiveRules()); }, []);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
@@ -198,7 +203,7 @@ function HomeView({ onDone, onValidate }: {
       if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is not XML text.");
 
       if (workflow === "validate") {
-        const result = validateXml(xmlText);
+        const result = validateXml(xmlText, activeRules);
         onValidate({
           fileName: selectedFile.name,
           originalXml: xmlText,
@@ -264,6 +269,11 @@ function HomeView({ onDone, onValidate }: {
             ))}
           </div>
         </div>
+
+        {/* Ruleset selector — validate workflow only */}
+        {workflow === "validate" && (
+          <RulesetSelector onRulesChange={setActiveRules} />
+        )}
 
         {/* Drop zone */}
         <div>
