@@ -30,6 +30,18 @@ npm run start        # Serve the production build
 npm run lint         # Run ESLint
 ```
 
+## Custom Validation Rulesets
+
+The built-in ruleset validates against STIX Wellington-Dufferin-Guelph defaults. If your board uses different grade codes, allows additional phone placeholder numbers, or has stricter required-field rules, you can create a custom ruleset without touching any code — changes only affect your browser session.
+
+### Quick start
+
+1. In the **Validate & Fix** or **Reports** workflow, open the **Validation ruleset** dropdown and click **Export** — this downloads the built-in rules as a `.json` file.
+2. Edit the file in any text editor. See [docs/rulesets.md](docs/rulesets.md) for a full field-by-field guide.
+3. Click **Import** to load it. Select it from the dropdown and validate as normal.
+
+Rulesets are saved in your browser's localStorage and persist between sessions. They are never uploaded anywhere. To share a ruleset with a colleague, send them the exported `.json` file — they import it the same way.
+
 ## Tech Stack
 
 - [Next.js 16](https://nextjs.org) — React framework
