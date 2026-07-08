@@ -257,32 +257,11 @@ Flags student records where the combination of `FirstName + LastName + BirthDate
 
 ---
 
-## Configuration File
+## Custom Rulesets
 
-All allowed values, field lengths, patterns, and aliases are defined in:
+The allowed values, field lengths, patterns, and aliases that drive these rules are configurable. You can create board-specific rulesets — no code changes required — using the **Validation ruleset** dropdown in the Validate & Fix or Reports workflow.
 
-```
-config/rules.stix.default.json
-```
-
-The structure of this file:
-
-```json
-{
-  "requiredFields": ["FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber"],
-  "allowedGradeValues": ["JK", "SK", "GR1", ...],
-  "allowedGenderValues": ["M", "F", "X", "U"],
-  "allowedProvinceValues": ["AB", "BC", ...],
-  "fieldLengths": { "FirstName": 50, ... },
-  "dateFields": ["BirthDate"],
-  "postalCodePattern": "^[A-Za-z]\\d[A-Za-z]\\s?\\d[A-Za-z]\\d$",
-  "gradeAliases": { "K": "JK", "1": "GR1", ... },
-  "genderAliases": { "MALE": "M", "FEMALE": "F", ... },
-  "duplicateDetection": { "checkOen": true, "checkNameDobSchool": true }
-}
-```
-
-To modify which values are allowed or which fields are required, edit this file and reload the app.
+See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, including how each ruleset field maps to the rule IDs above.
 
 ---
 
