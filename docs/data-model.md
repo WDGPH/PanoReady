@@ -132,6 +132,54 @@ type StudentRecord = {
 
 ---
 
+## Cleaning Step Types
+
+These types are used by the interactive cleaning step in the Validate & Fix workflow (`lib/cleaning.ts`, `lib/types.ts`).
+
+### `CleaningMapping`
+
+A single raw → canonical substitution rule for one field.
+
+```ts
+interface CleaningMapping {
+  raw: string;        // exact string to match (case-insensitive by default)
+  canonical: string;  // replacement value
+  matchCase?: boolean; // true = case-sensitive match (default: false)
+}
+```
+
+---
+
+### `CleaningProfile`
+
+The full set of cleaning rules attached to a custom ruleset.
+
+```ts
+interface CleaningProfile {
+  enabledFields: string[];                      // fields to apply mappings to (opt-in)
+  mappings: Record<string, CleaningMapping[]>;  // field → ordered mapping list
+}
+```
+
+Only fields listed in `enabledFields` are cleaned. Within a field, mappings are evaluated in order and the first match wins.
+
+---
+
+### `CleaningSummaryEntry`
+
+One row in the cleaning summary screen — one entry per mapping that was defined, including those with zero matches.
+
+```ts
+interface CleaningSummaryEntry {
+  field: string;
+  raw: string;
+  canonical: string;
+  count: number; // number of records changed by this mapping (0 = no match)
+}
+```
+
+---
+
 ## Clean Workflow Types
 
 ### `CleanStats`

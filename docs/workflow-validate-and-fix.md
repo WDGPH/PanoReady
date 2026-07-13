@@ -15,11 +15,67 @@ Use this workflow when you need to:
 
 On the home screen, drop or select your STIX XML file, then click the **Validate & Fix** card.
 
-The app immediately parses the XML and runs the full validation pass. If the XML is not well-formed, an error is shown and you are returned to the upload screen.
+The app parses the XML into student records. If the XML is not well-formed, an error is shown and you are returned to the upload screen. After a successful parse you are taken to the Cleaning step before validation runs.
 
 ---
 
-### Step 1 — Review Issues
+### Step 1 — Clean (optional)
+
+The Cleaning step lets you define field-value mappings to standardise inconsistent data **before** validation rules are applied. For example, if your SIS exports `"Gr. 7"` but the ruleset expects `"GR7"`, you can map the raw value to the canonical form here rather than treating it as a validation error.
+
+**Field picker (left panel):**
+
+- Click a field name to add it to the active field list.
+- Controlled-vocabulary fields (`Grade`, `Gender`, `Language`, `Province`) are excluded — use grade/gender aliases in your ruleset for those.
+- If a selected field has no values in the current file, the mapping table will show "No values found for this field in the loaded file."
+
+**Mapping table (right panel):**
+
+Once a field is selected, the table shows every distinct value found in the file with its occurrence count.
+
+| Column | Description |
+|---|---|
+| Raw value | The exact string currently in the XML |
+| Occurrences | Number of records containing this value |
+| Map to | The replacement value to write. Leave blank to keep the original. |
+| Match case | When checked, the raw value is matched case-sensitively (default: case-insensitive). |
+
+A collapsible **Pre-defined mappings** section also shows mappings whose raw value did not appear in the current file. These are still included when you click Apply & Continue but will produce a zero count in the summary; they remain in the profile and will fire on future files where a match exists.
+
+**Actions:**
+
+| Button | Effect |
+|---|---|
+| **Save to ruleset** | Persists the current cleaning profile to the active custom ruleset so it loads automatically next time. Requires a custom ruleset to be active. |
+| **Apply & Continue** | Runs the mappings against all records and advances to the Cleaning Summary screen. |
+| **Skip to validation** | Proceeds directly to validation with the original, unmodified XML. |
+| **Back** | Returns to the upload screen. |
+
+---
+
+### Step 1a — Cleaning Summary
+
+After applying mappings, the Cleaning Summary screen shows which rules fired and how many records each one changed.
+
+**Summary table columns:**
+
+| Column | Description |
+|---|---|
+| Field | The XML field the mapping targeted |
+| Raw | The original value that was matched |
+| Canonical | The replacement value that was written |
+| Records changed | Count of records affected |
+
+Mappings that matched zero records are highlighted with a warning — they had no effect on this file.
+
+**Actions:**
+
+- **Back to cleaning** — Return to the mapping editor.
+- **Continue to validation** — Apply the changes to the XML and run the full validation pass.
+
+---
+
+### Step 2 — Review Issues
 
 The Issues screen shows every validation finding in a filterable table.
 
@@ -66,7 +122,7 @@ A READY / BLOCKED badge in the top-right corner reflects the overall gate state:
 
 ---
 
-### Step 2 — Fix Data
+### Step 3 — Fix Data
 
 The Fix screen presents every issue that has either a suggested fix or can accept a manual correction.
 
@@ -97,7 +153,7 @@ The Fix screen presents every issue that has either a suggested fix or can accep
 
 ---
 
-### Step 3 — Revalidate
+### Step 4 — Revalidate
 
 After fixes are applied, the Revalidate screen shows a side-by-side before/after comparison and a full audit of every change.
 
@@ -129,7 +185,7 @@ If blocking errors remain after fixes (gate is still BLOCKED), a warning banner 
 
 ---
 
-### Step 4 — Download
+### Step 5 — Download
 
 The Download screen provides the final outputs.
 
@@ -165,9 +221,12 @@ The full set of rules checked during this workflow is documented in [Validation 
 | File | Role |
 |---|---|
 | `lib/validator.ts` | Core validation engine — parsing, rule checks, fix application, CSV generation |
+| `lib/cleaning.ts` | Cleaning logic — `applyCleaningProfile()`, `discoverFieldValues()` |
 | `config/rules.stix.default.json` | Rule configuration — required fields, allowed values, patterns, aliases |
-| `lib/types.ts` | `ValidationResult`, `ValidationIssue`, `AppliedFix`, `StudentRecord`, `ValidateSession` |
-| `app/page.tsx` | UI screens: `ValidateIssuesView`, `ValidateFixView`, `ValidateRevalidateView`, `ValidateDownloadView` |
+| `lib/types.ts` | `ValidationResult`, `ValidationIssue`, `AppliedFix`, `StudentRecord`, `ValidateSession`, `CleaningProfile`, `CleaningMapping`, `CleaningSummaryEntry` |
+| `components/CleaningView.tsx` | Mapping editor UI (Step 1) |
+| `components/CleaningSummaryView.tsx` | Post-cleaning summary screen (Step 1a) |
+| `app/page.tsx` | UI screens: `CleaningView`, `CleaningSummaryView`, `ValidateIssuesView`, `ValidateFixView`, `ValidateRevalidateView`, `ValidateDownloadView` |
 
 ---
 
@@ -177,7 +236,22 @@ The full set of rules checked during this workflow is documented in [Validation 
 Upload XML
     │
     ▼
-validateXml(xmlText)          ← lib/validator.ts
+parseStixXml(xmlText)         ← lib/validator.ts
+    │
+    ▼
+StudentRecord[]               ← in-memory records for cleaning
+    │
+    ▼
+applyCleaningProfile()        ← lib/cleaning.ts (skipped if user clicks Skip)
+    │
+    ▼
+CleaningSummaryEntry[]        ← user reviews which mappings fired
+    │
+    ▼
+applyValidationFixes(xml, syntheticFixes)  ← converts cleaning changes back to XML
+    │
+    ▼
+validateXml(cleanedXml)       ← lib/validator.ts
     │
     ▼
 ValidationResult              ← { gate, issues[], records[], studentCount, schoolCount }

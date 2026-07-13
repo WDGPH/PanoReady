@@ -6,7 +6,7 @@
  * All localStorage access is guarded against SSR environments.
  */
 
-import type { CustomRuleset, RulesProfile } from "./types";
+import type { CustomRuleset, RulesProfile, CleaningProfile } from "./types";
 import defaultRulesJson from "../config/rules.stix.default.json";
 
 /** The built-in ruleset, cast to the explicit (widened) RulesProfile type. */
@@ -65,6 +65,17 @@ export function getActiveRules(): RulesProfile {
   if (id === BUILTIN_ID) return defaultRules;
   const found = listCustomRulesets().find((r) => r.id === id);
   return found?.rules ?? defaultRules;
+}
+
+/**
+ * Return the CleaningProfile for the currently active ruleset, or null if the
+ * active ruleset is built-in or has no cleaning configured.
+ */
+export function getActiveCleaning(): CleaningProfile | null {
+  const id = getActiveRulesetId();
+  if (id === BUILTIN_ID) return null;
+  const found = listCustomRulesets().find((r) => r.id === id);
+  return found?.cleaning ?? null;
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
@@ -149,6 +160,50 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
     throw new Error("'rules.duplicateDetection.checkNameDobSchool' must be a boolean.");
   }
 
+  // Collects extra warnings from cleaning validation, merged with rules warnings below
+  const extraWarnings: string[] = [];
+
+  // ── Validate optional cleaning profile ────────────────────────────────────
+  if ("cleaning" in obj && obj.cleaning !== undefined) {
+    if (typeof obj.cleaning !== "object" || obj.cleaning === null || Array.isArray(obj.cleaning)) {
+      throw new Error("'cleaning' must be an object.");
+    }
+    const c = obj.cleaning as Record<string, unknown>;
+
+    if (!Array.isArray(c.enabledFields) || !(c.enabledFields as unknown[]).every((v) => typeof v === "string")) {
+      throw new Error("'cleaning.enabledFields' must be an array of strings.");
+    }
+
+    if (typeof c.mappings !== "object" || c.mappings === null || Array.isArray(c.mappings)) {
+      throw new Error("'cleaning.mappings' must be an object.");
+    }
+    for (const [fieldName, list] of Object.entries(c.mappings as Record<string, unknown>)) {
+      if (!Array.isArray(list)) {
+        throw new Error(`'cleaning.mappings.${fieldName}' must be an array.`);
+      }
+      for (let i = 0; i < (list as unknown[]).length; i++) {
+        const entry = (list as unknown[])[i];
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+          throw new Error(`'cleaning.mappings.${fieldName}[${i}]' must be an object.`);
+        }
+        const e = entry as Record<string, unknown>;
+        if (typeof e.raw !== "string") throw new Error(`'cleaning.mappings.${fieldName}[${i}].raw' must be a string.`);
+        if (typeof e.canonical !== "string") throw new Error(`'cleaning.mappings.${fieldName}[${i}].canonical' must be a string.`);
+        if ("matchCase" in e && e.matchCase !== undefined && typeof e.matchCase !== "boolean") {
+          throw new Error(`'cleaning.mappings.${fieldName}[${i}].matchCase' must be a boolean.`);
+        }
+      }
+    }
+
+    // Collect warnings for unknown keys inside cleaning (merged below)
+    const knownCleaningKeys = new Set(["enabledFields", "mappings"]);
+    extraWarnings.push(
+      ...Object.keys(c)
+        .filter((k) => !knownCleaningKeys.has(k))
+        .map((k) => `Unknown field in cleaning: '${k}' — will be ignored`)
+    );
+  }
+
   const knownRulesKeys = new Set([
     "requiredFields", "allowedGradeValues", "allowedGenderValues", "allowedProvinceValues",
     "allowedLanguageValues", "allowedCountryValues", "allowedStreetTypeValues",
@@ -157,10 +212,11 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
     "gradeAliases", "genderAliases", "phoneConfig", "duplicateDetection",
   ]);
   const unknownKeys = Object.keys(r).filter((k) => !knownRulesKeys.has(k));
-  const warnings: string[] | undefined =
-    unknownKeys.length > 0
-      ? unknownKeys.map((k) => `Unknown field in rules: '${k}' — will be ignored`)
-      : undefined;
+  const allWarnings: string[] = [
+    ...(unknownKeys.length > 0 ? unknownKeys.map((k) => `Unknown field in rules: '${k}' — will be ignored`) : []),
+    ...extraWarnings,
+  ];
+  const warnings: string[] | undefined = allWarnings.length > 0 ? allWarnings : undefined;
 
   const result = obj as unknown as CustomRuleset;
   if (warnings) result.warnings = warnings;
