@@ -1671,11 +1671,13 @@ export default function App() {
           onContinue={() => {
             const fixes: AppliedFix[] = [];
             let fixIndex = 0;
+            // Dedup by (recordId, field) — a field can only be changed to one canonical
+            // value per record (first-match-wins). The third condition disambiguates which
+            // summary entry to attribute the fix to when multiple entries share a field.
             const fixed = new Set<string>();
             for (const entry of cleaningSummary) {
               if (entry.count === 0) continue;
               for (let i = 0; i < parsedRecords.length; i++) {
-                if (i >= cleanedRecords.length) continue;
                 const original = parsedRecords[i];
                 const cleaned = cleanedRecords[i];
                 const key = `${original.id}\0${entry.field}`;

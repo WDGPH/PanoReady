@@ -117,7 +117,7 @@ A READY / BLOCKED badge in the top-right corner reflects the overall gate state:
 
 **Actions:**
 
-- **Fix Issues** — Proceed to the fix editor (Step 2).
+- **Fix Issues** — Proceed to the fix editor (Step 3).
 - **Skip to Download** — Bypass the fix step and go directly to the download screen. The file will still reflect any gate state.
 
 ---
