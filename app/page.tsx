@@ -2,12 +2,12 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
-  Upload, Wand2, FileSpreadsheet, FileText,
+  Wand2, FileText,
   CheckCircle2, AlertCircle, Loader2, ArrowLeft,
   ArrowRight, AlertTriangle, MapPin, School,
-  Download, Users, BarChart3, ShieldCheck,
+  Download, Users, BarChart3,
   ShieldX, Search, Filter, Wrench, RefreshCw,
-  ClipboardCheck, SlidersHorizontal,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cleanXml, applyReviewUpdates, prettyPrintXml } from "@/lib/cleaner";
 import { processExport, buildSchoolCounts, buildGradeCounts } from "@/lib/pullInfo";
@@ -44,17 +44,10 @@ type View =
 
 function NavBar() {
   return (
-    <header style={{ background: "var(--color-surface-1)", borderBottom: "1px solid var(--color-border)" }}>
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ background: "linear-gradient(135deg,#22c55e,#14b8a6)", borderRadius: 7, padding: "3px 9px", fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: "0.05em", fontFamily: "var(--font-mono)" }}>
-            PanoReady
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--color-text-muted)", fontSize: 12 }}>
-          <ShieldCheck size={13} style={{ color: "var(--color-brand-400)" }} />
-          Data never leaves your browser
-        </div>
+    <header className="topbar">
+      <div className="topbar-inner">
+        <span className="brand">PanoReady</span>
+        <span className="privacy">Data never leaves your browser</span>
       </div>
     </header>
   );
@@ -63,12 +56,14 @@ function NavBar() {
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, accent = "default" }: { label: string; value: number | string; accent?: "green" | "teal" | "yellow" | "red" | "default" }) {
-  const colors = { green: "var(--color-brand-400)", teal: "var(--color-teal-400)", yellow: "var(--color-warning-text)", red: "var(--color-error-text)", default: "var(--color-text-primary)" };
-  const bgs = { green: "var(--color-success-bg)", teal: "rgba(20,184,166,0.08)", yellow: "var(--color-warning-bg)", red: "var(--color-error-bg)", default: "var(--color-surface-2)" };
+  // Counts are facts, not confirmations — verde is reserved for the page's
+  // one real commitment moment, so plain quantities stay ink. Only warning
+  // and error counts keep functional color, since that's a real signal.
+  const colors = { green: "var(--color-text-primary)", teal: "var(--color-text-primary)", yellow: "var(--color-warning-text)", red: "var(--color-error-text)", default: "var(--color-text-primary)" };
   return (
-    <div style={{ background: bgs[accent], borderRadius: 10, padding: "18px 20px" }}>
-      <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: colors[accent] }}>{value}</div>
+    <div style={{ borderLeft: `2px solid ${accent === "yellow" || accent === "red" ? colors[accent] : "var(--color-border)"}`, padding: "2px 0 2px 14px" }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--color-text-muted)", fontWeight: 500, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontSize: 26, fontWeight: 600, color: colors[accent] }}>{value}</div>
     </div>
   );
 }
@@ -77,12 +72,13 @@ function StatCard({ label, value, accent = "default" }: { label: string; value: 
 
 function SeverityBadge({ severity }: { severity: ValidationSeverity }) {
   const config = {
-    error:   { bg: "var(--color-error-bg)",   border: "var(--color-error-border)",   text: "var(--color-error-text)",   label: "ERROR" },
-    warning: { bg: "var(--color-warning-bg)", border: "var(--color-warning-border)", text: "var(--color-warning-text)", label: "WARN" },
-    info:    { bg: "rgba(99,102,241,0.1)",     border: "rgba(99,102,241,0.3)",        text: "#818cf8",                   label: "INFO" },
+    error:   { color: "var(--color-error-text)",   label: "Error" },
+    warning: { color: "var(--color-warning-text)", label: "Warn" },
+    info:    { color: "var(--color-info-text)",    label: "Info" },
   }[severity];
   return (
-    <span style={{ background: config.bg, border: `1px solid ${config.border}`, borderRadius: 99, padding: "2px 8px", fontSize: 10, fontWeight: 700, color: config.text, letterSpacing: "0.05em", whiteSpace: "nowrap" as const }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 500, color: config.color, letterSpacing: "0.02em", whiteSpace: "nowrap" as const }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: config.color, flexShrink: 0 }} />
       {config.label}
     </span>
   );
@@ -93,12 +89,10 @@ function SeverityBadge({ severity }: { severity: ValidationSeverity }) {
 function GateBadge({ gate }: { gate: string }) {
   const isReady = gate === "READY";
   const isPending = gate === "PENDING";
-  const bg     = isReady ? "var(--color-success-bg)"  : isPending ? "var(--color-surface-2)"  : "var(--color-error-bg)";
-  const border = isReady ? "var(--color-success-border)" : isPending ? "var(--color-border)" : "var(--color-error-border)";
-  const color  = isReady ? "var(--color-brand-400)"   : isPending ? "var(--color-text-muted)" : "var(--color-error-text)";
+  const color  = isReady ? "var(--verde)" : isPending ? "var(--color-text-muted)" : "var(--color-error-text)";
   const icon   = isReady ? <CheckCircle2 size={14} /> : isPending ? <Loader2 size={14} />   : <ShieldX size={14} />;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: bg, border: `1px solid ${border}`, borderRadius: 99, padding: "5px 14px", fontSize: 13, fontWeight: 700, color }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${color}`, borderRadius: 3, padding: "4px 12px", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500, letterSpacing: "0.03em", color }}>
       {icon}{gate}
     </span>
   );
@@ -106,11 +100,11 @@ function GateBadge({ gate }: { gate: string }) {
 
 // ─── Workflows config ────────────────────────────────────────────────────────
 
-const WORKFLOWS: { id: Workflow; icon: React.ReactNode; label: string; description: string; color: string }[] = [
-  { id: "validate", icon: <ClipboardCheck size={20} />, label: "Validate & Fix",    description: "Full validation: required fields, code values, formats, duplicates. Apply safe fixes, revalidate, download.", color: "#818cf8" },
-  { id: "clean",    icon: <Wand2 size={20} />,          label: "Clean XML",         description: "Fix phones, standardize units, flag bad street numbers for manual review.", color: "var(--color-brand-400)" },
-  { id: "export",   icon: <FileSpreadsheet size={20} />, label: "Export Reports",   description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries.", color: "var(--color-teal-400)" },
-  { id: "pretty",   icon: <FileText size={20} />,        label: "Pretty Print",     description: "Reformat the XML with consistent indentation.", color: "#a78bfa" },
+const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
+  { id: "validate", label: "Validate & Fix",  description: "Full validation: required fields, code values, formats, duplicates. Apply safe fixes, revalidate, download." },
+  { id: "clean",    label: "Clean XML",       description: "Fix phones, standardize units, flag bad street numbers for manual review." },
+  { id: "export",   label: "Export Reports",  description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries." },
+  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation." },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
@@ -121,7 +115,6 @@ function HomeView({ onDone, onValidate }: {
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile]           = useState<File | null>(null);
-  const [selectedName, setSelectedName] = useState("");
   const [workflow, setWorkflow]   = useState<Workflow>("validate");
   const [dragging, setDragging]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -133,7 +126,6 @@ function HomeView({ onDone, onValidate }: {
   const handleFile = useCallback((f: File) => {
     setError(null);
     setFile(f);
-    setSelectedName(f.name || "selected file");
   }, []);
 
   const handleNativeFileSelect = useCallback((target: HTMLInputElement) => {
@@ -153,11 +145,7 @@ function HomeView({ onDone, onValidate }: {
       handleFile(selectedFile);
       return selectedFile;
     }
-    if (input.value) {
-      const fallbackName = input.value.split(/[/\\]/).pop() ?? input.value;
-      setSelectedName(fallbackName);
-    }
-    setError("No readable file found. Re-select the XML file, then click Use Selected File.");
+    setError("No readable file found. Please choose the XML file again.");
     return null;
   }, [handleFile]);
 
@@ -235,103 +223,107 @@ function HomeView({ onDone, onValidate }: {
     : workflow === "clean" ? "Clean XML"
     : workflow === "export" ? "Generate Reports"
     : "Pretty Print XML";
-  const wIcon = workflow === "validate" ? <ClipboardCheck size={16} />
-    : workflow === "clean" ? <Wand2 size={16} />
-    : workflow === "export" ? <FileSpreadsheet size={16} />
-    : <FileText size={16} />;
 
   return (
-    <main className="grid-bg" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "56px 24px 80px" }}>
-      <div style={{ textAlign: "center", marginBottom: 48, maxWidth: 560 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--color-success-bg)", border: "1px solid var(--color-success-border)", borderRadius: 99, padding: "4px 14px", fontSize: 12, color: "var(--color-success-text)", marginBottom: 18, fontWeight: 500 }}>
-          <CheckCircle2 size={12} /> 100% in-browser · No server · No data upload
-        </div>
-        <h1 style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.1, margin: "0 0 14px" }}>
-          <span className="gradient-text">PanoReady</span>
-        </h1>
-        <p style={{ color: "var(--color-text-secondary)", fontSize: 15, lineHeight: 1.7, margin: 0 }}>
-          Clean, validate, and export Ontario school enrollment data. Student records never leave your device.
-        </p>
-      </div>
+    <main style={{ flex: 1, display: "flex", justifyContent: "center", padding: "72px 24px 100px" }}>
+      <div className="rail-page" style={{ width: "100%", maxWidth: 620 }}>
+        <div className="rail" />
 
-      <div style={{ width: "100%", maxWidth: 720, display: "flex", flexDirection: "column", gap: 22 }}>
-        {/* Workflow selector */}
-        <div>
-          <div style={{ color: "var(--color-text-muted)", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>1 · Choose workflow</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
+        {/* Statement — the one decision on this page that isn't a workflow choice */}
+        <section className="beat">
+          <p className="eyebrow" style={{ marginBottom: 22 }}>In your browser, always</p>
+          <h1 style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 500, fontSize: "clamp(34px,5.5vw,58px)", lineHeight: 1.08, letterSpacing: "-0.01em", margin: 0, maxWidth: 480, color: "var(--ink)" }}>
+            Validate, in confidence.
+          </h1>
+        </section>
+
+        {/* Workflow — the tick on the spine registers the choice, nothing else needs to */}
+        <section className="beat">
+          <h2 className="beat-title">Workflow</h2>
+          <div>
             {WORKFLOWS.map((w) => (
-              <button key={w.id} onClick={() => setWorkflow(w.id)} style={{ background: workflow === w.id ? `color-mix(in srgb,${w.color} 12%,var(--color-surface-2))` : "var(--color-surface-1)", border: `1px solid ${workflow === w.id ? w.color : "var(--color-border)"}`, borderRadius: 10, padding: "16px 14px", textAlign: "left", cursor: "pointer", transition: "all 0.15s", outline: "none", position: "relative", overflow: "hidden" }}>
-                {workflow === w.id && <div style={{ position: "absolute", top: 0, right: 0, background: w.color, borderRadius: "0 10px 0 7px", padding: "2px 8px", fontSize: 9, fontWeight: 800, color: "#000", letterSpacing: "0.06em" }}>SELECTED</div>}
-                <div style={{ color: w.color, marginBottom: 8 }}>{w.icon}</div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "var(--color-text-primary)", marginBottom: 5 }}>{w.label}</div>
-                <div style={{ fontSize: 11, color: "var(--color-text-muted)", lineHeight: 1.5 }}>{w.description}</div>
+              <button
+                key={w.id}
+                onClick={() => setWorkflow(w.id)}
+                className={`wf-row${workflow === w.id ? " selected" : ""}`}
+              >
+                <span className="wf-title">{w.label}</span>
+                <span className="wf-desc">{w.description}</span>
               </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Ruleset selector — validate workflow only */}
+        {/* Ruleset — validate workflow only */}
         {workflow === "validate" && (
-          <RulesetSelector onRulesChange={setActiveRules} />
+          <section className="beat">
+            <h2 className="beat-title">Ruleset</h2>
+            <RulesetSelector onRulesChange={setActiveRules} />
+          </section>
         )}
 
-        {/* Drop zone */}
-        <div>
-          <div style={{ color: "var(--color-text-muted)", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>2 · Upload XML file</div>
-          <div
+        {/* File — a niche the file belongs in, not a placeholder. One target:
+            click it to browse, or drag a file onto it. */}
+        <section className="beat">
+          <h2 className="beat-title">File</h2>
+          <input
+            id="xml-upload"
+            ref={inputRef}
+            type="file"
+            accept=".xml,text/xml,application/xml"
+            aria-describedby="xml-upload-help"
+            onChange={(e) => handleNativeFileSelect(e.currentTarget)}
+            onInput={(e) => handleNativeFileSelect(e.currentTarget)}
+            style={{ display: "none" }}
+          />
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
             onDrop={onDrop}
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
-            style={{ display: "block", border: `2px dashed ${dragging ? "var(--color-brand-400)" : file ? "var(--color-brand-600)" : "var(--color-border)"}`, borderRadius: 12, padding: "36px 24px", textAlign: "center", background: dragging ? "var(--color-success-bg)" : file ? "rgba(34,197,94,0.04)" : "var(--color-surface-1)", transition: "all 0.2s" }}
+            className={`niche${dragging ? " dragging" : ""}`}
           >
             {file ? (
-              <div>
-                <CheckCircle2 size={28} style={{ color: "var(--color-brand-400)", margin: "0 auto 10px" }} />
-                <div style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{file.name}</div>
-                <div id="xml-upload-help" style={{ color: "var(--color-text-muted)", fontSize: 12, marginTop: 4 }}>{(file.size / 1024).toFixed(1)} KB · Drop another file below to change</div>
-              </div>
+              <>
+                <CheckCircle2 size={20} style={{ color: "var(--color-text-muted)", margin: "0 auto 16px" }} />
+                <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>{file.name}</p>
+                <p id="xml-upload-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {(file.size / 1024).toFixed(1)} KB · click, or drop another file, to change
+                </p>
+              </>
             ) : (
-              <div>
-                <Upload size={28} style={{ color: "var(--color-text-muted)", margin: "0 auto 10px" }} />
-                <div style={{ fontWeight: 500, color: "var(--color-text-secondary)", marginBottom: 5 }}>Drop your XML file here</div>
-                <div id="xml-upload-help" style={{ color: "var(--color-text-muted)", fontSize: 12 }}>or choose one from your device below</div>
-              </div>
+              <>
+                <span style={{ display: "block", fontSize: 20, color: "var(--color-text-muted)", marginBottom: 16 }}>↑</span>
+                <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>Drop your XML file here</p>
+                <p id="xml-upload-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  or click to browse your device
+                </p>
+              </>
             )}
-          </div>
-          <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <input
-              id="xml-upload"
-              ref={inputRef}
-              type="file"
-              accept=".xml,text/xml,application/xml"
-              aria-describedby="xml-upload-help"
-              onChange={(e) => handleNativeFileSelect(e.currentTarget)}
-              onInput={(e) => handleNativeFileSelect(e.currentTarget)}
-              style={{ minWidth: 280, color: "var(--color-text-secondary)", fontSize: 13 }}
-            />
-            <button type="button" onClick={syncFileFromInput} className="btn btn-secondary" style={{ padding: "7px 12px", fontSize: 12 }}>
-              Use Selected File
-            </button>
-            <div style={{ color: selectedName ? "var(--color-text-primary)" : "var(--color-text-muted)", fontSize: 13 }}>
-              {selectedName || "No file selected"}
-            </div>
-          </div>
-        </div>
+          </button>
+        </section>
 
         {error && (
-          <div style={{ background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)", borderRadius: 9, padding: "11px 15px", display: "flex", alignItems: "center", gap: 9, color: "var(--color-error-text)", fontSize: 13 }}>
-            <AlertCircle size={15} /> {error}
-          </div>
+          <section className="beat">
+            <div style={{ borderLeft: "2px solid var(--color-error-text)", padding: "8px 0 8px 14px", display: "flex", alignItems: "center", gap: 9, color: "var(--color-error-text)", fontSize: 13 }}>
+              <AlertCircle size={15} /> {error}
+            </div>
+          </section>
         )}
 
-        <button onClick={run} disabled={processing} className="btn btn-primary" style={{ width: "100%", padding: "13px", fontSize: 14, borderRadius: 10, opacity: processing ? 0.5 : 1, cursor: processing ? "not-allowed" : "pointer" }}>
-          {processing ? <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : <>{wIcon} {wLabel}</>}
-        </button>
-      </div>
+        {/* Commit — the only other place verde appears: the keystone above the final act */}
+        <section className="beat">
+          <div className="keystone-rule" />
+          <button onClick={run} disabled={processing} className="cta">
+            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : wLabel}
+          </button>
+        </section>
 
-      <p style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 36, textAlign: "center" }}>
-        Built by Wellington-Dufferin-Guelph Public Health · MIT License
-      </p>
+        <p className="colophon" style={{ fontSize: 11 }}>
+          Built by Wellington-Dufferin-Guelph Public Health · MIT License
+        </p>
+      </div>
     </main>
   );
 }
@@ -361,12 +353,12 @@ function ReviewView({ session, onBack, onDone }: { session: SessionData; onBack:
   };
 
   return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "36px 24px 80px" }}>
+    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 20, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Back
       </button>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 28 }}>
-        <div style={{ background: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)", borderRadius: 9, padding: 9, flexShrink: 0 }}>
+        <div style={{ flexShrink: 0, paddingTop: 2 }}>
           <AlertTriangle size={20} style={{ color: "var(--color-warning-text)" }} />
         </div>
         <div>
@@ -376,13 +368,13 @@ function ReviewView({ session, onBack, onDone }: { session: SessionData; onBack:
           </p>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 20, marginBottom: 28, background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 9, padding: "12px 18px" }}>
+      <div style={{ display: "flex", gap: 20, marginBottom: 28, background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "12px 18px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ fontWeight: 700, fontSize: 18, color: "var(--color-warning-text)" }}>{issues.filter(i => i.type === "street_number").length}</span>
           <span style={{ color: "var(--color-text-muted)", fontSize: 13 }}>street numbers</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, color: "var(--color-teal-400)" }}>{issues.filter(i => i.type === "unit").length}</span>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "var(--color-warning-text)" }}>{issues.filter(i => i.type === "unit").length}</span>
           <span style={{ color: "var(--color-text-muted)", fontSize: 13 }}>unit fields</span>
         </div>
         <div style={{ marginLeft: "auto", color: "var(--color-text-muted)", fontSize: 11, alignSelf: "center" }}>
@@ -392,16 +384,15 @@ function ReviewView({ session, onBack, onDone }: { session: SessionData; onBack:
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {issues.map((issue, idx) => {
           const isStreet = issue.type === "street_number";
-          const accent = isStreet ? "var(--color-warning-text)" : "var(--color-teal-400)";
-          const accentBg = isStreet ? "var(--color-warning-bg)" : "rgba(20,184,166,0.08)";
-          const accentBorder = isStreet ? "var(--color-warning-border)" : "rgba(20,184,166,0.3)";
+          const accent = "var(--color-warning-text)";
           const key = isStreet ? `${issue.id}_number` : `${issue.id}_unit`;
           return (
             <div key={issue.id} className="card" style={{ padding: "18px 22px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <span style={{ background: accentBg, border: `1px solid ${accentBorder}`, borderRadius: 99, padding: "2px 9px", fontSize: 10, fontWeight: 700, color: accent, letterSpacing: "0.05em" }}>
-                    {isStreet ? "STREET NUMBER" : "UNIT FIELD"}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 500, color: accent, letterSpacing: "0.05em" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+                    {isStreet ? "Street number" : "Unit field"}
                   </span>
                   <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{idx + 1}/{issues.length}</span>
                 </div>
@@ -508,11 +499,11 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
   };
 
   return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "36px 24px 80px" }}>
+    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 22, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Process another file
       </button>
-      <div style={{ background: "var(--color-success-bg)", border: "1px solid var(--color-success-border)", borderRadius: 11, padding: "18px 22px", display: "flex", alignItems: "center", gap: 14, marginBottom: 30 }}>
+      <div style={{ borderLeft: "2px solid var(--verde)", padding: "6px 0 6px 18px", display: "flex", alignItems: "center", gap: 14, marginBottom: 34 }}>
         <CheckCircle2 size={26} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} />
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, color: "var(--color-brand-400)", marginBottom: 2 }}>Processing Complete</div>
@@ -525,7 +516,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
       {session.workflow === "clean" && session.stats && (
         <>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Cleaning Summary</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 28, marginBottom: 24 }}>
             <StatCard label="Phones Fixed"        value={session.stats.phones_cleaned}   accent="green" />
             <StatCard label="Phones Cleared"      value={session.stats.phones_blank}     accent="yellow" />
             <StatCard label="Units Standardized"  value={session.stats.units_standardized} accent="teal" />
@@ -533,7 +524,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
           </div>
           <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ background: "var(--color-success-bg)", borderRadius: 8, padding: 9 }}><Wand2 size={18} style={{ color: "var(--color-brand-400)" }} /></div>
+              <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Wand2 size={18} style={{ color: "var(--color-text-muted)" }} /></div>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_clean.xml</div>
                 <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>Cleaned STIX XML</div>
@@ -547,7 +538,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
       {session.workflow === "pretty" && (
         <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: "rgba(167,139,250,0.1)", borderRadius: 8, padding: 9 }}><FileText size={18} style={{ color: "#a78bfa" }} /></div>
+            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><FileText size={18} style={{ color: "var(--color-text-muted)" }} /></div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_pretty.xml</div>
               <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>Reformatted XML</div>
@@ -563,21 +554,21 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
         return (
           <>
             <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Export Summary</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 28, marginBottom: 24 }}>
               <StatCard label="Total Students"         value={exp.allStudents.length}      accent="green" />
               <StatCard label="Filtered (Gr7–8 12/13)" value={exp.filteredStudents.length} accent="teal" />
               <StatCard label="Schools"                value={schoolCount} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {([
-                { icon: <Users size={16} style={{ color: "var(--color-brand-400)" }} />,   title: `${baseName}_all_students.csv`,   sub: `${exp.allStudents.length} students`,                       fn: () => dlCsv(exp.allStudents as unknown as Record<string,unknown>[],      "all_students") },
-                { icon: <Users size={16} style={{ color: "var(--color-teal-400)" }} />,    title: `${baseName}_filtered.csv`,       sub: `${exp.filteredStudents.length} Gr7–8 born 2012–2013`,      fn: () => dlCsv(exp.filteredStudents as unknown as Record<string,unknown>[],  "filtered") },
-                { icon: <School size={16} style={{ color: "#a78bfa" }} />,                 title: `${baseName}_school_counts.csv`,  sub: "Students per school per birth year",                       fn: () => dlCsv(exp.schoolCounts as unknown as Record<string,unknown>[],      "school_counts") },
+                { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_all_students.csv`,   sub: `${exp.allStudents.length} students`,                       fn: () => dlCsv(exp.allStudents as unknown as Record<string,unknown>[],      "all_students") },
+                { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_filtered.csv`,       sub: `${exp.filteredStudents.length} Gr7–8 born 2012–2013`,      fn: () => dlCsv(exp.filteredStudents as unknown as Record<string,unknown>[],  "filtered") },
+                { icon: <School size={16} style={{ color: "var(--color-text-muted)" }} />, title: `${baseName}_school_counts.csv`,  sub: "Students per school per birth year",                       fn: () => dlCsv(exp.schoolCounts as unknown as Record<string,unknown>[],      "school_counts") },
                 { icon: <BarChart3 size={16} style={{ color: "var(--color-warning-text)" }} />, title: `${baseName}_grade_counts.csv`, sub: "Students per school per grade",                        fn: () => dlCsv(exp.gradeCounts as unknown as Record<string,unknown>[],       "grade_counts") },
               ] as const).map(({ icon, title, sub, fn }) => (
                 <div key={title} className="card" style={{ padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-                    <div style={{ background: "var(--color-surface-2)", borderRadius: 7, padding: 8 }}>{icon}</div>
+                    <div style={{ background: "var(--color-surface-2)", borderRadius: 3, padding: 8 }}>{icon}</div>
                     <div>
                       <div style={{ fontWeight: 500, fontSize: 12, fontFamily: "var(--font-mono)", marginBottom: 2 }}>{title}</div>
                       <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{sub}</div>
@@ -586,9 +577,9 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
                   <button onClick={fn} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> CSV</button>
                 </div>
               ))}
-              <div style={{ background: "var(--color-surface-1)", border: "2px solid var(--color-brand-600)", borderRadius: 11, padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ background: "var(--color-surface-1)", border: "2px solid var(--color-brand-600)", borderRadius: 4, padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ background: "var(--color-success-bg)", borderRadius: 8, padding: 9 }}><FileText size={18} style={{ color: "var(--color-brand-400)" }} /></div>
+                  <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><FileText size={18} style={{ color: "var(--color-text-muted)" }} /></div>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_report.xlsx</div>
                     <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>All 4 sheets in one Excel workbook</div>
@@ -599,20 +590,16 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
             </div>
 
             {/* ── Custom Filter & Export ───────────────────────────────────── */}
-            <div style={{ marginTop: 32, borderRadius: 12, border: "1px solid rgba(45,212,191,0.3)", overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: "rgba(45,212,191,0.06)", borderBottom: "1px solid rgba(45,212,191,0.2)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ background: "rgba(45,212,191,0.15)", borderRadius: 7, padding: 7, display: "flex" }}>
-                    <SlidersHorizontal size={16} style={{ color: "var(--color-teal-400)" }} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>Filter &amp; Export Custom Report</div>
-                    <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 1 }}>Narrow by school, grade, gender, or age — then download a targeted CSV or Excel</div>
-                  </div>
+            <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <SlidersHorizontal size={15} style={{ color: "var(--color-text-muted)" }} />
+                <div>
+                  <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Export Custom Report</div>
+                  <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>Narrow by school, grade, gender, or age — then download a targeted CSV or Excel</div>
                 </div>
               </div>
 
-              <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16, background: "var(--color-surface-1)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <FilterCheckboxGroup
                     label="School"
@@ -645,9 +632,9 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
                   />
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 9, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 4, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
                   <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                    <span style={{ fontWeight: 800, color: "var(--color-teal-400)", fontSize: 22, lineHeight: 1 }}>{customStudents.length}</span>
+                    <span style={{ fontWeight: 800, color: "var(--color-text-primary)", fontSize: 22, lineHeight: 1 }}>{customStudents.length}</span>
                     <span style={{ marginLeft: 6 }}>of {exp.allStudents.length} students match</span>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -712,7 +699,7 @@ function ValidateIssuesView({
   const fixableCount = allIssues.filter(i => i.autoFixable).length;
 
   return (
-    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "32px 24px 80px" }}>
+    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Open another file
       </button>
@@ -729,7 +716,7 @@ function ValidateIssuesView({
       </div>
 
       {/* Summary stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 28, marginBottom: 22 }}>
         <StatCard label="Total Issues" value={allIssues.length} />
         <StatCard label="Errors"       value={errorCount}       accent="red" />
         <StatCard label="Warnings"     value={warningCount}     accent="yellow" />
@@ -774,7 +761,7 @@ function ValidateIssuesView({
       </div>
 
       {/* Issue table */}
-      <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
+      <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
         {filtered.length === 0 ? (
           <div style={{ padding: "40px 24px", textAlign: "center", color: "var(--color-text-muted)" }}>
             {allIssues.length === 0 ? "No issues found — file looks clean!" : "No issues match the current filters."}
@@ -802,7 +789,7 @@ function ValidateIssuesView({
                       <td><SeverityBadge severity={issue.severity} /></td>
                       <td style={{ fontWeight: 500, color: "var(--color-text-primary)", maxWidth: 160 }}>{issue.studentName || "—"}</td>
                       <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{issue.schoolNumber || "—"}</td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-teal-400)" }}>{issue.field || "—"}</td>
+                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || "—"}</td>
                       <td>
                         {currentValue ? (
                           <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
@@ -812,9 +799,9 @@ function ValidateIssuesView({
                       <td>
                         {issue.suggestedFix ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            <code style={{ background: "rgba(20,184,166,0.1)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "var(--color-teal-400)" }}>{issue.suggestedFix}</code>
+                            <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "var(--color-text-primary)" }}>{issue.suggestedFix}</code>
                             {issue.autoFixable && (
-                              <span style={{ fontSize: 9, background: "rgba(20,184,166,0.15)", color: "var(--color-teal-400)", borderRadius: 3, padding: "1px 5px", fontWeight: 700 }}>AUTO</span>
+                              <span style={{ fontSize: 9, border: "1px solid var(--color-border)", color: "var(--color-text-muted)", borderRadius: 3, padding: "1px 5px", fontWeight: 600, letterSpacing: "0.03em" }}>AUTO</span>
                             )}
                           </span>
                         ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Manual</span>}
@@ -922,7 +909,7 @@ function ValidateFixView({
   const fixableCount = issues.filter(i => i.autoFixable).length;
 
   return (
-    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "32px 24px 80px" }}>
+    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Back to Issues
       </button>
@@ -943,8 +930,8 @@ function ValidateFixView({
       </div>
 
       {/* Bulk action info */}
-      <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 9, padding: "10px 16px", marginBottom: 20, fontSize: 12, color: "#a5b4fc" }}>
-        <strong>Bulk-safe fixes</strong> are pre-filled automatically: whitespace trimming, grade/gender code normalization, deterministic date reformatting.
+      <div style={{ borderLeft: "2px solid var(--color-info-text)", padding: "6px 0 6px 14px", marginBottom: 20, fontSize: 12, color: "var(--color-text-secondary)" }}>
+        <strong style={{ color: "var(--color-info-text)" }}>Bulk-safe fixes</strong> are pre-filled automatically: whitespace trimming, grade/gender code normalization, deterministic date reformatting.
         Manual fields require you to type a correction — leave blank to skip.
       </div>
 
@@ -957,7 +944,7 @@ function ValidateFixView({
       </div>
 
       {/* Fix table */}
-      <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
+      <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
         <div style={{ overflowX: "auto" }}>
           <table className="data-table">
             <thead>
@@ -981,7 +968,7 @@ function ValidateFixView({
                       <div style={{ fontWeight: 500 }}>{issue.studentName || "—"}</div>
                       <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{issue.schoolNumber}</div>
                     </td>
-                    <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-teal-400)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>
+                    <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>
                     <td>
                       {currentValue ? (
                         <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
@@ -1079,7 +1066,7 @@ function ValidateRevalidateView({
   const resolvedCount = prev.issues.length - next.issues.length;
 
   return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "32px 24px 80px" }}>
+    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Back to Fix
       </button>
@@ -1145,7 +1132,7 @@ function ValidateRevalidateView({
       {session.fixes.length > 0 && (
         <>
           <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 10 }}>Applied Fixes</div>
-          <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
+          <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
             <div style={{ overflowX: "auto" }}>
               <table className="data-table">
                 <thead>
@@ -1163,7 +1150,7 @@ function ValidateRevalidateView({
                     return (
                       <tr key={fix.issueId}>
                         <td style={{ fontSize: 12, fontWeight: 500 }}>{studentName || fix.recordId}</td>
-                        <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-teal-400)" }}>{fix.field}</td>
+                        <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-secondary)" }}>{fix.field}</td>
                         <td><code style={{ background: "var(--color-error-bg)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{fix.oldValue || "(empty)"}</code></td>
                         <td><code style={{ background: "var(--color-success-bg)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "var(--color-brand-400)" }}>{fix.newValue}</code></td>
                       </tr>
@@ -1178,7 +1165,7 @@ function ValidateRevalidateView({
 
       {/* Remaining blocking issues */}
       {nextErrors > 0 && (
-        <div style={{ background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)", borderRadius: 9, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "var(--color-error-text)" }}>
+        <div style={{ borderLeft: "2px solid var(--color-error-text)", padding: "6px 0 6px 14px", marginBottom: 20, fontSize: 13, color: "var(--color-error-text)" }}>
           <strong>{nextErrors} blocking error{nextErrors !== 1 ? "s" : ""} remain.</strong> The file is still <strong>BLOCKED</strong>. You can download it for reference but it may not pass submission.
         </div>
       )}
@@ -1232,7 +1219,7 @@ function FilterCheckboxGroup({
   onNone: () => void;
 }) {
   return (
-    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "12px 14px", flex: "1 1 150px", minWidth: 0 }}>
+    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "12px 14px", flex: "1 1 150px", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ fontWeight: 600, fontSize: 12, color: "var(--color-text-secondary)", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>{label}</span>
         <div style={{ display: "flex", gap: 5 }}>
@@ -1245,7 +1232,7 @@ function FilterCheckboxGroup({
         {options.length === 0
           ? <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>No values</span>
           : options.map((opt) => (
-            <label key={opt} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 4px", borderRadius: 4, cursor: "pointer", fontSize: 12, color: "var(--color-text-primary)", background: selected.includes(opt) ? "rgba(34,197,94,0.08)" : "transparent" }}>
+            <label key={opt} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 4px", borderRadius: 4, cursor: "pointer", fontSize: 12, color: "var(--color-text-primary)", background: selected.includes(opt) ? "var(--color-success-bg)" : "transparent" }}>
               <input type="checkbox" checked={selected.includes(opt)} onChange={() => onToggle(opt)} style={{ accentColor: "var(--color-brand-500)", cursor: "pointer" }} />
               {opt}
             </label>
@@ -1264,7 +1251,7 @@ function AgeRangeFilter({
   onChange: (min: number, max: number) => void;
 }) {
   return (
-    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "12px 14px", flex: "1 1 180px", minWidth: 0 }}>
+    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "12px 14px", flex: "1 1 180px", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span style={{ fontWeight: 600, fontSize: 12, color: "var(--color-text-secondary)", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>Age Range</span>
         <button onClick={() => onChange(minBound, maxBound)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "var(--color-surface-4)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)", cursor: "pointer" }}>Reset</button>
@@ -1275,14 +1262,14 @@ function AgeRangeFilter({
           <div style={{ marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--color-text-muted)", marginBottom: 3 }}>
               <span>Min age</span>
-              <span style={{ fontWeight: 700, color: "var(--color-brand-400)" }}>{minAge}</span>
+              <span style={{ fontWeight: 700, color: "var(--color-text-primary)" }}>{minAge}</span>
             </div>
             <input type="range" min={minBound} max={maxBound} value={minAge} onChange={(e) => onChange(parseInt(e.target.value), Math.max(parseInt(e.target.value), maxAge))} style={{ width: "100%", accentColor: "var(--color-brand-500)" }} />
           </div>
           <div style={{ marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--color-text-muted)", marginBottom: 3 }}>
               <span>Max age</span>
-              <span style={{ fontWeight: 700, color: "var(--color-brand-400)" }}>{maxAge}</span>
+              <span style={{ fontWeight: 700, color: "var(--color-text-primary)" }}>{maxAge}</span>
             </div>
             <input type="range" min={minBound} max={maxBound} value={maxAge} onChange={(e) => onChange(Math.min(minAge, parseInt(e.target.value)), parseInt(e.target.value))} style={{ width: "100%", accentColor: "var(--color-brand-500)" }} />
           </div>
@@ -1381,21 +1368,19 @@ function ValidateDownloadView({
   const dlFilteredIssues  = () => downloadText(generateIssueReportCsv(filteredIssues, session.fixes), `${baseName}_filtered_issues.csv`, "text/csv");
 
   return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "36px 24px 80px" }}>
+    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 22, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Process another file
       </button>
 
       {/* Gate banner */}
       <div style={{
-        background: gate === "READY" ? "var(--color-success-bg)" : "var(--color-error-bg)",
-        border: `1px solid ${gate === "READY" ? "var(--color-success-border)" : "var(--color-error-border)"}`,
-        borderRadius: 12,
-        padding: "20px 24px",
+        borderLeft: `2px solid ${gate === "READY" ? "var(--verde)" : "var(--color-error-text)"}`,
+        padding: "6px 0 6px 22px",
         display: "flex",
         alignItems: "center",
         gap: 16,
-        marginBottom: 28,
+        marginBottom: 34,
       }}>
         {gate === "READY" ? <CheckCircle2 size={28} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} /> : <ShieldX size={28} style={{ color: "var(--color-error-text)", flexShrink: 0 }} />}
         <div>
@@ -1423,7 +1408,7 @@ function ValidateDownloadView({
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 28, marginBottom: 28 }}>
         <StatCard label="Fixes Applied"    value={session.fixes.length}  accent="teal" />
         <StatCard label="Remaining Issues" value={result.issues.length}  />
         <StatCard label="Students"         value={result.studentCount}   accent="green" />
@@ -1435,7 +1420,7 @@ function ValidateDownloadView({
         {/* Cleaned XML */}
         <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: gate === "READY" ? "var(--color-success-bg)" : "var(--color-error-bg)", borderRadius: 8, padding: 9 }}>
+            <div style={{ background: gate === "READY" ? "var(--color-success-bg)" : "var(--color-error-bg)", borderRadius: 4, padding: 9 }}>
               <FileText size={18} style={{ color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }} />
             </div>
             <div>
@@ -1451,8 +1436,8 @@ function ValidateDownloadView({
         {/* Issue report CSV */}
         <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: "var(--color-surface-2)", borderRadius: 8, padding: 9 }}>
-              <BarChart3 size={18} style={{ color: "var(--color-teal-400)" }} />
+            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}>
+              <BarChart3 size={18} style={{ color: "var(--color-text-muted)" }} />
             </div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_issue_report.csv</div>
@@ -1466,30 +1451,28 @@ function ValidateDownloadView({
       </div>
 
       {/* ── Filter & Report section ─────────────────────────────────────────── */}
-      <div style={{ marginTop: 32, borderRadius: 12, border: "1px solid rgba(45,212,191,0.3)", overflow: "hidden" }}>
+      <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
         {/* Section header */}
         <button
           onClick={() => setShowFilters((v) => !v)}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: "rgba(45,212,191,0.06)", border: "none", borderBottom: showFilters ? "1px solid rgba(45,212,191,0.2)" : "none", cursor: "pointer", textAlign: "left" as const }}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left" as const }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ background: "rgba(45,212,191,0.15)", borderRadius: 7, padding: 7, display: "flex" }}>
-              <SlidersHorizontal size={16} style={{ color: "var(--color-teal-400)" }} />
-            </div>
+            <SlidersHorizontal size={15} style={{ color: "var(--color-text-muted)" }} />
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>Filter &amp; Export Reports</div>
-              <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 1 }}>
+              <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Export Reports</div>
+              <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>
                 Narrow by school, grade, gender, or age — then download targeted CSVs
               </div>
             </div>
           </div>
-          <span style={{ fontSize: 12, color: "var(--color-teal-400)", fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>
-            {showFilters ? "▲ Collapse" : "▼ Expand"}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-muted)", fontWeight: 500, flexShrink: 0, marginLeft: 12 }}>
+            {showFilters ? "Collapse" : "Expand"}
           </span>
         </button>
 
         {showFilters && (
-          <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16, background: "var(--color-surface-1)" }}>
+          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Filter controls */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <FilterCheckboxGroup
@@ -1524,9 +1507,9 @@ function ValidateDownloadView({
             </div>
 
             {/* Result bar + export buttons */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 9, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 4, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
               <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                <span style={{ fontWeight: 800, color: "var(--color-teal-400)", fontSize: 22, lineHeight: 1 }}>{filteredRecords.length}</span>
+                <span style={{ fontWeight: 800, color: "var(--color-text-primary)", fontSize: 22, lineHeight: 1 }}>{filteredRecords.length}</span>
                 <span style={{ marginLeft: 6 }}>of {result.studentCount} students match</span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

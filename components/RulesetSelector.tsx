@@ -164,50 +164,39 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
   // ── Styles ───────────────────────────────────────────────────────────────────
 
   const selectStyle: React.CSSProperties = {
-    flex: 1,
-    background: "var(--color-surface-2)",
-    border: "1px solid var(--color-border)",
-    borderRadius: 7,
+    border: 0,
+    borderBottom: "1px solid var(--ink)",
+    background: "transparent",
+    borderRadius: 0,
     color: "var(--color-text-primary)",
-    fontSize: 13,
-    padding: "7px 10px",
+    fontSize: 14,
+    padding: "8px 0",
     cursor: "pointer",
     outline: "none",
-    minWidth: 0,
+    minWidth: 220,
   };
 
-  const iconBtnStyle: React.CSSProperties = {
+  const linkStyle: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
-    padding: "7px 11px",
-    borderRadius: 7,
-    fontSize: 12,
+    padding: 0,
+    fontSize: 11,
     fontWeight: 500,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
     cursor: "pointer",
-    border: "1px solid var(--color-border)",
-    background: "var(--color-surface-2)",
-    color: "var(--color-text-secondary)",
+    border: "none",
+    borderBottom: "1px solid transparent",
+    background: "transparent",
+    color: "var(--color-text-muted)",
     whiteSpace: "nowrap",
     flexShrink: 0,
   };
 
   return (
     <div>
-      <div
-        style={{
-          color: "var(--color-text-muted)",
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          marginBottom: 10,
-        }}
-      >
-        Validation ruleset
-      </div>
-
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap" }}>
         <select value={activeId} onChange={handleSelect} style={selectStyle}>
           <option value={BUILTIN_ID}>STIX Default (built-in)</option>
           {rulesets.map((rs) => (
@@ -224,53 +213,50 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
           style={{ display: "none" }}
         />
 
-        <button type="button" onClick={handleNew} style={iconBtnStyle} title="Create a new ruleset">
-          <Plus size={13} />
-          New
-        </button>
-
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          style={iconBtnStyle}
-          title="Import a ruleset from a .json file"
-        >
-          <FileUp size={13} />
-          Import
-        </button>
-
-        <button type="button" onClick={handleExport} style={iconBtnStyle} title="Export the active ruleset as a .json file">
-          <Download size={13} />
-          Export
-        </button>
-
-        <button type="button" onClick={handleDuplicate} style={iconBtnStyle} title="Duplicate the active ruleset">
-          <Copy size={13} />
-          Duplicate
-        </button>
-
-        {activeId !== BUILTIN_ID && (
-          <button type="button" onClick={handleEdit} style={iconBtnStyle} title="Edit this ruleset">
-            <Pencil size={13} />
-            Edit
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <button type="button" onClick={handleNew} style={linkStyle} title="Create a new ruleset">
+            <Plus size={12} />
+            New
           </button>
-        )}
 
-        {activeId !== BUILTIN_ID && (
           <button
             type="button"
-            onClick={handleDelete}
-            style={{
-              ...iconBtnStyle,
-              color: "var(--color-error-text)",
-              borderColor: "var(--color-error-border)",
-              background: "var(--color-error-bg)",
-            }}
-            title="Remove this custom ruleset"
+            onClick={() => fileInputRef.current?.click()}
+            style={linkStyle}
+            title="Import a ruleset from a .json file"
           >
-            Remove
+            <FileUp size={12} />
+            Import
           </button>
-        )}
+
+          <button type="button" onClick={handleExport} style={linkStyle} title="Export the active ruleset as a .json file">
+            <Download size={12} />
+            Export
+          </button>
+
+          <button type="button" onClick={handleDuplicate} style={linkStyle} title="Duplicate the active ruleset">
+            <Copy size={12} />
+            Duplicate
+          </button>
+
+          {activeId !== BUILTIN_ID && (
+            <button type="button" onClick={handleEdit} style={linkStyle} title="Edit this ruleset">
+              <Pencil size={12} />
+              Edit
+            </button>
+          )}
+
+          {activeId !== BUILTIN_ID && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              style={{ ...linkStyle, color: "var(--color-error-text)" }}
+              title="Remove this custom ruleset"
+            >
+              Remove
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Import error — field name shown as an inline badge when parseable */}
@@ -283,7 +269,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
             gap: 8,
             background: "var(--color-error-bg)",
             border: "1px solid var(--color-error-border)",
-            borderRadius: 7,
+            borderRadius: 3,
             padding: "9px 12px",
             color: "var(--color-error-text)",
             fontSize: 12,
@@ -295,7 +281,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
             {errorField && (
               <code
                 style={{
-                  background: "rgba(239,68,68,0.12)",
+                  background: "var(--color-error-bg)",
                   border: "1px solid var(--color-error-border)",
                   borderRadius: 4,
                   padding: "1px 5px",
@@ -319,7 +305,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
             marginTop: 8,
             background: "var(--color-warning-bg)",
             border: "1px solid var(--color-warning-border)",
-            borderRadius: 7,
+            borderRadius: 3,
             padding: "9px 12px",
             color: "var(--color-warning-text)",
             fontSize: 12,
