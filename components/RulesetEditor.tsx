@@ -34,7 +34,7 @@ const inputStyle: React.CSSProperties = {
   flex: 1,
   background: "var(--color-surface-0)",
   border: "1px solid var(--color-border)",
-  borderRadius: 6,
+  borderRadius: 3,
   color: "var(--color-text-primary)",
   fontSize: 13,
   padding: "6px 10px",
@@ -47,7 +47,7 @@ const smallBtnStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: "6px 10px",
-  borderRadius: 6,
+  borderRadius: 3,
   fontSize: 12,
   fontWeight: 500,
   cursor: "pointer",
@@ -154,7 +154,7 @@ function AllowedValuesSection({
   const [aliasCanon, setAliasCanon] = useState("");
 
   return (
-    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px" }}>
+    <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "14px 16px" }}>
       <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "var(--color-text-primary)" }}>
         {label}
       </div>
@@ -362,7 +362,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
             transform: "translate(-50%, -50%)",
             background: "var(--color-surface-1)",
             border: "1px solid var(--color-border)",
-            borderRadius: 12,
+            borderRadius: 4,
             width: "min(92vw, 740px)",
             maxHeight: "88vh",
             display: "flex",
@@ -465,8 +465,8 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                         key={field}
                         style={{
                           display: "flex", alignItems: "center", gap: 10,
-                          padding: "8px 10px", borderRadius: 6, cursor: "pointer",
-                          background: checked ? "rgba(34,197,94,0.06)" : "transparent",
+                          padding: "8px 10px", borderRadius: 3, cursor: "pointer",
+                          background: checked ? "var(--color-success-bg)" : "transparent",
                         }}
                       >
                         <input
@@ -610,7 +610,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                       display: "flex", alignItems: "flex-start", gap: 12,
                       padding: "12px 14px",
                       background: "var(--color-surface-2)", border: "1px solid var(--color-border)",
-                      borderRadius: 8, cursor: "pointer",
+                      borderRadius: 4, cursor: "pointer",
                     }}
                   >
                     <input
@@ -642,10 +642,10 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
               onClick={handleSave}
               disabled={!canSave}
               style={{
-                padding: "8px 20px", borderRadius: 7, fontSize: 13, fontWeight: 600,
+                padding: "8px 20px", borderRadius: 3, fontSize: 13, fontWeight: 600,
                 cursor: canSave ? "pointer" : "not-allowed",
                 background: canSave ? "var(--color-brand-600)" : "var(--color-surface-3)",
-                color: canSave ? "#fff" : "var(--color-text-muted)",
+                color: canSave ? "var(--marble)" : "var(--color-text-muted)",
                 border: "none",
               }}
             >

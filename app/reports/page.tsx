@@ -49,7 +49,7 @@ function CheckboxGroup({
       style={{
         background: "var(--color-surface-2)",
         border: "1px solid var(--color-border)",
-        borderRadius: 8,
+        borderRadius: 4,
         padding: "12px 14px",
         minWidth: 160,
         flex: "1 1 160px",
@@ -177,7 +177,7 @@ function AgeRangeFilter({
       style={{
         background: "var(--color-surface-2)",
         border: "1px solid var(--color-border)",
-        borderRadius: 8,
+        borderRadius: 4,
         padding: "12px 14px",
         minWidth: 180,
         flex: "1 1 180px",
@@ -299,7 +299,7 @@ function AgeRangeFilter({
             fontSize: 13,
             color: "var(--color-text-primary)",
             background: "var(--color-surface-3)",
-            borderRadius: 6,
+            borderRadius: 3,
             padding: "4px 8px",
           }}
         >
@@ -514,7 +514,7 @@ export default function ReportsPage() {
         style={{
           background: "var(--color-surface-1)",
           border: "1px solid var(--color-border)",
-          borderRadius: 10,
+          borderRadius: 4,
           padding: 16,
           marginBottom: 16,
         }}
@@ -548,7 +548,7 @@ export default function ReportsPage() {
             background: "var(--color-surface-0)",
             color: "var(--color-text-primary)",
             border: "1px solid var(--color-border)",
-            borderRadius: 6,
+            borderRadius: 3,
             padding: "10px 12px",
             resize: "vertical",
             boxSizing: "border-box",
@@ -565,12 +565,12 @@ export default function ReportsPage() {
             disabled={!xml.trim()}
             style={{
               padding: "7px 18px",
-              borderRadius: 6,
+              borderRadius: 3,
               background: xml.trim()
                 ? "var(--color-brand-600)"
                 : "var(--color-surface-3)",
               color: xml.trim()
-                ? "#fff"
+                ? "var(--marble)"
                 : "var(--color-text-muted)",
               border: "none",
               fontWeight: 600,
@@ -584,7 +584,7 @@ export default function ReportsPage() {
             onClick={clearAll}
             style={{
               padding: "7px 14px",
-              borderRadius: 6,
+              borderRadius: 3,
               background: "var(--color-surface-3)",
               color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border)",
@@ -603,7 +603,7 @@ export default function ReportsPage() {
             background: "var(--color-error-bg)",
             border: "1px solid var(--color-error-border)",
             color: "var(--color-error-text)",
-            borderRadius: 8,
+            borderRadius: 4,
             padding: "10px 14px",
             fontSize: 13,
             marginBottom: 16,
@@ -620,7 +620,7 @@ export default function ReportsPage() {
             style={{
               background: "var(--color-surface-1)",
               border: "1px solid var(--color-border)",
-              borderRadius: 10,
+              borderRadius: 4,
               padding: "12px 16px",
               marginBottom: 16,
               display: "flex",
@@ -671,8 +671,8 @@ export default function ReportsPage() {
                     summary.gate === "PASS"
                       ? "var(--color-brand-400)"
                       : summary.gate === "BLOCKED"
-                      ? "#f87171"
-                      : "#fbbf24",
+                      ? "var(--color-error-text)"
+                      : "var(--color-warning-text)",
                 }}
               >
                 {summary.gate}
@@ -685,7 +685,7 @@ export default function ReportsPage() {
             style={{
               background: "var(--color-surface-1)",
               border: "1px solid var(--color-border)",
-              borderRadius: 10,
+              borderRadius: 4,
               padding: "16px",
               marginBottom: 16,
             }}
@@ -792,7 +792,7 @@ export default function ReportsPage() {
             style={{
               background: "var(--color-surface-1)",
               border: "1px solid var(--color-border)",
-              borderRadius: 10,
+              borderRadius: 4,
               padding: "14px 16px",
               marginBottom: 16,
             }}
@@ -830,7 +830,7 @@ export default function ReportsPage() {
                   onClick={() => download(file, csv)}
                   style={{
                     padding: "7px 14px",
-                    borderRadius: 6,
+                    borderRadius: 3,
                     background: "var(--color-surface-3)",
                     color: "var(--color-text-primary)",
                     border: "1px solid var(--color-border-hover)",
@@ -850,7 +850,7 @@ export default function ReportsPage() {
             style={{
               background: "var(--color-surface-1)",
               border: "1px solid var(--color-border)",
-              borderRadius: 10,
+              borderRadius: 4,
               padding: "12px 16px",
             }}
           >
@@ -873,7 +873,7 @@ export default function ReportsPage() {
                 fontSize: 12,
                 color: "var(--color-text-primary)",
                 background: "var(--color-surface-0)",
-                borderRadius: 6,
+                borderRadius: 3,
                 padding: "10px 12px",
               }}
             >
