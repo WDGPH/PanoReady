@@ -5,25 +5,25 @@ interface Props {
   accent?: "green" | "teal" | "yellow" | "red" | "default";
 }
 
+// Counts are facts, not confirmations — verde is reserved for real commitment
+// moments elsewhere in the app, so plain quantities stay ink. Only warning and
+// error counts keep functional color, since that's a real signal.
 const accentMap = {
-  green: { color: "var(--color-brand-400)", bg: "var(--color-success-bg)" },
-  teal: { color: "var(--color-teal-400)", bg: "rgba(20,184,166,0.08)" },
-  yellow: { color: "var(--color-warning-text)", bg: "var(--color-warning-bg)" },
-  red: { color: "var(--color-error-text)", bg: "var(--color-error-bg)" },
-  default: { color: "var(--color-text-primary)", bg: "var(--color-surface-2)" },
+  green: { color: "var(--color-text-primary)", border: "var(--color-border)" },
+  teal: { color: "var(--color-text-primary)", border: "var(--color-border)" },
+  yellow: { color: "var(--color-warning-text)", border: "var(--color-warning-text)" },
+  red: { color: "var(--color-error-text)", border: "var(--color-error-text)" },
+  default: { color: "var(--color-text-primary)", border: "var(--color-border)" },
 };
 
 export default function StatCard({ label, value, sub, accent = "default" }: Props) {
-  const { color, bg } = accentMap[accent];
+  const { color, border } = accentMap[accent];
   return (
-    <div
-      className="card"
-      style={{ padding: "20px 24px", background: bg, borderColor: "transparent" }}
-    >
-      <div style={{ color: "var(--color-text-muted)", fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+    <div style={{ borderLeft: `2px solid ${border}`, padding: "2px 0 2px 14px" }}>
+      <div style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-muted)", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
         {label}
       </div>
-      <div style={{ color, fontSize: 32, fontWeight: 700, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-serif), Georgia, serif", color, fontSize: 26, fontWeight: 600, lineHeight: 1 }}>{value}</div>
       {sub && (
         <div style={{ color: "var(--color-text-muted)", fontSize: 12, marginTop: 6 }}>{sub}</div>
       )}
