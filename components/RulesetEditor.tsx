@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, ChevronDown, ChevronRight, Plus } from "lucide-react";
-import type { CustomRuleset, RulesProfile } from "@/lib/types";
+import type { CustomRuleset, RulesProfile, CleaningProfile, CleaningMapping } from "@/lib/types";
 import { BUILTIN_ID, defaultRules, listCustomRulesets, saveCustomRuleset } from "@/lib/rulesets";
+import { getCleanableFields } from "@/lib/cleaning";
 
 // Known STIX field names: union of requiredFields + fieldLengths keys from default JSON
 const KNOWN_FIELDS = [
@@ -20,7 +21,7 @@ const FIELD_LENGTH_KEYS = [
   "City", "StreetName", "StreetNumber", "StreetNumberSuffix", "Unit",
 ];
 
-type TabId = "general" | "required" | "values" | "lengths" | "format" | "duplication";
+type TabId = "general" | "required" | "values" | "lengths" | "format" | "duplication" | "cleaning";
 
 export interface RulesetEditorProps {
   initial?: CustomRuleset;
@@ -264,6 +265,9 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
   const [rules, setRules] = useState<RulesProfile>(() =>
     JSON.parse(JSON.stringify(initial?.rules ?? defaultRules))
   );
+  const [cleaning, setCleaning] = useState<CleaningProfile>(
+    () => JSON.parse(JSON.stringify(initial?.cleaning ?? { enabledFields: [], mappings: {} }))
+  );
   const [regexError, setRegexError] = useState<string | null>(null);
 
   // Populate clone options (client-only)
@@ -275,14 +279,18 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
     ]);
   }, []);
 
-  // When cloneFrom changes (new mode only), reset rules
+  // When cloneFrom changes (new mode only), reset rules and cleaning
   useEffect(() => {
     if (!isNew) return;
     if (cloneFrom === BUILTIN_ID) {
       setRules(JSON.parse(JSON.stringify(defaultRules)));
+      setCleaning({ enabledFields: [], mappings: {} });
     } else {
       const found = listCustomRulesets().find((r) => r.id === cloneFrom);
-      if (found) setRules(JSON.parse(JSON.stringify(found.rules)));
+      if (found) {
+        setRules(JSON.parse(JSON.stringify(found.rules)));
+        setCleaning(JSON.parse(JSON.stringify(found.cleaning ?? { enabledFields: [], mappings: {} })));
+      }
     }
   }, [cloneFrom, isNew]);
 
@@ -309,6 +317,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
       ...(description.trim() ? { description: description.trim() } : {}),
       createdAt: initial?.createdAt ?? new Date().toISOString(),
       rules,
+      ...(cleaning.enabledFields.length > 0 ? { cleaning } : {}),
     };
     saveCustomRuleset(rs);
     onSave(rs);
@@ -343,6 +352,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
     { id: "lengths",     label: "Field Lengths" },
     { id: "format",      label: "Format Rules" },
     { id: "duplication", label: "Duplicate Detection" },
+    { id: "cleaning",    label: "Cleaning" },
   ];
 
   return (
@@ -630,6 +640,15 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
               </div>
             )}
 
+            {/* ── Cleaning ── */}
+            {activeTab === "cleaning" && (
+              <CleaningTabPanel
+                profile={cleaning}
+                rules={rules}
+                onChange={setCleaning}
+              />
+            )}
+
           </div>
 
           {/* Footer */}
@@ -655,5 +674,231 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+// ── CleaningTabPanel ──────────────────────────────────────────────────────────
+
+function CleaningTabPanel({
+  profile,
+  rules,
+  onChange,
+}: {
+  profile: CleaningProfile;
+  rules: RulesProfile;
+  onChange: (p: CleaningProfile) => void;
+}) {
+  const [selectedField, setSelectedField] = useState<string>(profile.enabledFields[0] ?? "");
+  const [showPicker, setShowPicker] = useState(false);
+  const [newRaw, setNewRaw] = useState("");
+  const [newCanon, setNewCanon] = useState("");
+
+  const pickable = getCleanableFields(rules);
+  const available = pickable.filter((f) => !profile.enabledFields.includes(f));
+
+  function addField(field: string) {
+    onChange({
+      ...profile,
+      enabledFields: [...profile.enabledFields, field],
+      mappings: { ...profile.mappings, [field]: profile.mappings[field] ?? [] },
+    });
+    setSelectedField(field);
+    setShowPicker(false);
+  }
+
+  function removeField(field: string) {
+    const { [field]: _m, ...restMappings } = profile.mappings;
+    onChange({
+      enabledFields: profile.enabledFields.filter((f) => f !== field),
+      mappings: restMappings,
+    });
+    if (selectedField === field) {
+      const remaining = profile.enabledFields.filter((f) => f !== field);
+      setSelectedField(remaining[0] ?? "");
+    }
+  }
+
+  function removeMapping(field: string, raw: string) {
+    onChange({
+      ...profile,
+      mappings: {
+        ...profile.mappings,
+        [field]: (profile.mappings[field] ?? []).filter((m) => m.raw !== raw),
+      },
+    });
+  }
+
+  function addMapping() {
+    const r = newRaw.trim();
+    const c = newCanon.trim();
+    if (!r || !c || !selectedField) return;
+    const existing = profile.mappings[selectedField] ?? [];
+    if (existing.some((m) => m.raw === r)) return; // duplicate raw
+    onChange({
+      ...profile,
+      mappings: {
+        ...profile.mappings,
+        [selectedField]: [...existing, { raw: r, canonical: c }],
+      },
+    });
+    setNewRaw("");
+    setNewCanon("");
+  }
+
+  function toggleMappingMatchCase(field: string, raw: string) {
+    const existing = profile.mappings[field] ?? [];
+    onChange({
+      ...profile,
+      mappings: {
+        ...profile.mappings,
+        [field]: existing.map((m) => m.raw === raw ? { ...m, matchCase: !m.matchCase } : m),
+      },
+    });
+  }
+
+  const fieldMappings = selectedField ? (profile.mappings[selectedField] ?? []) : [];
+
+  if (profile.enabledFields.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "32px 0", color: "var(--color-text-muted)" }}>
+        <div style={{ fontSize: 13, marginBottom: 14 }}>
+          No cleaning fields defined. Add a field to pre-configure mappings.
+        </div>
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <button type="button" onClick={() => setShowPicker(true)} style={smallBtnStyle}>
+            <Plus size={13} /> Add field
+          </button>
+          {showPicker && available.length > 0 && (
+            <EditorFieldPicker fields={available} onPick={addField} onClose={() => setShowPicker(false)} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 16, minHeight: 300 }}>
+      {/* Field list */}
+      <div style={{ width: 160, flexShrink: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Fields</div>
+        {profile.enabledFields.map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setSelectedField(f)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "6px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+              border: `1px solid ${selectedField === f ? "var(--color-brand-400)" : "var(--color-border)"}`,
+              background: selectedField === f ? "color-mix(in srgb,var(--color-brand-400) 10%,var(--color-surface-2))" : "var(--color-surface-2)",
+              color: selectedField === f ? "var(--color-brand-400)" : "var(--color-text-primary)",
+              fontWeight: selectedField === f ? 600 : 400,
+            }}
+          >
+            <span>{f}</span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); removeField(f); }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-text-muted)", display: "flex" }}
+            >
+              <X size={11} />
+            </button>
+          </button>
+        ))}
+        <div style={{ position: "relative" }}>
+          {available.length > 0 && (
+            <button type="button" onClick={() => setShowPicker(true)} style={{ ...smallBtnStyle, width: "100%", justifyContent: "center", fontSize: 11, padding: "5px 8px" }}>
+              <Plus size={11} /> Add
+            </button>
+          )}
+          {showPicker && available.length > 0 && (
+            <EditorFieldPicker fields={available} onPick={addField} onClose={() => setShowPicker(false)} />
+          )}
+        </div>
+      </div>
+
+      {/* Mapping table */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {selectedField ? (
+          <>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{selectedField}</div>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 10 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-muted)", fontWeight: 600, borderBottom: "1px solid var(--color-border)" }}>Raw</th>
+                  <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-muted)", fontWeight: 600, borderBottom: "1px solid var(--color-border)" }}>Canonical</th>
+                  <th style={{ textAlign: "center", padding: "4px 8px", color: "var(--color-text-muted)", fontWeight: 600, borderBottom: "1px solid var(--color-border)", width: 72 }}>Match case</th>
+                  <th style={{ width: 28, borderBottom: "1px solid var(--color-border)" }} />
+                </tr>
+              </thead>
+              <tbody>
+                {fieldMappings.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: "8px", color: "var(--color-text-muted)", fontSize: 12 }}>No mappings yet.</td></tr>
+                )}
+                {fieldMappings.map((m: CleaningMapping) => (
+                  <tr key={m.raw} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                    <td style={{ padding: "5px 8px", fontFamily: "var(--font-mono)" }}>{m.raw}</td>
+                    <td style={{ padding: "5px 8px", fontFamily: "var(--font-mono)" }}>{m.canonical}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={!!m.matchCase}
+                        onChange={() => toggleMappingMatchCase(selectedField, m.raw)}
+                        title="Match case for this rule only"
+                      />
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <button type="button" onClick={() => removeMapping(selectedField, m.raw)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-text-muted)", display: "flex" }}>
+                        <X size={11} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="text" value={newRaw} onChange={(e) => setNewRaw(e.target.value)} placeholder="Raw value" style={{ ...inputStyle, flex: 1 }} />
+              <span style={{ fontSize: 12, color: "var(--color-text-muted)", flexShrink: 0 }}>→</span>
+              <input type="text" value={newCanon} onChange={(e) => setNewCanon(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addMapping(); } }} placeholder="Canonical" style={{ ...inputStyle, flex: 1 }} />
+              <button type="button" onClick={addMapping} style={smallBtnStyle} title="Add mapping">
+                <Plus size={13} />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ color: "var(--color-text-muted)", fontSize: 13 }}>Select a field to edit mappings.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditorFieldPicker({ fields, onPick, onClose }: { fields: string[]; onPick: (f: string) => void; onClose: () => void }) {
+  return (
+    <div style={{
+      position: "absolute", top: "100%", left: 0, zIndex: 20, marginTop: 4,
+      background: "var(--color-surface-1)", border: "1px solid var(--color-border)",
+      borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+    }}>
+      {fields.map((f) => (
+        <button
+          key={f}
+          type="button"
+          onClick={() => onPick(f)}
+          style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "5px 8px", borderRadius: 4, fontSize: 12, color: "var(--color-text-primary)" }}
+        >
+          {f}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={onClose}
+        style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 4, fontSize: 11, color: "var(--color-text-muted)", marginTop: 4 }}
+      >
+        Cancel
+      </button>
+    </div>
   );
 }
