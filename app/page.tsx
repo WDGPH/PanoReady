@@ -102,9 +102,9 @@ function GateBadge({ gate }: { gate: string }) {
 
 const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
   { id: "validate", label: "Validate & Fix",  description: "Full validation: required fields, code values, formats, duplicates. Apply safe fixes, revalidate, download." },
-  { id: "clean",    label: "Clean XML",       description: "Fix phones, standardize units, flag bad street numbers for manual review." },
-  { id: "export",   label: "Export Reports",  description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries." },
-  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation." },
+  { id: "clean",    label: "Clean & Standardize", description: "Automatically fix phone numbers and address units, then flag anything needing review." },
+  { id: "export",   label: "Create Reports",      description: "Turn student data into CSV and Excel reports with filters and school summaries." },
+  { id: "pretty",   label: "Format XML",          description: "Reformat XML with consistent indentation so it’s easier to read and review without changing the data." },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
@@ -225,14 +225,14 @@ function HomeView({ onDone, onValidate }: {
     : "Pretty Print XML";
 
   return (
-    <main style={{ flex: 1, display: "flex", justifyContent: "center", padding: "72px 24px 100px" }}>
+    <main style={{ flex: 1, display: "flex", justifyContent: "center", padding: "36px 24px 48px" }}>
       <div className="rail-page" style={{ width: "100%", maxWidth: 620 }}>
         <div className="rail" />
 
         {/* Statement — the one decision on this page that isn't a workflow choice */}
         <section className="beat">
-          <p className="eyebrow" style={{ marginBottom: 22 }}>In your browser, always</p>
-          <h1 style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 500, fontSize: "clamp(34px,5.5vw,58px)", lineHeight: 1.08, letterSpacing: "-0.01em", margin: 0, maxWidth: 480, color: "var(--ink)" }}>
+          <p className="eyebrow" style={{ marginBottom: 12 }}>In your browser, always</p>
+          <h1 style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 500, fontSize: "clamp(30px,5vw,46px)", lineHeight: 1.08, letterSpacing: "-0.01em", margin: 0, maxWidth: 480, color: "var(--ink)" }}>
             Validate, in confidence.
           </h1>
         </section>
@@ -240,7 +240,7 @@ function HomeView({ onDone, onValidate }: {
         {/* Workflow — the tick on the spine registers the choice, nothing else needs to */}
         <section className="beat">
           <h2 className="beat-title">Workflow</h2>
-          <div>
+          <div className="wf-grid">
             {WORKFLOWS.map((w) => (
               <button
                 key={w.id}
