@@ -8,7 +8,7 @@ Built by Wellington-Dufferin-Guelph Public Health.
 
 | Workflow | Description |
 |---|---|
-| **Validate & Fix** | Full validation of required fields, code values, formats, and duplicates. Apply safe auto-fixes, revalidate, and download. |
+| **Validate & Fix** | Optional cleaning step (raw → canonical value mappings), full validation of required fields, code values, formats, and duplicates. Apply safe auto-fixes, revalidate, and download. |
 | **Clean XML** | Fix phone numbers, standardize unit fields, and flag suspicious street numbers for manual review. |
 | **Export Reports** | Parse students into spreadsheets. Includes a filtered view for Gr7–8 students born 2012–2013 with per-school summaries. |
 | **Pretty Print** | Reformat XML with consistent indentation. |

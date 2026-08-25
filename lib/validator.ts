@@ -119,6 +119,95 @@ function checkPhone(
   return { message: `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`, autoFixable: true, suggestedFix: formatted };
 }
 
+// ─── XML parser (standalone) ──────────────────────────────────────────────────
+
+/**
+ * Parse a STIX XML string into StudentRecord[].
+ * Throws a descriptive Error for structural failures (bad XML, missing root,
+ * no schools) so callers can surface the message without running validation.
+ * Note: schools with zero <ns1:Student> elements produce no records here;
+ * the empty-school warning is handled by validateXml internally.
+ */
+export function parseStixXml(xmlText: string): StudentRecord[] {
+  let doc: XmlNode;
+  try {
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "@_",
+      parseAttributeValue: false,
+      parseTagValue: false,
+      textNodeName: "#text",
+      isArray: (name) => name === "ns1:School" || name === "ns1:Student",
+    });
+    doc = parser.parse(xmlText) as XmlNode;
+  } catch (e) {
+    throw new Error(`XML parse error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  const root = doc["ns1:SchoolUpload"] as XmlNode | null;
+  if (!root) {
+    throw new Error(
+      "Root element <ns1:SchoolUpload> not found. This may not be a valid STIX file."
+    );
+  }
+
+  const schools = ensureArray(root["ns1:School"] as XmlNode | XmlNode[]);
+  if (schools.length === 0) {
+    throw new Error("No <ns1:School> elements found.");
+  }
+
+  const records: StudentRecord[] = [];
+  for (let si = 0; si < schools.length; si++) {
+    const school = schools[si];
+    const schoolName = str(school["ns1:Name"]);
+    const schoolNumber = str(school["ns1:SchoolNumber"]);
+    const schoolLabel = schoolNumber || schoolName || `School #${si + 1}`;
+
+    const studentsNode = (school["ns1:Students"] ?? {}) as XmlNode;
+    const studentNodes = ensureArray(
+      studentsNode["ns1:Student"] as XmlNode | XmlNode[]
+    );
+
+    for (let pi = 0; pi < studentNodes.length; pi++) {
+      const s = studentNodes[pi];
+      const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
+      const aliasNode = (s["ns1:AliasName"] ?? {}) as XmlNode;
+      const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
+
+      const fields: Record<string, string> = {
+        SchoolName:          str(school["ns1:Name"]),
+        SchoolNumber:        str(school["ns1:SchoolNumber"]),
+        FirstName:           str(nameNode["ns1:First"]),
+        MiddleName:          str(nameNode["ns1:Middle"]),
+        LastName:            str(nameNode["ns1:Last"]),
+        AliasFirstName:      str(aliasNode["ns1:First"]),
+        AliasMiddleName:     str(aliasNode["ns1:Middle"]),
+        AliasLastName:       str(aliasNode["ns1:Last"]),
+        BirthDate:           str(s["ns1:BirthDate"]),
+        Grade:               str(s["ns1:Grade"]),
+        Gender:              str(s["ns1:Gender"]),
+        OEN:                 str(s["ns1:OEN"]),
+        Language:            str(s["ns1:Language"]),
+        ContactPhone:        str(s["ns1:ContactPhone"]),
+        City:                str(addrNode["ns1:City"]),
+        Province:            str(addrNode["ns1:Province"]),
+        PostalCode:          str(addrNode["ns1:PostalCode"]),
+        StreetNumber:        str(addrNode["ns1:StreetNumber"]),
+        StreetName:          str(addrNode["ns1:StreetName"]),
+        StreetNumberSuffix:  str(addrNode["ns1:StreetNumberSuffix"]),
+        Unit:                str(addrNode["ns1:Unit"]),
+      };
+
+      records.push({
+        id: `school${si}:student${pi}`,
+        xmlPath: `ns1:SchoolUpload/ns1:School[${schoolLabel}]/ns1:Students/ns1:Student[${pi}]`,
+        fields,
+      });
+    }
+  }
+  return records;
+}
+
 // ─── Core validator ───────────────────────────────────────────────────────────
 
 export function validateXml(
@@ -564,7 +653,9 @@ export function validateXml(
  * Field-name → XML path within a student node.
  * Name sub-fields live under ns1:Name, address sub-fields under ns1:Address.
  */
-const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct"; tag: string }> = {
+const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct" | "school"; tag: string }> = {
+  SchoolName:         { parent: "school", tag: "ns1:Name" },
+  SchoolNumber:       { parent: "school", tag: "ns1:SchoolNumber" },
   FirstName:          { parent: "name",   tag: "ns1:First" },
   MiddleName:         { parent: "name",   tag: "ns1:Middle" },
   LastName:           { parent: "name",   tag: "ns1:Last" },
@@ -587,11 +678,13 @@ const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct
   Unit:               { parent: "addr",   tag: "ns1:Unit" },
 };
 
-function applyFieldFix(studentNode: XmlNode, field: string, value: string) {
+function applyFieldFix(studentNode: XmlNode, schoolNode: XmlNode, field: string, value: string) {
   const mapping = FIELD_TO_XML[field];
   if (!mapping) return;
 
-  if (mapping.parent === "name") {
+  if (mapping.parent === "school") {
+    setTextValue(schoolNode, mapping.tag, value);
+  } else if (mapping.parent === "name") {
     const nameNode = (studentNode["ns1:Name"] ?? {}) as XmlNode;
     studentNode["ns1:Name"] = nameNode;
     setTextValue(nameNode, mapping.tag, value);
@@ -651,7 +744,7 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
     if (!studentNode) continue;
 
     for (const fix of recordFixes) {
-      applyFieldFix(studentNode, fix.field, fix.newValue);
+      applyFieldFix(studentNode, school as XmlNode, fix.field, fix.newValue);
     }
   }
 

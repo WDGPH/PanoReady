@@ -14,19 +14,24 @@ import { processExport, buildSchoolCounts, buildGradeCounts } from "@/lib/pullIn
 import { downloadText, toCsv } from "@/lib/utils";
 import {
   validateXml,
+  parseStixXml,
   applyValidationFixes,
   applyFixesToRecords,
   generateIssueReportCsv,
   generateSchoolSummaryCsv,
   generateAgeGroupReportCsv,
 } from "@/lib/validator";
+import { applyCleaningProfile } from "@/lib/cleaning";
 import type {
   Workflow, SessionData,
   ValidateSession, ValidationIssue, AppliedFix,
-  ValidationSeverity, RulesProfile,
+  ValidationSeverity, RulesProfile, StudentRecord,
+  CleaningProfile, CleaningSummaryEntry,
 } from "@/lib/types";
-import { defaultRules, getActiveRules, getActiveRulesetId, listCustomRulesets, BUILTIN_ID } from "@/lib/rulesets";
+import { defaultRules, getActiveRules, getActiveCleaning, getActiveRulesetId, listCustomRulesets, saveCustomRuleset, BUILTIN_ID } from "@/lib/rulesets";
 import RulesetSelector from "@/components/RulesetSelector";
+import CleaningView from "@/components/CleaningView";
+import CleaningSummaryView from "@/components/CleaningSummaryView";
 import * as XLSX from "xlsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,6 +40,8 @@ type View =
   | "home"
   | "review"
   | "result"
+  | "clean-step"
+  | "clean-summary"
   | "validate-issues"
   | "validate-fix"
   | "validate-revalidate"
@@ -109,9 +116,11 @@ const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 
-function HomeView({ onDone, onValidate }: {
+function HomeView({ onDone, onParsed, activeRules, onRulesChange }: {
   onDone: (data: SessionData, next: View) => void;
-  onValidate: (session: ValidateSession) => void;
+  onParsed: (xmlText: string, records: StudentRecord[], fileName: string) => void;
+  activeRules: RulesProfile;
+  onRulesChange: (rules: RulesProfile) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile]           = useState<File | null>(null);
@@ -119,9 +128,6 @@ function HomeView({ onDone, onValidate }: {
   const [dragging, setDragging]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [activeRules, setActiveRules] = useState<RulesProfile>(defaultRules);
-
-  useEffect(() => { setActiveRules(getActiveRules()); }, []);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
@@ -191,13 +197,9 @@ function HomeView({ onDone, onValidate }: {
       if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is not XML text.");
 
       if (workflow === "validate") {
-        const result = validateXml(xmlText, activeRules);
-        onValidate({
-          fileName: selectedFile.name,
-          originalXml: xmlText,
-          initialResult: result,
-          fixes: [],
-        });
+        // Parse records first; errors throw and are caught below.
+        const parsed = parseStixXml(xmlText);
+        onParsed(xmlText, parsed, selectedFile.name);
         return;
       }
 
@@ -258,7 +260,7 @@ function HomeView({ onDone, onValidate }: {
         {workflow === "validate" && (
           <section className="beat">
             <h2 className="beat-title">Ruleset</h2>
-            <RulesetSelector onRulesChange={setActiveRules} />
+            <RulesetSelector onRulesChange={onRulesChange} />
           </section>
         )}
 
@@ -1551,8 +1553,37 @@ export default function App() {
   const [view, setView]                   = useState<View>("home");
   const [session, setSession]             = useState<SessionData | null>(null);
   const [validateSess, setValidateSess]   = useState<ValidateSession | null>(null);
+  // Lifted so CleaningView and validation both see the same ruleset
+  const [activeRules, setActiveRules]     = useState<RulesProfile>(defaultRules);
+  // Cleaning pipeline state
+  const [pendingFile, setPendingFile]     = useState<{ xml: string; fileName: string } | null>(null);
+  const [parsedRecords, setParsedRecords] = useState<StudentRecord[] | null>(null);
+  const [cleanedRecords, setCleanedRecords] = useState<StudentRecord[] | null>(null);
+  const [cleaningSummary, setCleaningSummary] = useState<CleaningSummaryEntry[] | null>(null);
 
-  const goHome = () => { setView("home"); setSession(null); setValidateSess(null); };
+  // Sync activeRules from localStorage on mount
+  useEffect(() => { setActiveRules(getActiveRules()); }, []);
+
+  const goHome = () => {
+    setView("home");
+    setSession(null);
+    setValidateSess(null);
+    setPendingFile(null);
+    setParsedRecords(null);
+    setCleanedRecords(null);
+    setCleaningSummary(null);
+  };
+
+  /** Run validateXml and transition to validate-issues. Used by both skip and apply paths. */
+  function runValidation(xmlText: string, fileName: string) {
+    const result = validateXml(xmlText, activeRules);
+    setValidateSess({ fileName, originalXml: xmlText, initialResult: result, fixes: [] });
+    setPendingFile(null);
+    setParsedRecords(null);
+    setCleanedRecords(null);
+    setCleaningSummary(null);
+    setView("validate-issues");
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -1561,7 +1592,13 @@ export default function App() {
       {view === "home" && (
         <HomeView
           onDone={(data, next) => { setSession(data); setView(next); }}
-          onValidate={(vs) => { setValidateSess(vs); setView("validate-issues"); }}
+          activeRules={activeRules}
+          onRulesChange={setActiveRules}
+          onParsed={(xmlText, records, fileName) => {
+            setPendingFile({ xml: xmlText, fileName });
+            setParsedRecords(records);
+            setView("clean-step");
+          }}
         />
       )}
 
@@ -1575,6 +1612,80 @@ export default function App() {
 
       {view === "result" && session && (
         <ResultView session={session} onStartOver={goHome} />
+      )}
+
+      {/* ── Cleaning step ── */}
+
+      {view === "clean-step" && parsedRecords && pendingFile && (
+        <CleaningView
+          records={parsedRecords}
+          activeRules={activeRules}
+          initialProfile={getActiveCleaning()}
+          onApply={(cleaned, summary, _profile) => {
+            setCleanedRecords(cleaned);
+            setCleaningSummary(summary);
+            setView("clean-summary");
+          }}
+          onSkip={() => runValidation(pendingFile.xml, pendingFile.fileName)}
+          onBack={goHome}
+          onSaveToRuleset={(profile) => {
+            const id = getActiveRulesetId();
+            if (id === BUILTIN_ID) {
+              alert("Switch to a custom ruleset first before saving cleaning rules.");
+              return false;
+            }
+            const all = listCustomRulesets();
+            const rs = all.find((r) => r.id === id);
+            if (!rs) return false;
+            const { cleaning: _omit, ...rsBase } = rs;
+            const updated = profile.enabledFields.length === 0
+              ? rsBase
+              : { ...rsBase, cleaning: profile };
+            saveCustomRuleset(updated);
+            return true;
+          }}
+        />
+      )}
+
+      {view === "clean-summary" && cleaningSummary && cleanedRecords && parsedRecords && pendingFile && (
+        <CleaningSummaryView
+          summary={cleaningSummary}
+          onBack={() => setView("clean-step")}
+          onContinue={() => {
+            const fixes: AppliedFix[] = [];
+            let fixIndex = 0;
+            // Dedup by (recordId, field) — a field can only be changed to one canonical
+            // value per record (first-match-wins). The third condition disambiguates which
+            // summary entry to attribute the fix to when multiple entries share a field.
+            const fixed = new Set<string>();
+            for (const entry of cleaningSummary) {
+              if (entry.count === 0) continue;
+              for (let i = 0; i < parsedRecords.length; i++) {
+                const original = parsedRecords[i];
+                const cleaned = cleanedRecords[i];
+                const key = `${original.id}\0${entry.field}`;
+                if (!fixed.has(key) &&
+                    original.fields[entry.field] !== cleaned.fields[entry.field] &&
+                    cleaned.fields[entry.field] === entry.canonical) {
+                  fixes.push({
+                    issueId: `cleaning-${fixIndex++}`,
+                    recordId: original.id,
+                    field: entry.field,
+                    oldValue: original.fields[entry.field] ?? "",
+                    newValue: entry.canonical,
+                    ruleId: "cleaning",
+                    appliedAt: Date.now(),
+                  });
+                  fixed.add(key);
+                }
+              }
+            }
+            const xmlToValidate = fixes.length > 0
+              ? applyValidationFixes(pendingFile.xml, fixes)
+              : pendingFile.xml;
+            runValidation(xmlToValidate, pendingFile.fileName);
+          }}
+        />
       )}
 
       {/* ── Validate workflow ── */}

@@ -109,12 +109,35 @@ export interface RulesProfile {
   duplicateDetection: { checkOen: boolean; checkNameDobSchool: boolean };
 }
 
+// ─── Cleaning types ───────────────────────────────────────────────────────────
+
+export interface CleaningMapping {
+  raw: string;        // exact string to match
+  canonical: string;  // replacement value
+  matchCase?: boolean; // true means case-sensitive match (default false)
+}
+
+export interface CleaningProfile {
+  enabledFields: string[];                      // opt-in field whitelist
+  mappings: Record<string, CleaningMapping[]>;  // field → ordered mapping list
+}
+
+export interface CleaningSummaryEntry {
+  field: string;
+  raw: string;
+  canonical: string;
+  count: number; // number of records changed
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface CustomRuleset {
   id: string;
   name: string;
   description?: string;
   createdAt: string; // ISO 8601
   rules: RulesProfile;
+  cleaning?: CleaningProfile; // absent means no cleaning configured
   warnings?: string[];
 }
 
