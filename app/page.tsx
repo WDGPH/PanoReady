@@ -717,8 +717,11 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
 // ─── CompareView ──────────────────────────────────────────────────────────────
 
 function CompareView({ comparison, onStartOver }: { comparison: StixComparison; onStartOver: () => void }) {
+  const [viewMode, setViewMode] = useState<"schools" | "records">("schools");
+  const [selectedSchool, setSelectedSchool] = useState("all");
   const signalColor = comparison.signal === "stable" ? "var(--color-brand-400)" : comparison.signal === "moderate" ? "var(--color-warning-text)" : "var(--color-error-text)";
   const signalBackground = comparison.signal === "stable" ? "var(--color-success-bg)" : comparison.signal === "moderate" ? "var(--color-warning-bg)" : "var(--color-error-bg)";
+  const visibleRecords = selectedSchool === "all" ? comparison.recordChanges : comparison.recordChanges.filter((record) => record.schoolName === selectedSchool);
   const downloadChanges = () => {
     const rows = comparison.schoolChanges.map((school) => ({
       School: school.schoolName,
@@ -788,57 +791,38 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         )}
       </section>
 
-      <section className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2>
-          <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Specific records added, removed, or changed. Records are matched by OEN when available.</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+        <div className="compare-tabs" role="tablist" aria-label="Comparison detail view">
+          <button className={viewMode === "schools" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("schools")} role="tab" aria-selected={viewMode === "schools"}><School size={14} /> School overview</button>
+          <button className={viewMode === "records" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("records")} role="tab" aria-selected={viewMode === "records"}><Users size={14} /> Record details</button>
         </div>
-        {comparison.recordChanges.length === 0 ? (
-          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected.</p>
-        ) : (
+        {viewMode === "records" && (
+          <select className="input compare-school-filter" value={selectedSchool} onChange={(event) => setSelectedSchool(event.target.value)} aria-label="Filter records by school">
+            <option value="all">All schools</option>
+            {comparison.schoolChanges.map((school) => <option key={school.schoolName} value={school.schoolName}>{school.schoolName}</option>)}
+          </select>
+        )}
+      </div>
+
+      {viewMode === "schools" ? (
+        <section className="card" style={{ padding: "18px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>School-level impact</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Select a school row to inspect its record-level changes.</p></div>
+            <button onClick={downloadChanges} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 12px" }}><Download size={12} /> CSV</button>
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table className="data-table">
-              <thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead>
-              <tbody>
-                {comparison.recordChanges.map((record) => {
-                  const color = record.kind === "added" ? "var(--color-brand-400)" : record.kind === "removed" ? "var(--color-error-text)" : "var(--color-warning-text)";
-                  return (
-                    <tr key={`${record.kind}-${record.key}`}>
-                      <td><span style={{ color, fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.05em" }}>{record.kind}</span></td>
-                      <td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td>
-                      <td>{record.schoolName}</td>
-                      <td>{record.changedFields.length ? record.changedFields.join(", ") : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+              <thead><tr><th>School</th><th>Previous</th><th>Current</th><th>Added</th><th>Removed</th><th>Changed</th></tr></thead>
+              <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => { setSelectedSchool(school.schoolName); setViewMode("records"); }} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{school.schoolName}</td><td>{school.previousCount}</td><td>{school.currentCount}</td><td>{school.added}</td><td>{school.removed}</td><td>{school.changed}</td></tr>)}</tbody>
             </table>
           </div>
-        )}
-      </section>
-
-      <section className="card" style={{ padding: "18px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
-          <div>
-            <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>School-level impact</h2>
-            <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Schools ordered by the number of observed changes.</p>
-          </div>
-          <button onClick={downloadChanges} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 12px" }}><Download size={12} /> CSV</button>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="data-table">
-            <thead><tr><th>School</th><th>Previous</th><th>Current</th><th>Added</th><th>Removed</th><th>Changed</th></tr></thead>
-            <tbody>
-              {comparison.schoolChanges.map((school) => (
-                <tr key={school.schoolName}>
-                  <td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{school.schoolName}</td>
-                  <td>{school.previousCount}</td><td>{school.currentCount}</td><td>{school.added}</td><td>{school.removed}</td><td>{school.changed}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="card" style={{ padding: "18px 20px" }}>
+          <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>{selectedSchool === "all" ? "Specific records added, removed, or changed across all schools." : `Changes for ${selectedSchool}.`} Records are matched by OEN when available.</p></div>
+          {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead><tbody>{visibleRecords.map((record) => { const color = record.kind === "added" ? "var(--color-brand-400)" : record.kind === "removed" ? "var(--color-error-text)" : "var(--color-warning-text)"; return <tr key={`${record.kind}-${record.key}`}><td><span style={{ color, fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.05em" }}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? record.changedFields.join(", ") : "—"}</td></tr>; })}</tbody></table></div>}
+        </section>
+      )}
     </main>
   );
 }
