@@ -736,7 +736,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   };
 
   return (
-    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: 1180, width: "100%", margin: "0 auto", padding: "16px 24px 24px" }}>
+    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: "none", width: "100%", margin: 0, padding: "16px 4vw 24px" }}>
       <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 8, padding: "4px 8px", gap: 5, fontSize: 12 }}>
         <ArrowLeft size={13} /> Compare another pair
       </button>

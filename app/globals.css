@@ -137,6 +137,7 @@ body {
 }
 .compare-results-main {
   width: 100%;
+  max-width: none;
   min-width: 0;
   height: calc(100vh - 52px);
   display: flex;
@@ -228,6 +229,11 @@ body {
   display: flex;
   flex-direction: column;
 }
+.compare-dashboard > .compare-detail-card,
+.compare-dashboard > .compare-record-layout {
+  flex: 1;
+  min-height: 0;
+}
 .compare-table-scroll {
   width: 100%;
   max-width: 100%;
@@ -235,6 +241,10 @@ body {
   flex: 1;
   max-height: none;
   overflow: auto;
+}
+.compare-collapsible-body .compare-table-scroll {
+  max-height: 28vh;
+  flex: initial;
 }
 .compare-collapsible {
   overflow: hidden;
