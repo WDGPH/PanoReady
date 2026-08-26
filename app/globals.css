@@ -135,6 +135,21 @@ body {
   padding: 8px 0;
   background: var(--color-surface-0);
 }
+.compare-results-main {
+  height: calc(100vh - 52px);
+  overflow: hidden;
+}
+.compare-detail-card {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.compare-table-scroll {
+  min-height: 0;
+  max-height: min(34vh, 360px);
+  overflow: auto;
+}
 .compare-collapsible {
   overflow: hidden;
 }
@@ -210,6 +225,13 @@ body {
 }
 
 @media (max-width: 760px) {
+  .compare-results-main {
+    height: auto;
+    overflow: visible;
+  }
+  .compare-table-scroll {
+    max-height: 52vh;
+  }
   .compare-record-layout {
     grid-template-columns: 1fr;
   }
