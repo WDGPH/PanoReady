@@ -139,8 +139,9 @@ body {
   width: 100%;
   min-width: 0;
   height: calc(100vh - 52px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .compare-dashboard {
   background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
@@ -211,6 +212,7 @@ body {
 .compare-detail-card {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -219,7 +221,8 @@ body {
   width: 100%;
   max-width: 100%;
   min-height: 0;
-  max-height: min(34vh, 360px);
+  flex: 1;
+  max-height: none;
   overflow: auto;
 }
 .compare-collapsible {
@@ -278,6 +281,8 @@ body {
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
+  flex: 1;
+  min-height: 0;
 }
 .compare-record-layout:has(.compare-school-summary) {
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) 250px;
@@ -285,6 +290,7 @@ body {
 .compare-school-panel {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 .compare-school-summary {
@@ -318,6 +324,7 @@ body {
   }
   .compare-table-scroll {
     max-height: 52vh;
+    flex: initial;
   }
   .compare-record-layout {
     grid-template-columns: 1fr;
