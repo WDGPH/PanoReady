@@ -736,11 +736,11 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   };
 
   return (
-    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: 1180, width: "100%", margin: "0 auto", padding: "24px 24px 56px" }}>
-      <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
+    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: 1180, width: "100%", margin: "0 auto", padding: "16px 24px 24px" }}>
+      <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 8, padding: "4px 8px", gap: 5, fontSize: 12 }}>
         <ArrowLeft size={13} /> Compare another pair
       </button>
-      <div className="compare-dashboard-header" style={{ marginBottom: 20 }}>
+      <div className="compare-dashboard-header" style={{ marginBottom: 12 }}>
         <div className="compare-dashboard-kicker">OPERATIONS / CHANGE INTELLIGENCE <span>LOCAL ANALYSIS</span></div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <GitCompareArrows size={22} style={{ color: "#f59e0b" }} />
@@ -759,7 +759,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <StatCard label="Moved schools" value={comparison.movedCount} accent="teal" />
       </div>
 
-      <div className="compare-signal" style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "16px 18px", marginBottom: 18 }}>
+      <div className="compare-signal" style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "12px 16px", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
           <div style={{ fontWeight: 700, color: signalColor }}>{comparison.recommendation}</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: signalColor }}>{comparison.changeRate.toFixed(1)}%</div>

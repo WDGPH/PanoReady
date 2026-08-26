@@ -149,13 +149,13 @@ body {
 }
 .compare-dashboard-header {
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 16px;
+  padding-bottom: 10px;
 }
 .compare-dashboard-kicker {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   color: var(--color-teal-400);
   font-family: var(--font-mono), monospace;
   font-size: 10px;
@@ -182,6 +182,17 @@ body {
 .compare-kpi-grid > div {
   position: relative;
   overflow: hidden;
+  padding: 12px 14px;
+}
+.compare-dashboard .compare-kpi-grid > div > div:first-child,
+.compare-dashboard .compare-context-grid > div > div:first-child {
+  margin-bottom: 5px;
+}
+.compare-dashboard .compare-kpi-grid > div > div:last-child {
+  font-size: 24px;
+}
+.compare-dashboard .compare-context-grid > div {
+  padding: 12px 14px;
 }
 .compare-kpi-grid > div::before {
   content: "";
@@ -233,7 +244,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 18px;
+  padding: 10px 14px;
   color: var(--color-text-primary);
   cursor: pointer;
   list-style: none;
@@ -269,7 +280,7 @@ body {
   white-space: nowrap;
 }
 .compare-collapsible-body {
-  padding: 0 18px 18px;
+  padding: 0 14px 14px;
 }
 .compare-school-filter {
   width: auto;
