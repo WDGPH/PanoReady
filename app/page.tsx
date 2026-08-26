@@ -717,7 +717,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
 // ─── CompareView ──────────────────────────────────────────────────────────────
 
 function CompareView({ comparison, onStartOver }: { comparison: StixComparison; onStartOver: () => void }) {
-  const [viewMode, setViewMode] = useState<"schools" | "records">("records");
+  const [viewMode, setViewMode] = useState<"schools" | "records" | "fields" | "transfers">("records");
   const [selectedSchool, setSelectedSchool] = useState("all");
   const signalColor = comparison.signal === "stable" ? "var(--color-brand-400)" : comparison.signal === "moderate" ? "var(--color-warning-text)" : "var(--color-error-text)";
   const signalBackground = comparison.signal === "stable" ? "var(--color-success-bg)" : comparison.signal === "moderate" ? "var(--color-warning-bg)" : "var(--color-error-bg)";
@@ -775,7 +775,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <StatCard label="Schools" value={`${comparison.previousSchoolCount} → ${comparison.currentSchoolCount}`} />
       </div>
 
-      <details className="card compare-collapsible" style={{ marginBottom: 12 }}>
+      <details className="card compare-collapsible compare-top-detail" style={{ marginBottom: 12 }}>
         <summary><span><strong>What changed</strong><small>Field changes among matched records</small></span><span className="compare-collapsible-count">{comparison.fieldChanges.length} fields</span></summary>
         <div className="compare-collapsible-body">
         {comparison.fieldChanges.length === 0 ? (
@@ -793,7 +793,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         </div>
       </details>
 
-      <details className="card compare-collapsible" style={{ marginBottom: 18 }}>
+      <details className="card compare-collapsible compare-top-detail" style={{ marginBottom: 18 }}>
         <summary><span><strong>Student transfers</strong><small>Students matched across both files whose school changed</small></span><span className="compare-collapsible-count">{comparison.movedCount} moves</span></summary>
         <div className="compare-collapsible-body">
         {comparison.schoolTransfers.length === 0 ? (
@@ -813,6 +813,8 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <div className="compare-tabs" role="tablist" aria-label="Comparison detail view">
           <button className={viewMode === "schools" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("schools")} role="tab" aria-selected={viewMode === "schools"}><School size={14} /> School overview</button>
           <button className={viewMode === "records" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("records")} role="tab" aria-selected={viewMode === "records"}><Users size={14} /> Record details</button>
+          <button className={viewMode === "fields" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("fields")} role="tab" aria-selected={viewMode === "fields"}><SlidersHorizontal size={14} /> Field changes</button>
+          <button className={viewMode === "transfers" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("transfers")} role="tab" aria-selected={viewMode === "transfers"}><GitCompareArrows size={14} /> Transfers</button>
         </div>
         {viewMode === "records" && (
           <select className="input compare-school-filter" value={selectedSchool} onChange={(event) => setSelectedSchool(event.target.value)} aria-label="Filter records by school">
@@ -834,6 +836,16 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
               <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => { setSelectedSchool(school.schoolName); setViewMode("records"); }} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{school.schoolName}</td><td>{school.previousCount}</td><td>{school.currentCount}</td><td>{school.added}</td><td>{school.removed}</td><td>{school.changed}</td></tr>)}</tbody>
             </table>
           </div>
+        </section>
+      ) : viewMode === "fields" ? (
+        <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
+          <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Field changes</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Fields changed among matched student records, ordered by frequency.</p></div>
+          <div className="compare-table-scroll"><table className="data-table"><thead><tr><th>Field</th><th>Changed records</th></tr></thead><tbody>{comparison.fieldChanges.map((field) => <tr key={field.field}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{field.label}</td><td>{field.count}</td></tr>)}</tbody></table></div>
+        </section>
+      ) : viewMode === "transfers" ? (
+        <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
+          <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Student transfers</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Students matched across both files whose school changed.</p></div>
+          <div className="compare-table-scroll"><table className="data-table"><thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead><tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody></table></div>
         </section>
       ) : (
         <div className="compare-record-layout">

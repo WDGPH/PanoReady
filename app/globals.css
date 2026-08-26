@@ -134,6 +134,10 @@ body {
   z-index: 2;
   padding: 8px 0;
   background: var(--color-surface-0);
+  flex-shrink: 0;
+}
+.compare-top-detail {
+  display: none;
 }
 .compare-results-main {
   width: 100%;
@@ -194,6 +198,12 @@ body {
 }
 .compare-dashboard .compare-context-grid > div {
   padding: 12px 14px;
+}
+.compare-context-grid {
+  margin-bottom: 12px !important;
+}
+.compare-dashboard .compare-context-grid > div > div:last-child {
+  font-size: 21px;
 }
 .compare-kpi-grid > div::before {
   content: "";
