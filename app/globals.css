@@ -128,6 +128,59 @@ body {
   color: var(--color-text-primary);
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.18);
 }
+.compare-tabs-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 0;
+  background: var(--color-surface-0);
+}
+.compare-collapsible {
+  overflow: hidden;
+}
+.compare-collapsible summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+.compare-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+.compare-collapsible summary::after {
+  content: "⌄";
+  color: var(--color-text-muted);
+  font-size: 16px;
+  transition: transform 0.15s ease;
+}
+.compare-collapsible[open] summary::after {
+  transform: rotate(180deg);
+}
+.compare-collapsible summary > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.compare-collapsible summary strong {
+  font-size: 14px;
+}
+.compare-collapsible summary small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+.compare-collapsible-count {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.compare-collapsible-body {
+  padding: 0 18px 18px;
+}
 .compare-school-filter {
   width: auto;
   min-width: 210px;
