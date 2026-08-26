@@ -717,7 +717,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
 // ─── CompareView ──────────────────────────────────────────────────────────────
 
 function CompareView({ comparison, onStartOver }: { comparison: StixComparison; onStartOver: () => void }) {
-  const [viewMode, setViewMode] = useState<"schools" | "records">("schools");
+  const [viewMode, setViewMode] = useState<"schools" | "records">("records");
   const [selectedSchool, setSelectedSchool] = useState("all");
   const signalColor = comparison.signal === "stable" ? "var(--color-brand-400)" : comparison.signal === "moderate" ? "var(--color-warning-text)" : "var(--color-error-text)";
   const signalBackground = comparison.signal === "stable" ? "var(--color-success-bg)" : comparison.signal === "moderate" ? "var(--color-warning-bg)" : "var(--color-error-bg)";
@@ -837,6 +837,15 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         </section>
       ) : (
         <div className="compare-record-layout">
+        <section className="card compare-school-panel" style={{ padding: "16px" }}>
+          <div style={{ marginBottom: 12 }}><h2 style={{ fontSize: 15, margin: "0 0 3px" }}>Schools</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Select a school to focus the records.</p></div>
+          <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
+            <table className="data-table">
+              <thead><tr><th>School</th><th>Δ</th></tr></thead>
+              <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => setSelectedSchool(school.schoolName)} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: selectedSchool === school.schoolName ? 700 : 500 }}>{school.schoolName}</td><td style={{ color: school.added + school.removed + school.changed > 0 ? "var(--color-warning-text)" : "var(--color-text-muted)" }}>{school.added + school.removed + school.changed}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
         <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
           <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>{selectedSchool === "all" ? "Specific records added, removed, or changed across all schools." : `Changes for ${selectedSchool}.`} Records are matched by OEN when available.</p></div>
           {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div className="compare-table-scroll" style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead><tbody>{visibleRecords.map((record) => { const color = record.kind === "added" ? "var(--color-brand-400)" : record.kind === "removed" ? "var(--color-error-text)" : "var(--color-warning-text)"; return <tr key={`${record.kind}-${record.key}`}><td><span style={{ color, fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.05em" }}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? record.changedFields.join(", ") : "—"}</td></tr>; })}</tbody></table></div>}
