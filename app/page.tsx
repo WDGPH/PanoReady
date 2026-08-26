@@ -722,6 +722,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   const signalColor = comparison.signal === "stable" ? "var(--color-brand-400)" : comparison.signal === "moderate" ? "var(--color-warning-text)" : "var(--color-error-text)";
   const signalBackground = comparison.signal === "stable" ? "var(--color-success-bg)" : comparison.signal === "moderate" ? "var(--color-warning-bg)" : "var(--color-error-bg)";
   const visibleRecords = selectedSchool === "all" ? comparison.recordChanges : comparison.recordChanges.filter((record) => record.schoolName === selectedSchool);
+  const selectedSchoolSummary = comparison.schoolChanges.find((school) => school.schoolName === selectedSchool);
   const downloadChanges = () => {
     const rows = comparison.schoolChanges.map((school) => ({
       School: school.schoolName,
@@ -818,10 +819,32 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
           </div>
         </section>
       ) : (
+        <div className="compare-record-layout">
         <section className="card" style={{ padding: "18px 20px" }}>
           <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>{selectedSchool === "all" ? "Specific records added, removed, or changed across all schools." : `Changes for ${selectedSchool}.`} Records are matched by OEN when available.</p></div>
           {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead><tbody>{visibleRecords.map((record) => { const color = record.kind === "added" ? "var(--color-brand-400)" : record.kind === "removed" ? "var(--color-error-text)" : "var(--color-warning-text)"; return <tr key={`${record.kind}-${record.key}`}><td><span style={{ color, fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.05em" }}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? record.changedFields.join(", ") : "—"}</td></tr>; })}</tbody></table></div>}
         </section>
+        {selectedSchoolSummary && (
+          <aside className="card compare-school-summary">
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 16 }}>
+              <div><div style={{ color: "var(--color-text-muted)", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 5 }}>Selected school</div><h2 style={{ fontSize: 17, margin: 0 }}>{selectedSchoolSummary.schoolName}</h2></div>
+              <School size={18} style={{ color: "var(--color-teal-400)" }} />
+            </div>
+            <div className="compare-school-stat-grid">
+              <StatCard label="Previous" value={selectedSchoolSummary.previousCount} />
+              <StatCard label="Current" value={selectedSchoolSummary.currentCount} />
+              <StatCard label="Added" value={selectedSchoolSummary.added} accent="green" />
+              <StatCard label="Removed" value={selectedSchoolSummary.removed} accent="red" />
+              <StatCard label="Changed" value={selectedSchoolSummary.changed} accent="yellow" />
+              <StatCard label="Net movement" value={selectedSchoolSummary.currentCount - selectedSchoolSummary.previousCount} />
+            </div>
+            <div style={{ borderTop: "1px solid var(--color-border)", marginTop: 16, paddingTop: 14, color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.5 }}>
+              School change rate: <strong style={{ color: "var(--color-text-primary)" }}>{((selectedSchoolSummary.added + selectedSchoolSummary.removed + selectedSchoolSummary.changed) / Math.max(selectedSchoolSummary.previousCount, 1) * 100).toFixed(1)}%</strong>
+            </div>
+            <button className="btn btn-ghost" onClick={() => setSelectedSchool("all")} style={{ marginTop: 10, padding: "5px 0", fontSize: 12 }}>Clear school filter</button>
+          </aside>
+        )}
+        </div>
       )}
     </main>
   );

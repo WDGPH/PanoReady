@@ -133,6 +133,37 @@ body {
   min-width: 210px;
   padding: 8px 12px;
 }
+.compare-record-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 14px;
+  align-items: start;
+}
+.compare-school-summary {
+  padding: 16px;
+  position: sticky;
+  top: 16px;
+}
+.compare-school-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.compare-school-stat-grid > div {
+  padding: 11px 12px;
+}
+.compare-school-stat-grid > div > div:last-child {
+  font-size: 22px;
+}
+
+@media (max-width: 760px) {
+  .compare-record-layout {
+    grid-template-columns: 1fr;
+  }
+  .compare-school-summary {
+    position: static;
+  }
+}
 
 /* Gradient text */
 .gradient-text {
