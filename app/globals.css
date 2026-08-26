@@ -97,6 +97,43 @@ body {
   border-color: var(--color-border-hover);
 }
 
+.compare-tabs {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+}
+.compare-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.compare-tab:hover {
+  color: var(--color-text-primary);
+}
+.compare-tab.active {
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.18);
+}
+.compare-school-filter {
+  width: auto;
+  min-width: 210px;
+  padding: 8px 12px;
+}
+
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(135deg, #4ade80 0%, #2dd4bf 100%);
