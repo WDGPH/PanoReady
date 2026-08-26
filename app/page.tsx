@@ -736,8 +736,8 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   };
 
   return (
-    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: "none", width: "100%", margin: 0, padding: "16px 4vw 24px" }}>
-      <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 8, padding: "4px 8px", gap: 5, fontSize: 12 }}>
+    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: "none", width: "100%", margin: 0, padding: 0 }}>
+      <button onClick={onStartOver} className="btn btn-ghost compare-back" style={{ marginBottom: 8, padding: "4px 8px", gap: 5, fontSize: 12 }}>
         <ArrowLeft size={13} /> Compare another pair
       </button>
       <div className="compare-dashboard-header" style={{ marginBottom: 12 }}>
@@ -751,7 +751,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         </p>
       </div>
 
-      <div className="compare-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 18 }}>
+      <div className="compare-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 12 }}>
         <StatCard label="Records added" value={comparison.addedCount} accent="green" />
         <StatCard label="Records removed" value={comparison.removedCount} accent="red" />
         <StatCard label="Records changed" value={comparison.changedCount} accent="yellow" />
@@ -759,13 +759,13 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <StatCard label="Moved schools" value={comparison.movedCount} accent="teal" />
       </div>
 
-      <div className="compare-signal" style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "12px 16px", marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
-          <div style={{ fontWeight: 700, color: signalColor }}>{comparison.recommendation}</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: signalColor }}>{comparison.changeRate.toFixed(1)}%</div>
+      <div className="compare-signal" style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 9, padding: "9px 13px", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: signalColor }}>{comparison.recommendation}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: signalColor }}>{comparison.changeRate.toFixed(1)}%</div>
         </div>
-        <div style={{ color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.55 }}>{comparison.recommendationDetail}</div>
-        <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 9 }}>Observed change rate = added + removed + changed records ÷ previous records. This is an operational signal, not a replacement for required reporting schedules.</div>
+        <div style={{ color: "var(--color-text-secondary)", fontSize: 11.5, lineHeight: 1.5 }}>{comparison.recommendationDetail}</div>
+        <div style={{ color: "var(--color-text-muted)", fontSize: 10.5, marginTop: 6 }}>Observed change rate = added + removed + changed records ÷ previous records. This is an operational signal, not a replacement for required reporting schedules.</div>
       </div>
 
       <div className="compare-context-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
@@ -853,14 +853,14 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
           <div style={{ marginBottom: 12 }}><h2 style={{ fontSize: 15, margin: "0 0 3px" }}>Schools</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Select a school to focus the records.</p></div>
           <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
             <table className="data-table">
-              <thead><tr><th>School</th><th>Δ</th></tr></thead>
-              <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => setSelectedSchool(school.schoolName)} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: selectedSchool === school.schoolName ? 700 : 500 }}>{school.schoolName}</td><td style={{ color: school.added + school.removed + school.changed > 0 ? "var(--color-warning-text)" : "var(--color-text-muted)" }}>{school.added + school.removed + school.changed}</td></tr>)}</tbody>
+              <thead><tr><th>School</th></tr></thead>
+              <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => setSelectedSchool(school.schoolName)} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: selectedSchool === school.schoolName ? 700 : 500 }}>{school.schoolName}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
         <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
           <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>{selectedSchool === "all" ? "Specific records added, removed, or changed across all schools." : `Changes for ${selectedSchool}.`} Records are matched by OEN when available.</p></div>
-          {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div className="compare-table-scroll" style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead><tbody>{visibleRecords.map((record) => { const color = record.kind === "added" ? "var(--color-brand-400)" : record.kind === "removed" ? "var(--color-error-text)" : "var(--color-warning-text)"; return <tr key={`${record.kind}-${record.key}`}><td><span style={{ color, fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.05em" }}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? record.changedFields.join(", ") : "—"}</td></tr>; })}</tbody></table></div>}
+          {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div className="compare-table-scroll" style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={`${record.kind}-${record.key}`}><td><span className={`change-badge change-badge--${record.kind}`}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? <div className="field-tag-list">{record.changedFields.map((field) => <span key={field} className="field-tag">{field}</span>)}</div> : <span style={{ color: "var(--color-text-muted)" }}>—</span>}</td></tr>)}</tbody></table></div>}
         </section>
         {selectedSchoolSummary && (
           <aside className="card compare-school-summary">
