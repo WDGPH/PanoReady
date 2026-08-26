@@ -736,11 +736,12 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   };
 
   return (
-    <main className="compare-results-main" style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "32px 24px 80px" }}>
+    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: 1180, width: "100%", margin: "0 auto", padding: "24px 24px 56px" }}>
       <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Compare another pair
       </button>
-      <div style={{ marginBottom: 26 }}>
+      <div className="compare-dashboard-header" style={{ marginBottom: 20 }}>
+        <div className="compare-dashboard-kicker">OPERATIONS / CHANGE INTELLIGENCE <span>LOCAL ANALYSIS</span></div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <GitCompareArrows size={22} style={{ color: "#f59e0b" }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>STIX file comparison</h1>
@@ -750,7 +751,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 24 }}>
+      <div className="compare-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 18 }}>
         <StatCard label="Records added" value={comparison.addedCount} accent="green" />
         <StatCard label="Records removed" value={comparison.removedCount} accent="red" />
         <StatCard label="Records changed" value={comparison.changedCount} accent="yellow" />
@@ -758,7 +759,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <StatCard label="Moved schools" value={comparison.movedCount} accent="teal" />
       </div>
 
-      <div style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "18px 20px", marginBottom: 24 }}>
+      <div className="compare-signal" style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "16px 18px", marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
           <div style={{ fontWeight: 700, color: signalColor }}>{comparison.recommendation}</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: signalColor }}>{comparison.changeRate.toFixed(1)}%</div>
@@ -767,7 +768,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 9 }}>Observed change rate = added + removed + changed records ÷ previous records. This is an operational signal, not a replacement for required reporting schedules.</div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 28 }}>
+      <div className="compare-context-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
         <StatCard label="Previous records" value={comparison.previousStudentCount} />
         <StatCard label="Current records" value={comparison.currentStudentCount} />
         <StatCard label="Matched records" value={comparison.matchedCount} />

@@ -142,6 +142,72 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
 }
+.compare-dashboard {
+  background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.compare-dashboard-header {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 16px;
+}
+.compare-dashboard-kicker {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  color: var(--color-teal-400);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.compare-dashboard-kicker span {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+.compare-dashboard h1,
+.compare-dashboard h2 {
+  letter-spacing: -0.02em;
+}
+.compare-dashboard .card {
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.compare-kpi-grid > div,
+.compare-context-grid > div {
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+}
+.compare-kpi-grid > div {
+  position: relative;
+  overflow: hidden;
+}
+.compare-kpi-grid > div::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-teal-400);
+  opacity: 0.65;
+}
+.compare-signal {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02), 0 10px 28px rgba(0,0,0,0.14);
+}
+.compare-dashboard .data-table th {
+  background: var(--color-surface-2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.compare-dashboard .data-table td,
+.compare-dashboard .data-table th {
+  padding: 9px 11px;
+}
+.compare-dashboard .data-table tbody tr:hover td {
+  background: var(--color-surface-3);
+}
 .compare-detail-card {
   min-width: 0;
   min-height: 0;
@@ -231,6 +297,13 @@ body {
 }
 
 @media (max-width: 760px) {
+  .compare-dashboard-kicker {
+    flex-direction: column;
+    gap: 5px;
+  }
+  .compare-context-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
   .compare-results-main {
     height: auto;
     overflow: visible;
