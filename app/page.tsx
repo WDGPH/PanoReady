@@ -7,9 +7,10 @@ import {
   ArrowRight, AlertTriangle, MapPin, School,
   Download, Users, BarChart3, ShieldCheck,
   ShieldX, Search, Filter, Wrench, RefreshCw,
-  ClipboardCheck, SlidersHorizontal,
+  ClipboardCheck, SlidersHorizontal, GitCompareArrows,
 } from "lucide-react";
 import { cleanXml, applyReviewUpdates, prettyPrintXml } from "@/lib/cleaner";
+import { compareStixFiles } from "@/lib/compare";
 import { processExport, buildSchoolCounts, buildGradeCounts } from "@/lib/pullInfo";
 import { downloadText, toCsv } from "@/lib/utils";
 import {
@@ -23,7 +24,7 @@ import {
 import type {
   Workflow, SessionData,
   ValidateSession, ValidationIssue, AppliedFix,
-  ValidationSeverity, RulesProfile,
+  ValidationSeverity, RulesProfile, StixComparison,
 } from "@/lib/types";
 import { defaultRules, getActiveRules, getActiveRulesetId, listCustomRulesets, BUILTIN_ID } from "@/lib/rulesets";
 import RulesetSelector from "@/components/RulesetSelector";
@@ -38,7 +39,8 @@ type View =
   | "validate-issues"
   | "validate-fix"
   | "validate-revalidate"
-  | "validate-download";
+  | "validate-download"
+  | "compare";
 
 // ─── NavBar ──────────────────────────────────────────────────────────────────
 
@@ -111,17 +113,22 @@ const WORKFLOWS: { id: Workflow; icon: React.ReactNode; label: string; descripti
   { id: "clean",    icon: <Wand2 size={20} />,          label: "Clean XML",         description: "Fix phones, standardize units, flag bad street numbers for manual review.", color: "var(--color-brand-400)" },
   { id: "export",   icon: <FileSpreadsheet size={20} />, label: "Export Reports",   description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries.", color: "var(--color-teal-400)" },
   { id: "pretty",   icon: <FileText size={20} />,        label: "Pretty Print",     description: "Reformat the XML with consistent indentation.", color: "#a78bfa" },
+  { id: "compare",  icon: <GitCompareArrows size={20} />, label: "Compare Files",    description: "Compare two snapshots to measure record, field, and school-level changes.", color: "#f59e0b" },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 
-function HomeView({ onDone, onValidate }: {
+function HomeView({ onDone, onValidate, onCompare }: {
   onDone: (data: SessionData, next: View) => void;
   onValidate: (session: ValidateSession) => void;
+  onCompare: (comparison: StixComparison) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const currentInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile]           = useState<File | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [selectedName, setSelectedName] = useState("");
+  const [currentSelectedName, setCurrentSelectedName] = useState("");
   const [workflow, setWorkflow]   = useState<Workflow>("validate");
   const [dragging, setDragging]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -141,6 +148,17 @@ function HomeView({ onDone, onValidate }: {
     if (!selectedFile) return;
     handleFile(selectedFile);
   }, [handleFile]);
+
+  const handleCurrentFile = useCallback((f: File) => {
+    setError(null);
+    setCurrentFile(f);
+    setCurrentSelectedName(f.name || "current file");
+  }, []);
+
+  const handleCurrentFileSelect = useCallback((target: HTMLInputElement) => {
+    const selectedFile = target.files?.[0];
+    if (selectedFile) handleCurrentFile(selectedFile);
+  }, [handleCurrentFile]);
 
   const syncFileFromInput = useCallback(() => {
     const input = inputRef.current;
@@ -202,6 +220,15 @@ function HomeView({ onDone, onValidate }: {
       const xmlText = await readFileText(selectedFile);
       if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is not XML text.");
 
+      if (workflow === "compare") {
+        const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
+        if (!selectedCurrentFile) throw new Error("Please select the current XML file as well.");
+        const currentXmlText = await readFileText(selectedCurrentFile);
+        if (!currentXmlText.trim().startsWith("<")) throw new Error("The current file is not XML text.");
+        onCompare(compareStixFiles(xmlText, currentXmlText, selectedFile.name, selectedCurrentFile.name));
+        return;
+      }
+
       if (workflow === "validate") {
         const result = validateXml(xmlText, activeRules);
         onValidate({
@@ -234,11 +261,13 @@ function HomeView({ onDone, onValidate }: {
   const wLabel = workflow === "validate" ? "Validate & Fix"
     : workflow === "clean" ? "Clean XML"
     : workflow === "export" ? "Generate Reports"
-    : "Pretty Print XML";
+    : workflow === "pretty" ? "Pretty Print XML"
+    : "Compare Files";
   const wIcon = workflow === "validate" ? <ClipboardCheck size={16} />
     : workflow === "clean" ? <Wand2 size={16} />
     : workflow === "export" ? <FileSpreadsheet size={16} />
-    : <FileText size={16} />;
+    : workflow === "pretty" ? <FileText size={16} />
+    : <GitCompareArrows size={16} />;
 
   return (
     <main className="grid-bg" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "56px 24px 80px" }}>
@@ -317,6 +346,25 @@ function HomeView({ onDone, onValidate }: {
             </div>
           </div>
         </div>
+
+        {workflow === "compare" && (
+          <div>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>3 · Upload current XML file</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 10, padding: "16px 18px" }}>
+              <input
+                ref={currentInputRef}
+                type="file"
+                accept=".xml,text/xml,application/xml"
+                onChange={(e) => handleCurrentFileSelect(e.currentTarget)}
+                onInput={(e) => handleCurrentFileSelect(e.currentTarget)}
+                style={{ minWidth: 280, color: "var(--color-text-secondary)", fontSize: 13 }}
+              />
+              <div style={{ color: currentSelectedName ? "var(--color-text-primary)" : "var(--color-text-muted)", fontSize: 13 }}>
+                {currentSelectedName || "No current file selected"}
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div style={{ background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)", borderRadius: 9, padding: "11px 15px", display: "flex", alignItems: "center", gap: 9, color: "var(--color-error-text)", fontSize: 13 }}>
@@ -662,6 +710,135 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
           </>
         );
       })()}
+    </main>
+  );
+}
+
+// ─── CompareView ──────────────────────────────────────────────────────────────
+
+function CompareView({ comparison, onStartOver }: { comparison: StixComparison; onStartOver: () => void }) {
+  const signalColor = comparison.signal === "stable" ? "var(--color-brand-400)" : comparison.signal === "moderate" ? "var(--color-warning-text)" : "var(--color-error-text)";
+  const signalBackground = comparison.signal === "stable" ? "var(--color-success-bg)" : comparison.signal === "moderate" ? "var(--color-warning-bg)" : "var(--color-error-bg)";
+  const downloadChanges = () => {
+    const rows = comparison.schoolChanges.map((school) => ({
+      School: school.schoolName,
+      PreviousStudents: school.previousCount,
+      CurrentStudents: school.currentCount,
+      Added: school.added,
+      Removed: school.removed,
+      Changed: school.changed,
+    }));
+    downloadText(toCsv(rows), "stix_comparison_school_changes.csv", "text/csv");
+  };
+
+  return (
+    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "32px 24px 80px" }}>
+      <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
+        <ArrowLeft size={13} /> Compare another pair
+      </button>
+      <div style={{ marginBottom: 26 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <GitCompareArrows size={22} style={{ color: "#f59e0b" }} />
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>STIX file comparison</h1>
+        </div>
+        <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>
+          {comparison.previousFileName} <span style={{ color: "var(--color-text-muted)" }}>previous</span> · {comparison.currentFileName} <span style={{ color: "var(--color-text-muted)" }}>current</span>
+        </p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 24 }}>
+        <StatCard label="Records added" value={comparison.addedCount} accent="green" />
+        <StatCard label="Records removed" value={comparison.removedCount} accent="red" />
+        <StatCard label="Records changed" value={comparison.changedCount} accent="yellow" />
+        <StatCard label="No change" value={comparison.unchangedCount} accent="teal" />
+      </div>
+
+      <div style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "18px 20px", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, color: signalColor }}>{comparison.recommendation}</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: signalColor }}>{comparison.changeRate.toFixed(1)}%</div>
+        </div>
+        <div style={{ color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.55 }}>{comparison.recommendationDetail}</div>
+        <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 9 }}>Observed change rate = added + removed + changed records ÷ previous records. This is an operational signal, not a replacement for required reporting schedules.</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 28 }}>
+        <StatCard label="Previous records" value={comparison.previousStudentCount} />
+        <StatCard label="Current records" value={comparison.currentStudentCount} />
+        <StatCard label="Matched records" value={comparison.matchedCount} />
+        <StatCard label="Schools" value={`${comparison.previousSchoolCount} → ${comparison.currentSchoolCount}`} />
+      </div>
+
+      <section className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>What changed</h2>
+          <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Fields changed among matched student records.</p>
+        </div>
+        {comparison.fieldChanges.length === 0 ? (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No field-level changes were detected.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+            {comparison.fieldChanges.map((field) => (
+              <div key={field.field} style={{ display: "flex", justifyContent: "space-between", background: "var(--color-surface-2)", borderRadius: 7, padding: "9px 12px", fontSize: 12 }}>
+                <span style={{ color: "var(--color-text-secondary)" }}>{field.label}</span>
+                <strong>{field.count}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2>
+          <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Specific records added, removed, or changed. Records are matched by OEN when available.</p>
+        </div>
+        {comparison.recordChanges.length === 0 ? (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="data-table">
+              <thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th></tr></thead>
+              <tbody>
+                {comparison.recordChanges.map((record) => {
+                  const color = record.kind === "added" ? "var(--color-brand-400)" : record.kind === "removed" ? "var(--color-error-text)" : "var(--color-warning-text)";
+                  return (
+                    <tr key={`${record.kind}-${record.key}`}>
+                      <td><span style={{ color, fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.05em" }}>{record.kind}</span></td>
+                      <td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td>
+                      <td>{record.schoolName}</td>
+                      <td>{record.changedFields.length ? record.changedFields.join(", ") : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="card" style={{ padding: "18px 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>School-level impact</h2>
+            <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Schools ordered by the number of observed changes.</p>
+          </div>
+          <button onClick={downloadChanges} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 12px" }}><Download size={12} /> CSV</button>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="data-table">
+            <thead><tr><th>School</th><th>Previous</th><th>Current</th><th>Added</th><th>Removed</th><th>Changed</th></tr></thead>
+            <tbody>
+              {comparison.schoolChanges.map((school) => (
+                <tr key={school.schoolName}>
+                  <td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{school.schoolName}</td>
+                  <td>{school.previousCount}</td><td>{school.currentCount}</td><td>{school.added}</td><td>{school.removed}</td><td>{school.changed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }
@@ -1568,8 +1745,9 @@ export default function App() {
   const [view, setView]                   = useState<View>("home");
   const [session, setSession]             = useState<SessionData | null>(null);
   const [validateSess, setValidateSess]   = useState<ValidateSession | null>(null);
+  const [comparison, setComparison]       = useState<StixComparison | null>(null);
 
-  const goHome = () => { setView("home"); setSession(null); setValidateSess(null); };
+  const goHome = () => { setView("home"); setSession(null); setValidateSess(null); setComparison(null); };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -1579,6 +1757,7 @@ export default function App() {
         <HomeView
           onDone={(data, next) => { setSession(data); setView(next); }}
           onValidate={(vs) => { setValidateSess(vs); setView("validate-issues"); }}
+          onCompare={(result) => { setComparison(result); setView("compare"); }}
         />
       )}
 
@@ -1592,6 +1771,10 @@ export default function App() {
 
       {view === "result" && session && (
         <ResultView session={session} onStartOver={goHome} />
+      )}
+
+      {view === "compare" && comparison && (
+        <CompareView comparison={comparison} onStartOver={goHome} />
       )}
 
       {/* ── Validate workflow ── */}

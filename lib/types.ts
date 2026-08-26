@@ -1,4 +1,4 @@
-export type Workflow = "validate" | "clean" | "export" | "pretty";
+export type Workflow = "validate" | "clean" | "export" | "pretty" | "compare";
 
 export interface CleanStats {
   phones_cleaned: number;
@@ -72,6 +72,54 @@ export interface GradeCount {
   SchoolName: string;
   Grade: string;
   GradeCount: number;
+}
+
+export interface ComparisonFieldChange {
+  field: string;
+  label: string;
+  count: number;
+}
+
+export interface ComparisonSchoolChange {
+  schoolName: string;
+  previousCount: number;
+  currentCount: number;
+  added: number;
+  removed: number;
+  changed: number;
+}
+
+export type ComparisonRecordChangeKind = "added" | "removed" | "changed";
+
+export interface ComparisonRecordChange {
+  key: string;
+  kind: ComparisonRecordChangeKind;
+  studentName: string;
+  schoolName: string;
+  changedFields: string[];
+}
+
+export type ComparisonSignal = "stable" | "moderate" | "high";
+
+export interface StixComparison {
+  previousFileName: string;
+  currentFileName: string;
+  previousStudentCount: number;
+  currentStudentCount: number;
+  previousSchoolCount: number;
+  currentSchoolCount: number;
+  matchedCount: number;
+  unchangedCount: number;
+  addedCount: number;
+  removedCount: number;
+  changedCount: number;
+  changeRate: number;
+  fieldChanges: ComparisonFieldChange[];
+  recordChanges: ComparisonRecordChange[];
+  schoolChanges: ComparisonSchoolChange[];
+  signal: ComparisonSignal;
+  recommendation: string;
+  recommendationDetail: string;
 }
 
 /** Shape stored in sessionStorage between pages */
