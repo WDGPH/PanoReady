@@ -275,9 +275,17 @@ body {
 }
 .compare-record-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
+}
+.compare-record-layout:has(.compare-school-summary) {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) 250px;
+}
+.compare-school-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .compare-school-summary {
   padding: 16px;
@@ -312,6 +320,9 @@ body {
     max-height: 52vh;
   }
   .compare-record-layout {
+    grid-template-columns: 1fr;
+  }
+  .compare-record-layout:has(.compare-school-summary) {
     grid-template-columns: 1fr;
   }
   .compare-school-summary {
