@@ -774,11 +774,9 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         <StatCard label="Schools" value={`${comparison.previousSchoolCount} → ${comparison.currentSchoolCount}`} />
       </div>
 
-      <section className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>What changed</h2>
-          <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Fields changed among matched student records.</p>
-        </div>
+      <details className="card compare-collapsible" style={{ marginBottom: 12 }}>
+        <summary><span><strong>What changed</strong><small>Field changes among matched records</small></span><span className="compare-collapsible-count">{comparison.fieldChanges.length} fields</span></summary>
+        <div className="compare-collapsible-body">
         {comparison.fieldChanges.length === 0 ? (
           <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No field-level changes were detected.</p>
         ) : (
@@ -791,13 +789,12 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
             ))}
           </div>
         )}
-      </section>
-
-      <section className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Student transfers</h2>
-          <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Students matched across both files whose school changed. This is a subset of changed records.</p>
         </div>
+      </details>
+
+      <details className="card compare-collapsible" style={{ marginBottom: 18 }}>
+        <summary><span><strong>Student transfers</strong><small>Students matched across both files whose school changed</small></span><span className="compare-collapsible-count">{comparison.movedCount} moves</span></summary>
+        <div className="compare-collapsible-body">
         {comparison.schoolTransfers.length === 0 ? (
           <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No student moves between schools were detected.</p>
         ) : (
@@ -808,9 +805,10 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
             </table>
           </div>
         )}
-      </section>
+        </div>
+      </details>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+      <div className="compare-tabs-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
         <div className="compare-tabs" role="tablist" aria-label="Comparison detail view">
           <button className={viewMode === "schools" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("schools")} role="tab" aria-selected={viewMode === "schools"}><School size={14} /> School overview</button>
           <button className={viewMode === "records" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("records")} role="tab" aria-selected={viewMode === "records"}><Users size={14} /> Record details</button>
