@@ -307,6 +307,47 @@ Set either value to `false` to disable that duplicate check entirely. This is us
 
 ---
 
+### `cleaning`
+
+**Controls:** Cleaning step in Validate & Fix (Step 1)  
+**Type:** object (optional — omit entirely if you have no cleaning rules)
+
+```json
+"cleaning": {
+  "enabledFields": ["City", "StreetType"],
+  "mappings": {
+    "City": [
+      { "raw": "toronto", "canonical": "Toronto" },
+      { "raw": "TORONTO", "canonical": "Toronto", "matchCase": true }
+    ],
+    "StreetType": [
+      { "raw": "Street", "canonical": "ST" },
+      { "raw": "Avenue", "canonical": "AVE" }
+    ]
+  }
+}
+```
+
+The cleaning profile defines field-value substitutions applied to student records **before** the validation rules run. Fields in `enabledFields` are processed in order; within each field, mappings are evaluated top-to-bottom and the first match wins.
+
+**`enabledFields`** — array of strings  
+Fields to apply mappings to. Only fields listed here are cleaned, even if `mappings` has entries for other fields.
+
+**`mappings`** — object  
+A record keyed by field name. Each value is an ordered array of mapping objects:
+
+| Property | Required | Description |
+|---|---|---|
+| `raw` | Yes | The value to match against the field's current content |
+| `canonical` | Yes | The replacement value to write when `raw` matches |
+| `matchCase` | No | `true` for case-sensitive matching; default is case-insensitive |
+
+**Scope note:** The cleaning step applies to all student records from the uploaded file. It does not affect controlled-vocabulary validation (grade, gender, language, province) — use the `gradeAliases` / `genderAliases` fields for those.
+
+**In-app editing:** The Cleaning tab in the ruleset editor provides a UI for managing these mappings without editing JSON directly. Click **Save to ruleset** in the Cleaning step to sync mappings discovered from a file back into the active ruleset.
+
+---
+
 ## Sharing Rulesets
 
 Export produces a self-contained `.json` file. Recipients import it the same way — open the dropdown, click **Import**, and select the file. The ruleset is added to their browser's localStorage under the name defined in the file; it does not overwrite their existing rulesets.

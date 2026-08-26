@@ -1,60 +1,72 @@
 @import "tailwindcss";
 
-/* Tell Tailwind about our fonts (inline = don't emit to :root, just use values) */
-@theme inline {
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
 /*
-  All design tokens live here on :root so every var() call — whether in
-  inline JSX styles or CSS classes — can resolve them at runtime.
-  Tailwind v4's @theme inline does NOT emit to :root, so we do it ourselves.
+  Fonts (--font-sans, --font-serif, --font-mono) are supplied as CSS
+  variables on <html> by next/font in app/layout.tsx, so every var() call —
+  inline JSX styles included — resolves them at runtime without redeclaring
+  them here.
+
+  Design tokens below define the "Canon" palette: warm marble paper,
+  ink text, sage-green accent.
 */
 :root {
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-sans-fallback: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono-fallback: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-  /* Brand green */
-  --color-brand-400: #4ade80;
-  --color-brand-500: #22c55e;
-  --color-brand-600: #16a34a;
+  /* Canon base */
+  --marble: #f4efe6;
+  --ink: #22201c;
+  --muted: #8c8473;
+  --line: #ddd6c6;
+  --verde: #40564a;
+  --verde-light: #5c7b6b;
+  --gold: #9c7a3c;
 
-  /* Teal accent */
-  --color-teal-400: #2dd4bf;
-  --color-teal-500: #14b8a6;
-  --color-teal-600: #0d9488;
+  /* Brand green (mapped to verde) */
+  --color-brand-400: var(--verde-light);
+  --color-brand-500: var(--verde);
+  --color-brand-600: #32463c;
 
-  /* Dark surfaces */
-  --color-surface-0: #0f1117;
-  --color-surface-1: #161b27;
-  --color-surface-2: #1d2535;
-  --color-surface-3: #252f42;
-  --color-surface-4: #2d3a50;
+  /* Secondary accent (mapped to a muted antique gold — was teal) */
+  --color-teal-400: var(--gold);
+  --color-teal-500: #8a6a35;
+  --color-teal-600: #6f552a;
+
+  /* Surfaces — warm paper tones instead of dark glass */
+  --color-surface-0: var(--marble);
+  --color-surface-1: #faf7f0;
+  --color-surface-2: #ece5d5;
+  --color-surface-3: #e3dbc7;
+  --color-surface-4: #d3c8ac;
 
   /* Borders */
-  --color-border:       rgba(255, 255, 255, 0.07);
-  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-border:       var(--line);
+  --color-border-hover: rgba(34, 32, 28, 0.28);
 
   /* Text */
-  --color-text-primary:   #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted:     #64748b;
+  --color-text-primary:   var(--ink);
+  --color-text-secondary: #56503f;
+  --color-text-muted:     var(--muted);
 
-  /* Status — warning */
-  --color-warning-bg:     rgba(251, 191, 36, 0.1);
-  --color-warning-border: rgba(251, 191, 36, 0.3);
-  --color-warning-text:   #fbbf24;
+  /* Status — warning (muted amber/gold, not neon) */
+  --color-warning-bg:     rgba(156, 122, 60, 0.12);
+  --color-warning-border: rgba(156, 122, 60, 0.38);
+  --color-warning-text:   #7a5a20;
 
-  /* Status — error */
-  --color-error-bg:     rgba(239, 68, 68, 0.1);
-  --color-error-border: rgba(239, 68, 68, 0.3);
-  --color-error-text:   #f87171;
+  /* Status — error (dusty brick red, not neon) */
+  --color-error-bg:     rgba(139, 58, 43, 0.09);
+  --color-error-border: rgba(139, 58, 43, 0.32);
+  --color-error-text:   #8c3a2b;
 
-  /* Status — success */
-  --color-success-bg:     rgba(34, 197, 94, 0.1);
-  --color-success-border: rgba(34, 197, 94, 0.3);
-  --color-success-text:   #4ade80;
+  /* Status — success (verde) */
+  --color-success-bg:     rgba(64, 86, 74, 0.09);
+  --color-success-border: rgba(64, 86, 74, 0.3);
+  --color-success-text:   var(--verde);
+
+  /* Status — info (muted slate, used for informational badges/callouts) */
+  --color-info-bg:     rgba(74, 90, 100, 0.08);
+  --color-info-border: rgba(74, 90, 100, 0.28);
+  --color-info-text:   #4a5a64;
 }
 
 *, *::before, *::after {
@@ -67,31 +79,41 @@ html, body {
 }
 
 body {
-  background-color: var(--color-surface-0);
   color: var(--color-text-primary);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans), var(--font-sans-fallback);
   -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(ellipse 900px 500px at 12% -8%, rgba(180,170,140,.14), transparent 60%),
+    radial-gradient(ellipse 700px 480px at 102% 28%, rgba(120,140,125,.10), transparent 55%),
+    var(--marble);
+  background-attachment: fixed;
+}
+
+/* Headings use the serif display face throughout the app */
+h1, h2, h3 {
+  font-family: var(--font-serif), Georgia, serif;
+  letter-spacing: -0.01em;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--color-surface-1); }
+::-webkit-scrollbar-track { background: var(--color-surface-2); }
 ::-webkit-scrollbar-thumb { background: var(--color-surface-4); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-/* Glow utility */
+/* Glow utility — softened into a paper-like lift instead of a neon glow */
 .glow-brand {
-  box-shadow: 0 0 24px rgba(34,197,94,0.15), 0 0 48px rgba(34,197,94,0.07);
+  box-shadow: 0 1px 3px rgba(34,32,28,0.06), 0 0 0 1px rgba(64,86,74,0.1);
 }
 .glow-teal {
-  box-shadow: 0 0 24px rgba(20,184,166,0.15), 0 0 48px rgba(20,184,166,0.07);
+  box-shadow: 0 1px 3px rgba(34,32,28,0.06), 0 0 0 1px rgba(156,122,60,0.12);
 }
 
-/* Card glass */
+/* Card */
 .card {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 4px;
 }
 .card:hover {
   border-color: var(--color-border-hover);
@@ -368,7 +390,7 @@ body {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
   flex: 1;
   min-height: 0;
 }
@@ -584,7 +606,7 @@ body {
 
 /* Focus ring */
 *:focus-visible {
-  outline: 2px solid var(--color-brand-400);
+  outline: 2px solid var(--verde);
   outline-offset: 2px;
 }
 
@@ -599,9 +621,10 @@ body {
   padding: 10px 14px;
   color: var(--color-text-muted);
   font-weight: 500;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  font-family: var(--font-mono), var(--font-mono-fallback);
   border-bottom: 1px solid var(--color-border);
 }
 .data-table td {
@@ -615,9 +638,9 @@ body {
 
 /* Input */
 .input {
-  background: var(--color-surface-2);
+  background: var(--color-surface-1);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 8px 12px;
   color: var(--color-text-primary);
   font-size: 0.875rem;
@@ -626,8 +649,8 @@ body {
 }
 .input:focus {
   outline: none;
-  border-color: var(--color-brand-500);
-  box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px rgba(64,86,74,0.12);
 }
 .input::placeholder {
   color: var(--color-text-muted);
@@ -640,7 +663,7 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 9px 18px;
-  border-radius: 8px;
+  border-radius: 3px;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -649,22 +672,21 @@ body {
   text-decoration: none;
 }
 .btn-primary {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: #fff;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px rgba(34,197,94,0.2);
+  background: var(--ink);
+  color: var(--marble);
+  border: 1px solid var(--ink);
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-  box-shadow: 0 2px 8px rgba(34,197,94,0.3);
-  transform: translateY(-1px);
+  background: var(--verde);
+  border-color: var(--verde);
 }
 .btn-secondary {
-  background: var(--color-surface-3);
+  background: transparent;
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
 }
 .btn-secondary:hover {
-  background: var(--color-surface-4);
+  background: var(--color-surface-2);
   border-color: var(--color-border-hover);
 }
 .btn-ghost {
@@ -685,4 +707,250 @@ body {
   border-radius: 99px;
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+/* ── Canon-flavoured layout helpers ─────────────────────────────────────── */
+
+.eyebrow {
+  font-family: var(--font-mono), var(--font-mono-fallback);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--verde);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.eyebrow::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--verde);
+}
+
+/* Top bar — no fill, just a hairline; brand mark and a quiet privacy dot */
+.topbar {
+  border-bottom: 1px solid var(--color-border);
+}
+.topbar-inner {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 22px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.brand {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+.privacy {
+  font-family: var(--font-mono), var(--font-mono-fallback);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.privacy::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--verde);
+}
+
+.colophon {
+  font-family: var(--font-mono), var(--font-mono-fallback);
+  color: var(--color-text-muted);
+  letter-spacing: 0.03em;
+  text-align: center;
+  margin-top: 60px;
+  padding-top: 26px;
+  border-top: 1px solid var(--color-border);
+}
+
+/*
+  The spine — a single hairline rail runs down the left margin of the
+  home page, with a tick mark at each section. Verde appears in exactly
+  three places on this page: the eyebrow dot, a selected workflow's tick
+  (the spine registering the choice), and the keystone rule above the
+  final button. Nowhere else — one accent, spent once.
+*/
+.rail-page {
+  position: relative;
+  padding-left: 44px;
+}
+.rail {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 90px;
+  width: 1px;
+  background: var(--color-border);
+}
+.beat {
+  position: relative;
+  padding-top: 56px;
+}
+.beat:first-child {
+  padding-top: 0;
+}
+.beat::before {
+  content: "";
+  position: absolute;
+  left: -44px;
+  top: 12px;
+  width: 16px;
+  height: 1px;
+  background: var(--color-border-hover);
+}
+.beat:first-child::before {
+  display: none;
+}
+.beat-title {
+  font-family: var(--font-mono), var(--font-mono-fallback);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  margin: 0 0 22px;
+}
+
+.wf-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  cursor: pointer;
+  position: relative;
+}
+.wf-row:last-child {
+  border-bottom: 0;
+}
+.wf-row::before {
+  content: "";
+  position: absolute;
+  left: -44px;
+  top: 27px;
+  width: 16px;
+  height: 1px;
+  background: var(--color-border-hover);
+  transition: all 0.2s ease;
+}
+.wf-row.selected::before {
+  background: var(--verde);
+  height: 2px;
+  width: 20px;
+  left: -46px;
+  top: 26px;
+}
+.wf-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 600;
+  font-size: 19px;
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+}
+/* A second, always-visible echo of the tick — the margin rail can be missed
+   (and is hidden on narrow screens), so the choice also registers right next
+   to the text people are already reading. Space is reserved either way, so
+   nothing shifts when the selection changes. */
+.wf-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  transform: scale(0.4);
+}
+.wf-row.selected .wf-title::before {
+  background: var(--verde);
+  transform: scale(1);
+}
+.wf-desc {
+  display: block;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+  max-width: 500px;
+}
+
+/* Niche — a shallow carved recess the file belongs in, not a dashed placeholder.
+   Rendered as a <button> so it's the one keyboard-accessible way in — click to
+   browse, or drag a file onto it. */
+.niche {
+  display: block;
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  padding: 56px 20px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: inset 0 2px 10px rgba(34,32,28,0.05), inset 0 -1px 0 rgba(255,255,255,0.5);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.niche:hover {
+  border-color: var(--color-border-hover);
+}
+.niche.dragging {
+  border-color: var(--verde);
+  box-shadow: inset 0 2px 14px rgba(64,86,74,0.1);
+}
+
+.keystone-rule {
+  height: 2px;
+  background: var(--verde);
+  width: 56px;
+  margin-bottom: 26px;
+}
+
+.cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 20px;
+  background: var(--ink);
+  color: var(--marble);
+  border: 0;
+  border-radius: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cta:hover:not(:disabled) {
+  background: var(--verde);
+}
+.cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .rail-page { padding-left: 0; }
+  .rail, .beat::before, .wf-row::before { display: none; }
 }

@@ -6,7 +6,7 @@ TWIG STIX Cleaner is a browser-based utility for validating, cleaning, and expor
 
 | Workflow | Purpose | Output |
 |---|---|---|
-| [Validate & Fix](./workflow-validate-and-fix.md) | Deep validation against rules, interactive fix editor, revalidation, audit trail | Cleaned XML + issue report CSV |
+| [Validate & Fix](./workflow-validate-and-fix.md) | Optional cleaning step (raw → canonical value mappings), deep validation against rules, interactive fix editor, revalidation, audit trail | Cleaned XML + issue report CSV |
 | [Clean XML](./workflow-clean-xml.md) | Auto-fix phone numbers and address unit fields, optional manual review | Cleaned XML |
 | [Export Reports](./workflow-export-reports.md) | Extract student data into spreadsheets with optional filtering | CSV files + Excel workbook |
 | [Pretty Print](./workflow-pretty-print.md) | Reformat XML with consistent indentation | Formatted XML |
