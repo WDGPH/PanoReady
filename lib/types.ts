@@ -99,6 +99,13 @@ export interface ComparisonRecordChange {
   changedFields: string[];
 }
 
+export interface ComparisonSchoolTransfer {
+  fromSchool: string;
+  toSchool: string;
+  count: number;
+  students: string[];
+}
+
 export type ComparisonSignal = "stable" | "moderate" | "high";
 
 export interface StixComparison {
@@ -113,9 +120,11 @@ export interface StixComparison {
   addedCount: number;
   removedCount: number;
   changedCount: number;
+  movedCount: number;
   changeRate: number;
   fieldChanges: ComparisonFieldChange[];
   recordChanges: ComparisonRecordChange[];
+  schoolTransfers: ComparisonSchoolTransfer[];
   schoolChanges: ComparisonSchoolChange[];
   signal: ComparisonSignal;
   recommendation: string;

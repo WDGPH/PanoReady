@@ -1,5 +1,5 @@
 import { parseXml } from "./pullInfo";
-import type { ComparisonFieldChange, ComparisonRecordChange, ComparisonSchoolChange, StixComparison, Student } from "./types";
+import type { ComparisonFieldChange, ComparisonRecordChange, ComparisonSchoolChange, ComparisonSchoolTransfer, StixComparison, Student } from "./types";
 
 const COMPARED_FIELDS: Array<{ key: keyof Student; label: string }> = [
   { key: "SchoolName", label: "School" },
@@ -70,7 +70,9 @@ export function compareStixFiles(previousXml: string, currentXml: string, previo
   let matchedCount = 0;
   let unchangedCount = 0;
   let changedCount = 0;
+  let movedCount = 0;
   const recordChanges: ComparisonRecordChange[] = [];
+  const transferMap = new Map<string, ComparisonSchoolTransfer>();
 
   currentByKey.forEach((currentStudent, key) => {
     const previousStudent = previousByKey.get(key);
@@ -84,6 +86,16 @@ export function compareStixFiles(previousXml: string, currentXml: string, previo
     });
     if (recordChanged) {
       changedCount++;
+      const fromSchool = previousStudent.SchoolName || "Unknown school";
+      const toSchool = currentStudent.SchoolName || "Unknown school";
+      if (valueOf(previousStudent, "SchoolName") !== valueOf(currentStudent, "SchoolName")) {
+        movedCount++;
+        const transferKey = `${fromSchool}\u0000${toSchool}`;
+        const transfer = transferMap.get(transferKey) ?? { fromSchool, toSchool, count: 0, students: [] };
+        transfer.count++;
+        transfer.students.push(studentName(currentStudent));
+        transferMap.set(transferKey, transfer);
+      }
       recordChanges.push({
         key,
         kind: "changed",
@@ -153,9 +165,11 @@ export function compareStixFiles(previousXml: string, currentXml: string, previo
     addedCount,
     removedCount,
     changedCount,
+    movedCount,
     changeRate,
     fieldChanges,
     recordChanges: recordChanges.sort((a, b) => a.schoolName.localeCompare(b.schoolName) || a.studentName.localeCompare(b.studentName)),
+    schoolTransfers: Array.from(transferMap.values()).sort((a, b) => b.count - a.count || a.fromSchool.localeCompare(b.fromSchool)),
     schoolChanges,
     signal,
     recommendation,

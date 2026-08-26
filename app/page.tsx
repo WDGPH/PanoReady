@@ -750,11 +750,12 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 24 }}>
         <StatCard label="Records added" value={comparison.addedCount} accent="green" />
         <StatCard label="Records removed" value={comparison.removedCount} accent="red" />
         <StatCard label="Records changed" value={comparison.changedCount} accent="yellow" />
         <StatCard label="No change" value={comparison.unchangedCount} accent="teal" />
+        <StatCard label="Moved schools" value={comparison.movedCount} accent="teal" />
       </div>
 
       <div style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 11, padding: "18px 20px", marginBottom: 24 }}>
@@ -788,6 +789,23 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
                 <strong>{field.count}</strong>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Student transfers</h2>
+          <p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Students matched across both files whose school changed. This is a subset of changed records.</p>
+        </div>
+        {comparison.schoolTransfers.length === 0 ? (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No student moves between schools were detected.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="data-table">
+              <thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead>
+              <tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody>
+            </table>
           </div>
         )}
       </section>
