@@ -50,9 +50,23 @@ export interface Student {
   StreetNumberSuffix: string;
   StreetName: string;
   StreetType: string;
+  StreetDirection: string;
+  RuralRoute: string;
+  PoBoxNumber: string;
   City: string;
   Province: string;
   PostalCode: string;
+  PhoneType: string;
+  GuardianFirstName: string;
+  GuardianLastName: string;
+  GuardianRelationship: string;
+  GuardianPhoneNumber: string;
+  GuardianPhoneType: string;
+  Guardian2FirstName: string;
+  Guardian2LastName: string;
+  Guardian2Relationship: string;
+  Guardian2PhoneNumber: string;
+  Guardian2PhoneType: string;
 }
 
 export interface ExportResult {
@@ -256,6 +270,7 @@ export type ValidateSession = {
   originalXml: string;
   initialResult: ValidationResult;
   fixes: AppliedFix[];
+  validationRules?: RulesProfile;
   revalidatedResult?: ValidationResult;
   finalXml?: string;
 };

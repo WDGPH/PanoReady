@@ -21,6 +21,7 @@ function filenameSchoolName(fileName: string): string {
 }
 
 export interface XlsmMetadata {
+  requiredFields: string[];
   dateCreated: string;
   timeCreated: string;
   createdBy: string;
@@ -42,6 +43,7 @@ function readFileInfo(workbook: XLSX.WorkBook, fileName: string): XlsmMetadata {
     if (key && key !== "Field") values[key] = text(row[2]);
   }
   return {
+    requiredFields: [],
     dateCreated: values["Date Created"], timeCreated: values["Time Created"], createdBy: values["Created By"],
     contactPhone: values["Contact Phone"], phoneType: values["Phone Type"], contactEmail: values["PHU Contact Email"],
     fullUpload: values["Full Upload"], boardNumber: values["Board Number"], boardName: values["Board Name"],
@@ -50,7 +52,19 @@ function readFileInfo(workbook: XLSX.WorkBook, fileName: string): XlsmMetadata {
 }
 
 export function xlsmMetadata(data: ArrayBuffer, fileName: string): XlsmMetadata {
-  return readFileInfo(XLSX.read(data, { type: "array", cellDates: false, raw: false }), fileName);
+  const workbook = XLSX.read(data, { type: "array", cellDates: false, raw: false });
+  const metadata = readFileInfo(workbook, fileName);
+  const sheet = workbook.Sheets["Student Info"];
+  if (sheet) {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
+    const headerIndex = rows.findIndex((row) => row.some((cell) => text(cell).toLowerCase() === "first name"));
+    if (headerIndex >= 0) {
+      const headers = rows[headerIndex].map(fieldName);
+      const requiredRow = rows[headerIndex + 1] ?? [];
+      metadata.requiredFields = headers.filter((header, index) => text(requiredRow[index]).toUpperCase() === "Y" && header);
+    }
+  }
+  return metadata;
 }
 
 /** Converts the STIX Excel template's Student Info sheet into the XML shape used by the app. */
@@ -62,13 +76,15 @@ export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverr
   const headerIndex = rows.findIndex((row) => row.some((cell) => text(cell).toLowerCase() === "first name"));
   if (headerIndex < 0) throw new Error("Could not find the Student Info column headers.");
   const headers = rows[headerIndex].map(fieldName);
+  const requiredRow = rows[headerIndex + 1] ?? [];
+  const requiredFields = headers.filter((header, index) => text(requiredRow[index]).toUpperCase() === "Y" && header);
   const markerIndex = rows.findIndex((row, index) => index > headerIndex && text(row[0]).toLowerCase().startsWith("enter data"));
   const firstDataRow = markerIndex >= 0 ? markerIndex + 1 : headerIndex + 1;
   const students = rows.slice(firstDataRow)
     .map((row) => Object.fromEntries(headers.map((header, index) => [header, text(row[index])])))
     .filter((row) => Object.values(row).some(Boolean));
 
-  const metadata = { ...xlsmMetadata(data, fileName), ...metadataOverrides };
+  const metadata = { ...xlsmMetadata(data, fileName), ...metadataOverrides, requiredFields };
   const schoolName = metadata.schoolName || filenameSchoolName(fileName);
   const schoolNumber = metadata.schoolNumber;
   const studentXml = students.map((student) => {
@@ -76,7 +92,7 @@ export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverr
     const name = [child("First", get("FirstName")), child("Middle", get("MiddleName")), child("Last", get("LastName"))].join("");
     const alias = [child("First", get("AliasFirstName")), child("Middle", get("AliasMiddleName")), child("Last", get("AliasLastName"))].join("");
     const address = ["Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "StreetType", "City", "Province", "PostalCode"].map((field) => child(field, get(field))).join("");
-    const direct = ["OEN", "Grade", "Class", "BirthDate", "Gender", "Language", "CountryOfOrigin", "ContactPhone"].map((field) => child(field, get(field))).join("");
+    const direct = ["OEN", "Grade", "Class", "BirthDate", "Gender", "Language", "CountryOfOrigin", "ContactPhone", "StreetDirection", "RuralRoute", "PoBoxNumber", "PhoneType", "GuardianFirstName", "GuardianLastName", "GuardianRelationship", "GuardianPhoneNumber", "GuardianPhoneType", "Guardian2FirstName", "Guardian2LastName", "Guardian2Relationship", "Guardian2PhoneNumber", "Guardian2PhoneType"].map((field) => child(field, get(field))).join("");
     return `<ns1:Student><ns1:Name>${name}</ns1:Name>${alias ? `<ns1:AliasName>${alias}</ns1:AliasName>` : ""}${direct}<ns1:Address>${address}</ns1:Address></ns1:Student>`;
   }).join("");
   const fileMetadata = [

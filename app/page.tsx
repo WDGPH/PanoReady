@@ -127,7 +127,7 @@ const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
 
 function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   onDone: (data: SessionData, next: View) => void;
-  onParsed: (xmlText: string, records: StudentRecord[], fileName: string) => void;
+  onParsed: (xmlText: string, records: StudentRecord[], fileName: string, requiredFields?: string[]) => void;
   onCompare: (comparison: StixComparison) => void;
   activeRules: RulesProfile;
   onRulesChange: (rules: RulesProfile) => void;
@@ -152,13 +152,33 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   useEffect(() => {
     if (!file || !/\.xlsm?$/i.test(file.name)) return;
     let cancelled = false;
+    const storageKey = `panoready:xlsm-metadata:${file.name}:${file.size}:${file.lastModified}`;
     file.arrayBuffer().then((data) => {
-      if (!cancelled) setXlsmMeta(xlsmMetadata(data, file.name));
+      if (cancelled) return;
+      const workbookMeta = xlsmMetadata(data, file.name);
+      try {
+        const saved = window.localStorage.getItem(storageKey);
+        setXlsmMeta(saved ? { ...workbookMeta, ...JSON.parse(saved) as Partial<XlsmMetadata> } : workbookMeta);
+      } catch {
+        setXlsmMeta(workbookMeta);
+      }
     }).catch((err) => {
       if (!cancelled) setError(`Could not read workbook metadata: ${err instanceof Error ? err.message : String(err)}`);
     });
     return () => { cancelled = true; };
   }, [file]);
+
+  useEffect(() => {
+    if (!file || !xlsmMeta || !/\.xlsm?$/i.test(file.name)) return;
+    try {
+      window.localStorage.setItem(
+        `panoready:xlsm-metadata:${file.name}:${file.size}:${file.lastModified}`,
+        JSON.stringify(xlsmMeta),
+      );
+    } catch {
+      // Storage may be disabled or full; workbook processing still works.
+    }
+  }, [file, xlsmMeta]);
 
   const handleNativeFileSelect = useCallback((target: HTMLInputElement) => {
     const selectedFile = target.files?.[0];
@@ -247,7 +267,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
       if (workflow === "validate") {
         // Parse records first; errors throw and are caught below.
         const parsed = parseStixXml(xmlText);
-        onParsed(xmlText, parsed, selectedFile.name);
+        onParsed(xmlText, parsed, selectedFile.name, xlsmMeta?.requiredFields);
         return;
       }
 
@@ -548,7 +568,7 @@ function ReviewView({ session, onBack, onDone }: { session: SessionData; onBack:
 // ─── ResultView ───────────────────────────────────────────────────────────────
 
 function ResultView({ session, onStartOver }: { session: SessionData; onStartOver: () => void }) {
-  const baseName = session.fileName.replace(/\.xml$/i, "");
+  const baseName = session.fileName.replace(/\.(xml|xlsm)$/i, "");
 
   const dlXml = (content: string, suffix: string) =>
     downloadText(content, `${baseName}_${suffix}.xml`, "application/xml");
@@ -1531,7 +1551,7 @@ function ValidateRevalidateView({
 
   useEffect(() => {
     const fixedXml = applyValidationFixes(session.originalXml, session.fixes);
-    const revalidated = validateXml(fixedXml);
+    const revalidated = validateXml(fixedXml, session.validationRules);
     setResult({
       ...session,
       revalidatedResult: revalidated,
@@ -1790,6 +1810,24 @@ function ValidateDownloadView({
   const xml = session.finalXml ?? session.originalXml;
 
   const dlXml = () => downloadText(xml, `${baseName}_validated.xml`, "application/xml");
+  const [encryptOpen, setEncryptOpen] = useState(false);
+  const [zipPassword, setZipPassword] = useState("");
+  const [zipConfirm, setZipConfirm] = useState("");
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [zipBusy, setZipBusy] = useState(false);
+  const closeEncrypt = () => { setEncryptOpen(false); setZipPassword(""); setZipConfirm(""); setZipError(null); setZipBusy(false); };
+  const dlEncryptedZip = async () => {
+    if (zipPassword.length < 8) { setZipError("Password must be at least 8 characters."); return; }
+    if (zipPassword !== zipConfirm) { setZipError("Passwords do not match."); return; }
+    setZipBusy(true); setZipError(null);
+    try {
+      const writer = new ZipWriter(new BlobWriter("application/zip"), { password: zipPassword, encryptionStrength: 3 });
+      await writer.add(`${baseName}_validated.xml`, new TextReader(xml));
+      const blob = await writer.close();
+      downloadBlob(blob, `${baseName}_validated.zip`);
+      closeEncrypt();
+    } catch (error) { setZipError(error instanceof Error ? error.message : "Encryption failed. Please try again."); setZipBusy(false); }
+  };
 
   const dlReport = () => {
     const csv = generateIssueReportCsv(session.initialResult.issues, session.fixes);
@@ -1926,6 +1964,15 @@ function ValidateDownloadView({
           <button onClick={dlXml} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Download</button>
         </div>
 
+        {/* Encrypted XML */}
+        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Lock size={18} style={{ color: "var(--color-text-muted)" }} /></div>
+            <div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.zip</div><div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>AES-256 encrypted ZIP containing the validated XML</div></div>
+          </div>
+          <button onClick={() => setEncryptOpen(true)} className="btn btn-secondary" style={{ gap: 7 }}><Lock size={14} /> Encrypt &amp; ZIP</button>
+        </div>
+
         {/* Issue report CSV */}
         <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1942,6 +1989,19 @@ function ValidateDownloadView({
           <button onClick={dlReport} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> CSV</button>
         </div>
       </div>
+
+      <Dialog.Root open={encryptOpen} onOpenChange={(open) => { if (!open) closeEncrypt(); }}>
+        <Dialog.Portal><Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+          <Dialog.Content aria-describedby={undefined} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 8, width: "min(92vw, 420px)", zIndex: 51, padding: "20px 22px" }}>
+            <Dialog.Title style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Encrypted ZIP download</Dialog.Title>
+            <p style={{ color: "var(--color-text-muted)", fontSize: 11.5, lineHeight: 1.5, margin: "0 0 14px" }}>The password is not saved. Use 7-Zip, WinRAR, or PeaZip to open the AES-256 ZIP.</p>
+            <input className="input" type="password" value={zipPassword} onChange={(event) => setZipPassword(event.target.value)} placeholder="Password (8+ characters)" style={{ width: "100%", marginBottom: 8 }} autoFocus />
+            <input className="input" type="password" value={zipConfirm} onChange={(event) => setZipConfirm(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") dlEncryptedZip(); }} placeholder="Confirm password" style={{ width: "100%", marginBottom: 10 }} />
+            {zipError && <div style={{ color: "var(--color-error-text)", fontSize: 11.5, marginBottom: 10 }}>{zipError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={closeEncrypt}>Cancel</button><button className="btn btn-primary" onClick={dlEncryptedZip} disabled={zipBusy} style={{ gap: 5 }}>{zipBusy ? "Encrypting…" : "Encrypt & download"}</button></div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* ── Filter & Report section ─────────────────────────────────────────── */}
       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
@@ -2058,7 +2118,7 @@ export default function App() {
   // Lifted so CleaningView and validation both see the same ruleset
   const [activeRules, setActiveRules]     = useState<RulesProfile>(defaultRules);
   // Cleaning pipeline state
-  const [pendingFile, setPendingFile]     = useState<{ xml: string; fileName: string } | null>(null);
+  const [pendingFile, setPendingFile]     = useState<{ xml: string; fileName: string; validationRules?: RulesProfile } | null>(null);
   const [parsedRecords, setParsedRecords] = useState<StudentRecord[] | null>(null);
   const [cleanedRecords, setCleanedRecords] = useState<StudentRecord[] | null>(null);
   const [cleaningSummary, setCleaningSummary] = useState<CleaningSummaryEntry[] | null>(null);
@@ -2078,9 +2138,9 @@ export default function App() {
   };
 
   /** Run validateXml and transition to validate-issues. Used by both skip and apply paths. */
-  function runValidation(xmlText: string, fileName: string) {
-    const result = validateXml(xmlText, activeRules);
-    setValidateSess({ fileName, originalXml: xmlText, initialResult: result, fixes: [] });
+  function runValidation(xmlText: string, fileName: string, validationRules = activeRules) {
+    const result = validateXml(xmlText, validationRules);
+    setValidateSess({ fileName, originalXml: xmlText, initialResult: result, fixes: [], validationRules });
     setPendingFile(null);
     setParsedRecords(null);
     setCleanedRecords(null);
@@ -2098,8 +2158,9 @@ export default function App() {
           onCompare={(result) => { setComparison(result); setView("compare"); }}
           activeRules={activeRules}
           onRulesChange={setActiveRules}
-          onParsed={(xmlText, records, fileName) => {
-            setPendingFile({ xml: xmlText, fileName });
+          onParsed={(xmlText, records, fileName, requiredFields) => {
+            const validationRules = requiredFields?.length ? { ...activeRules, requiredFields } : activeRules;
+            setPendingFile({ xml: xmlText, fileName, validationRules });
             setParsedRecords(records);
             setView("clean-step");
           }}
@@ -2134,7 +2195,7 @@ export default function App() {
             setCleaningSummary(summary);
             setView("clean-summary");
           }}
-          onSkip={() => runValidation(pendingFile.xml, pendingFile.fileName)}
+          onSkip={() => runValidation(pendingFile.xml, pendingFile.fileName, pendingFile.validationRules)}
           onBack={goHome}
           onSaveToRuleset={(profile) => {
             const id = getActiveRulesetId();
@@ -2191,7 +2252,7 @@ export default function App() {
             const xmlToValidate = fixes.length > 0
               ? applyValidationFixes(pendingFile.xml, fixes)
               : pendingFile.xml;
-            runValidation(xmlToValidate, pendingFile.fileName);
+            runValidation(xmlToValidate, pendingFile.fileName, pendingFile.validationRules);
           }}
         />
       )}
