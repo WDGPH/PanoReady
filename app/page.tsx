@@ -38,6 +38,8 @@ import RulesetSelector from "@/components/RulesetSelector";
 import CleaningView from "@/components/CleaningView";
 import CleaningSummaryView from "@/components/CleaningSummaryView";
 import * as XLSX from "xlsx";
+import { xlsmMetadata, xlsmToStixXml } from "@/lib/excel";
+import type { XlsmMetadata } from "@/lib/excel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,11 +141,24 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   const [currentDragging, setCurrentDragging] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
     setFile(f);
+    setXlsmMeta(null);
   }, []);
+
+  useEffect(() => {
+    if (!file || !/\.xlsm?$/i.test(file.name)) return;
+    let cancelled = false;
+    file.arrayBuffer().then((data) => {
+      if (!cancelled) setXlsmMeta(xlsmMetadata(data, file.name));
+    }).catch((err) => {
+      if (!cancelled) setError(`Could not read workbook metadata: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return () => { cancelled = true; };
+  }, [file]);
 
   const handleNativeFileSelect = useCallback((target: HTMLInputElement) => {
     const selectedFile = target.files?.[0];
@@ -219,14 +234,12 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
     if (!selectedFile) { setError("Please select a file first."); return; }
     setProcessing(true); setError(null);
     try {
-      const xmlText = await readFileText(selectedFile);
-      if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is not XML text.");
+      const xmlText = await readInputAsStixXml(selectedFile, xlsmMeta ?? undefined);
 
       if (workflow === "compare") {
         const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
         if (!selectedCurrentFile) throw new Error("Please select the current XML file as well.");
-        const currentXmlText = await readFileText(selectedCurrentFile);
-        if (!currentXmlText.trim().startsWith("<")) throw new Error("The current file is not XML text.");
+        const currentXmlText = await readInputAsStixXml(selectedCurrentFile);
         onCompare(compareStixFiles(xmlText, currentXmlText, selectedFile.name, selectedCurrentFile.name));
         return;
       }
@@ -308,7 +321,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
             id="xml-upload"
             ref={inputRef}
             type="file"
-            accept=".xml,text/xml,application/xml"
+            accept=".xml,.xlsm,text/xml,application/xml,application/vnd.ms-excel.sheet.macroEnabled.12"
             aria-describedby="xml-upload-help"
             onChange={(e) => handleNativeFileSelect(e.currentTarget)}
             onInput={(e) => handleNativeFileSelect(e.currentTarget)}
@@ -342,6 +355,34 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
           </button>
         </section>
 
+        {xlsmMeta && (
+          <section className="beat">
+            <h2 className="beat-title">File Info metadata</h2>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
+              Review or update these values before the workbook is converted to STIX XML.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+              {([
+                ["dateCreated", "Date created"], ["timeCreated", "Time created"], ["createdBy", "Created by"],
+                ["contactPhone", "Contact phone"], ["phoneType", "Phone type"], ["contactEmail", "PHU contact email"],
+                ["fullUpload", "Full upload"], ["boardNumber", "Board number"], ["boardName", "Board name"],
+                ["schoolNumber", "School number"], ["schoolName", "School name"],
+              ] as const).map(([key, label]) => (
+                <label key={key} style={{ display: "grid", gap: 4, fontSize: 10, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {label}
+                  {key === "fullUpload" ? (
+                    <select className="input" value={xlsmMeta[key]} onChange={(event) => setXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)}>
+                      <option value="">Select</option><option value="YES">YES</option><option value="NO">NO</option>
+                    </select>
+                  ) : (
+                    <input className="input" value={xlsmMeta[key]} onChange={(event) => setXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)} />
+                  )}
+                </label>
+              ))}
+            </div>
+          </section>
+        )}
+
         {workflow === "compare" && (
           <section className="beat">
             <h2 className="beat-title">Current file</h2>
@@ -349,7 +390,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
               id="xml-upload-current"
               ref={currentInputRef}
               type="file"
-              accept=".xml,text/xml,application/xml"
+              accept=".xml,.xlsm,text/xml,application/xml,application/vnd.ms-excel.sheet.macroEnabled.12"
               aria-describedby="xml-upload-current-help"
               onChange={(e) => handleCurrentFileSelect(e.currentTarget)}
               onInput={(e) => handleCurrentFileSelect(e.currentTarget)}
@@ -748,7 +789,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   const [zipError, setZipError] = useState<string | null>(null);
   const [zipBusy, setZipBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const xmlBaseName = comparison.currentFileName.replace(/\.xml$/i, "");
+  const xmlBaseName = comparison.currentFileName.replace(/\.(xml|xlsm)$/i, "");
   const exportScope = selectedSchool === "all" ? "full" : safeExportPart(selectedSchool);
   const xmlDownloadName = `${xmlBaseName}_${exportScope}.xml`;
   const toggleFieldFilter = (label: string) =>
@@ -1978,6 +2019,16 @@ function ValidateDownloadView({
 }
 
 // ─── File read helper ─────────────────────────────────────────────────────────
+
+async function readInputAsStixXml(f: File, metadata?: Partial<XlsmMetadata>): Promise<string> {
+  if (/\.xlsm?$/i.test(f.name)) {
+    const data = await f.arrayBuffer();
+    return xlsmToStixXml(data, f.name, metadata);
+  }
+  const xmlText = await readFileText(f);
+  if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is neither XML nor a supported Excel workbook.");
+  return xmlText;
+}
 
 async function readFileText(f: File): Promise<string> {
   try {
