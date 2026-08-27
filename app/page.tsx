@@ -152,7 +152,9 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   useEffect(() => {
     if (!file || !/\.xlsm?$/i.test(file.name)) return;
     let cancelled = false;
-    const storageKey = `panoready:xlsm-metadata:${file.name}:${file.size}:${file.lastModified}`;
+    // v2 invalidates metadata cached by the pre-canonical-header importer,
+    // which stored required fields such as "gender" instead of "Gender".
+    const storageKey = `panoready:xlsm-metadata:v2:${file.name}:${file.size}:${file.lastModified}`;
     file.arrayBuffer().then((data) => {
       if (cancelled) return;
       const workbookMeta = xlsmMetadata(data, file.name);
@@ -172,7 +174,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
     if (!file || !xlsmMeta || !/\.xlsm?$/i.test(file.name)) return;
     try {
       window.localStorage.setItem(
-        `panoready:xlsm-metadata:${file.name}:${file.size}:${file.lastModified}`,
+        `panoready:xlsm-metadata:v2:${file.name}:${file.size}:${file.lastModified}`,
         JSON.stringify(xlsmMeta),
       );
     } catch {

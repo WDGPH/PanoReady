@@ -1,7 +1,12 @@
 import * as XLSX from "xlsx";
 
 const HEADER_ALIASES: Record<string, string> = {
-  "o e n": "OEN", "first name": "FirstName", "middle name": "MiddleName", "last name": "LastName",
+  // Keep canonical STIX field names for headers that would otherwise be
+  // normalized to lowercase (for example, "Gender" -> "gender").
+  oen: "OEN", "o e n": "OEN", grade: "Grade", gender: "Gender", sex: "Gender",
+  "gender type": "Gender", "gender code": "Gender", "student gender": "Gender",
+  language: "Language", class: "Class",
+  "first name": "FirstName", "middle name": "MiddleName", "last name": "LastName",
   "alias first name": "AliasFirstName", "alias middle name": "AliasMiddleName", "alias last name": "AliasLastName",
   birthdate: "BirthDate", "country of origin": "CountryOfOrigin", "street number": "StreetNumber",
   "street name": "StreetName", "street type": "StreetType", "street direction": "StreetDirection",
