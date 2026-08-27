@@ -102,6 +102,12 @@ export function compareStixFiles(previousXml: string, currentXml: string, previo
         studentName: studentName(currentStudent),
         schoolName: currentStudent.SchoolName || "Unknown school",
         changedFields: COMPARED_FIELDS.filter(({ key: field }) => valueOf(previousStudent, field) !== valueOf(currentStudent, field)).map(({ label }) => label),
+        fieldDiffs: COMPARED_FIELDS.filter(({ key: field }) => valueOf(previousStudent, field) !== valueOf(currentStudent, field)).map(({ key: field, label }) => ({
+          field,
+          label,
+          previousValue: String(previousStudent[field] ?? "").trim(),
+          currentValue: String(currentStudent[field] ?? "").trim(),
+        })),
       });
     } else unchangedCount++;
   });
@@ -110,11 +116,11 @@ export function compareStixFiles(previousXml: string, currentXml: string, previo
   const removedKeys = Array.from(previousByKey.keys()).filter((key) => !currentByKey.has(key));
   addedKeys.forEach((key) => {
     const student = currentByKey.get(key)!;
-    recordChanges.push({ key, kind: "added", studentName: studentName(student), schoolName: student.SchoolName || "Unknown school", changedFields: [] });
+    recordChanges.push({ key, kind: "added", studentName: studentName(student), schoolName: student.SchoolName || "Unknown school", changedFields: [], fieldDiffs: [] });
   });
   removedKeys.forEach((key) => {
     const student = previousByKey.get(key)!;
-    recordChanges.push({ key, kind: "removed", studentName: studentName(student), schoolName: student.SchoolName || "Unknown school", changedFields: [] });
+    recordChanges.push({ key, kind: "removed", studentName: studentName(student), schoolName: student.SchoolName || "Unknown school", changedFields: [], fieldDiffs: [] });
   });
   const addedCount = addedKeys.length;
   const removedCount = removedKeys.length;
@@ -156,6 +162,7 @@ export function compareStixFiles(previousXml: string, currentXml: string, previo
   return {
     previousFileName,
     currentFileName,
+    currentXml,
     previousStudentCount: previous.length,
     currentStudentCount: current.length,
     previousSchoolCount: previousSchools.size,

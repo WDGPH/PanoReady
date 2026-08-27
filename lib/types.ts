@@ -97,6 +97,14 @@ export interface ComparisonRecordChange {
   studentName: string;
   schoolName: string;
   changedFields: string[];
+  fieldDiffs: ComparisonFieldDiff[];
+}
+
+export interface ComparisonFieldDiff {
+  field: string;
+  label: string;
+  previousValue: string;
+  currentValue: string;
 }
 
 export interface ComparisonSchoolTransfer {
@@ -111,6 +119,7 @@ export type ComparisonSignal = "stable" | "moderate" | "high";
 export interface StixComparison {
   previousFileName: string;
   currentFileName: string;
+  currentXml: string;
   previousStudentCount: number;
   currentStudentCount: number;
   previousSchoolCount: number;
