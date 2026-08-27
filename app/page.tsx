@@ -142,6 +142,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
+  const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
@@ -191,7 +192,39 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   const handleCurrentFile = useCallback((f: File) => {
     setError(null);
     setCurrentFile(f);
+    setCurrentXlsmMeta(null);
   }, []);
+
+  useEffect(() => {
+    if (!currentFile || !/\.xlsm?$/i.test(currentFile.name)) return;
+    let cancelled = false;
+    const storageKey = `panoready:xlsm-metadata:v2:${currentFile.name}:${currentFile.size}:${currentFile.lastModified}`;
+    currentFile.arrayBuffer().then((data) => {
+      if (cancelled) return;
+      const workbookMeta = xlsmMetadata(data, currentFile.name);
+      try {
+        const saved = window.localStorage.getItem(storageKey);
+        setCurrentXlsmMeta(saved ? { ...workbookMeta, ...JSON.parse(saved) as Partial<XlsmMetadata> } : workbookMeta);
+      } catch {
+        setCurrentXlsmMeta(workbookMeta);
+      }
+    }).catch((err) => {
+      if (!cancelled) setError(`Could not read current workbook metadata: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return () => { cancelled = true; };
+  }, [currentFile]);
+
+  useEffect(() => {
+    if (!currentFile || !currentXlsmMeta || !/\.xlsm?$/i.test(currentFile.name)) return;
+    try {
+      window.localStorage.setItem(
+        `panoready:xlsm-metadata:v2:${currentFile.name}:${currentFile.size}:${currentFile.lastModified}`,
+        JSON.stringify(currentXlsmMeta),
+      );
+    } catch {
+      // Storage may be disabled or full; workbook processing still works.
+    }
+  }, [currentFile, currentXlsmMeta]);
 
   const handleCurrentFileSelect = useCallback((target: HTMLInputElement) => {
     const selectedFile = target.files?.[0];
@@ -261,7 +294,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
       if (workflow === "compare") {
         const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
         if (!selectedCurrentFile) throw new Error("Please select the current XML file as well.");
-        const currentXmlText = await readInputAsStixXml(selectedCurrentFile);
+        const currentXmlText = await readInputAsStixXml(selectedCurrentFile, currentXlsmMeta ?? undefined);
         onCompare(compareStixFiles(xmlText, currentXmlText, selectedFile.name, selectedCurrentFile.name));
         return;
       }
@@ -406,6 +439,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
         )}
 
         {workflow === "compare" && (
+          <>
           <section className="beat">
             <h2 className="beat-title">Current file</h2>
             <input
@@ -445,6 +479,35 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
               )}
             </button>
           </section>
+
+          {currentXlsmMeta && (
+            <section className="beat">
+              <h2 className="beat-title">Current file metadata</h2>
+              <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
+                Review or update these values before the current workbook is converted for comparison.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                {([
+                  ["dateCreated", "Date created"], ["timeCreated", "Time created"], ["createdBy", "Created by"],
+                  ["contactPhone", "Contact phone"], ["phoneType", "Phone type"], ["contactEmail", "PHU contact email"],
+                  ["fullUpload", "Full upload"], ["boardNumber", "Board number"], ["boardName", "Board name"],
+                  ["schoolNumber", "School number"], ["schoolName", "School name"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} style={{ display: "grid", gap: 4, fontSize: 10, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {label}
+                    {key === "fullUpload" ? (
+                      <select className="input" value={currentXlsmMeta[key]} onChange={(event) => setCurrentXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)}>
+                        <option value="">Select</option><option value="YES">YES</option><option value="NO">NO</option>
+                      </select>
+                    ) : (
+                      <input className="input" value={currentXlsmMeta[key]} onChange={(event) => setCurrentXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)} />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
+          </>
         )}
 
         {error && (
