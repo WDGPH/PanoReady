@@ -106,5 +106,8 @@ export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverr
     child("ContactEmail", metadata.contactEmail),
     child("FullUpload", metadata.fullUpload), child("BoardNumber", metadata.boardNumber), child("BoardName", metadata.boardName),
   ].join("");
-  return `<?xml version="1.0" encoding="utf-8"?><ns1:SchoolUpload xmlns:ns1="http://example.com/stix"><ns1:Metadata>${fileMetadata}</ns1:Metadata><ns1:School>${child("Name", schoolName)}${child("SchoolNumber", schoolNumber)}<ns1:Students>${studentXml}</ns1:Students></ns1:School></ns1:SchoolUpload>`;
+  // These values come from the official Pano STIX workbook's XML-generation
+  // macro. The namespace URI is part of the schema identity; the ns1 prefix
+  // itself is only an alias and may be changed without changing the XML name.
+  return `<?xml version="1.0" encoding="utf-8"?><ns1:SchoolUpload xmlns:ns1="http://ontario.ca" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://ontario.ca studentuploaddata.xsd"><ns1:Metadata>${fileMetadata}</ns1:Metadata><ns1:School>${child("Name", schoolName)}${child("SchoolNumber", schoolNumber)}<ns1:Students>${studentXml}</ns1:Students></ns1:School></ns1:SchoolUpload>`;
 }
