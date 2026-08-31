@@ -5,9 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Trigger a browser download of arbitrary text content */
-export function downloadText(content: string, filename: string, mimeType = "text/plain") {
-  const blob = new Blob([content], { type: mimeType });
+/** Trigger a browser download of a Blob */
+export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -15,7 +14,13 @@ export function downloadText(content: string, filename: string, mimeType = "text
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Give the browser time to start the download before releasing the blob.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Trigger a browser download of arbitrary text content */
+export function downloadText(content: string, filename: string, mimeType = "text/plain") {
+  downloadBlob(new Blob([content], { type: mimeType }), filename);
 }
 
 /** Convert array of objects to CSV string */

@@ -7,11 +7,16 @@ import {
   ArrowRight, AlertTriangle, MapPin, School,
   Download, Users, BarChart3,
   ShieldX, Search, Filter, Wrench, RefreshCw,
-  SlidersHorizontal,
+  ClipboardCheck, SlidersHorizontal, GitCompareArrows,
+  Lock, X, FileCode,
 } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
 import { cleanXml, applyReviewUpdates, prettyPrintXml } from "@/lib/cleaner";
+import { compareStixFiles } from "@/lib/compare";
+import { applyReviewCorrections, extractSchoolXml, safeExportPart } from "@/lib/stixExport";
 import { processExport, buildSchoolCounts, buildGradeCounts } from "@/lib/pullInfo";
-import { downloadText, toCsv } from "@/lib/utils";
+import { downloadText, downloadBlob, toCsv } from "@/lib/utils";
 import {
   validateXml,
   parseStixXml,
@@ -25,14 +30,16 @@ import { applyCleaningProfile } from "@/lib/cleaning";
 import type {
   Workflow, SessionData,
   ValidateSession, ValidationIssue, AppliedFix,
-  ValidationSeverity, RulesProfile, StudentRecord,
-  CleaningProfile, CleaningSummaryEntry,
+  ValidationSeverity, RulesProfile, StixComparison,
+  StudentRecord, CleaningProfile, CleaningSummaryEntry,
 } from "@/lib/types";
 import { defaultRules, getActiveRules, getActiveCleaning, getActiveRulesetId, listCustomRulesets, saveCustomRuleset, BUILTIN_ID } from "@/lib/rulesets";
 import RulesetSelector from "@/components/RulesetSelector";
 import CleaningView from "@/components/CleaningView";
 import CleaningSummaryView from "@/components/CleaningSummaryView";
 import * as XLSX from "xlsx";
+import { xlsmMetadata, xlsmToStixXml } from "@/lib/excel";
+import type { XlsmMetadata } from "@/lib/excel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +52,8 @@ type View =
   | "validate-issues"
   | "validate-fix"
   | "validate-revalidate"
-  | "validate-download";
+  | "validate-download"
+  | "compare";
 
 // ─── NavBar ──────────────────────────────────────────────────────────────────
 
@@ -112,33 +120,121 @@ const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
   { id: "clean",    label: "Clean XML",       description: "Fix phones, standardize units, flag bad street numbers for manual review." },
   { id: "export",   label: "Export Reports",  description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries." },
   { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation." },
+  { id: "compare",  label: "Compare Files",   description: "Compare two snapshots to measure record, field, and school-level changes." },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 
-function HomeView({ onDone, onParsed, activeRules, onRulesChange }: {
+function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   onDone: (data: SessionData, next: View) => void;
-  onParsed: (xmlText: string, records: StudentRecord[], fileName: string) => void;
+  onParsed: (xmlText: string, records: StudentRecord[], fileName: string, requiredFields?: string[]) => void;
+  onCompare: (comparison: StixComparison) => void;
   activeRules: RulesProfile;
   onRulesChange: (rules: RulesProfile) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const currentInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile]           = useState<File | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [workflow, setWorkflow]   = useState<Workflow>("validate");
   const [dragging, setDragging]   = useState(false);
+  const [currentDragging, setCurrentDragging] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
+  const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
     setFile(f);
+    setXlsmMeta(null);
   }, []);
+
+  useEffect(() => {
+    if (!file || !/\.xlsm?$/i.test(file.name)) return;
+    let cancelled = false;
+    // v2 invalidates metadata cached by the pre-canonical-header importer,
+    // which stored required fields such as "gender" instead of "Gender".
+    const storageKey = `panoready:xlsm-metadata:v2:${file.name}:${file.size}:${file.lastModified}`;
+    file.arrayBuffer().then((data) => {
+      if (cancelled) return;
+      const workbookMeta = xlsmMetadata(data, file.name);
+      try {
+        const saved = window.localStorage.getItem(storageKey);
+        setXlsmMeta(saved ? { ...workbookMeta, ...JSON.parse(saved) as Partial<XlsmMetadata> } : workbookMeta);
+      } catch {
+        setXlsmMeta(workbookMeta);
+      }
+    }).catch((err) => {
+      if (!cancelled) setError(`Could not read workbook metadata: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return () => { cancelled = true; };
+  }, [file]);
+
+  useEffect(() => {
+    if (!file || !xlsmMeta || !/\.xlsm?$/i.test(file.name)) return;
+    try {
+      window.localStorage.setItem(
+        `panoready:xlsm-metadata:v2:${file.name}:${file.size}:${file.lastModified}`,
+        JSON.stringify(xlsmMeta),
+      );
+    } catch {
+      // Storage may be disabled or full; workbook processing still works.
+    }
+  }, [file, xlsmMeta]);
 
   const handleNativeFileSelect = useCallback((target: HTMLInputElement) => {
     const selectedFile = target.files?.[0];
     if (!selectedFile) return;
     handleFile(selectedFile);
   }, [handleFile]);
+
+  const handleCurrentFile = useCallback((f: File) => {
+    setError(null);
+    setCurrentFile(f);
+    setCurrentXlsmMeta(null);
+  }, []);
+
+  useEffect(() => {
+    if (!currentFile || !/\.xlsm?$/i.test(currentFile.name)) return;
+    let cancelled = false;
+    const storageKey = `panoready:xlsm-metadata:v2:${currentFile.name}:${currentFile.size}:${currentFile.lastModified}`;
+    currentFile.arrayBuffer().then((data) => {
+      if (cancelled) return;
+      const workbookMeta = xlsmMetadata(data, currentFile.name);
+      try {
+        const saved = window.localStorage.getItem(storageKey);
+        setCurrentXlsmMeta(saved ? { ...workbookMeta, ...JSON.parse(saved) as Partial<XlsmMetadata> } : workbookMeta);
+      } catch {
+        setCurrentXlsmMeta(workbookMeta);
+      }
+    }).catch((err) => {
+      if (!cancelled) setError(`Could not read current workbook metadata: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return () => { cancelled = true; };
+  }, [currentFile]);
+
+  useEffect(() => {
+    if (!currentFile || !currentXlsmMeta || !/\.xlsm?$/i.test(currentFile.name)) return;
+    try {
+      window.localStorage.setItem(
+        `panoready:xlsm-metadata:v2:${currentFile.name}:${currentFile.size}:${currentFile.lastModified}`,
+        JSON.stringify(currentXlsmMeta),
+      );
+    } catch {
+      // Storage may be disabled or full; workbook processing still works.
+    }
+  }, [currentFile, currentXlsmMeta]);
+
+  const handleCurrentFileSelect = useCallback((target: HTMLInputElement) => {
+    const selectedFile = target.files?.[0];
+    if (selectedFile) handleCurrentFile(selectedFile);
+  }, [handleCurrentFile]);
+
+  const onCurrentDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setCurrentDragging(false);
+    const f = e.dataTransfer.files[0]; if (f) handleCurrentFile(f);
+  }, [handleCurrentFile]);
 
   const syncFileFromInput = useCallback(() => {
     const input = inputRef.current;
@@ -193,13 +289,20 @@ function HomeView({ onDone, onParsed, activeRules, onRulesChange }: {
     if (!selectedFile) { setError("Please select a file first."); return; }
     setProcessing(true); setError(null);
     try {
-      const xmlText = await readFileText(selectedFile);
-      if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is not XML text.");
+      const xmlText = await readInputAsStixXml(selectedFile, xlsmMeta ?? undefined);
+
+      if (workflow === "compare") {
+        const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
+        if (!selectedCurrentFile) throw new Error("Please select the current XML file as well.");
+        const currentXmlText = await readInputAsStixXml(selectedCurrentFile, currentXlsmMeta ?? undefined);
+        onCompare(compareStixFiles(xmlText, currentXmlText, selectedFile.name, selectedCurrentFile.name));
+        return;
+      }
 
       if (workflow === "validate") {
         // Parse records first; errors throw and are caught below.
         const parsed = parseStixXml(xmlText);
-        onParsed(xmlText, parsed, selectedFile.name);
+        onParsed(xmlText, parsed, selectedFile.name, xlsmMeta?.requiredFields);
         return;
       }
 
@@ -224,7 +327,8 @@ function HomeView({ onDone, onParsed, activeRules, onRulesChange }: {
   const wLabel = workflow === "validate" ? "Validate & Fix"
     : workflow === "clean" ? "Clean XML"
     : workflow === "export" ? "Generate Reports"
-    : "Pretty Print XML";
+    : workflow === "pretty" ? "Pretty Print XML"
+    : "Compare Files";
 
   return (
     <main style={{ flex: 1, display: "flex", justifyContent: "center", padding: "72px 24px 100px" }}>
@@ -267,12 +371,12 @@ function HomeView({ onDone, onParsed, activeRules, onRulesChange }: {
         {/* File — a niche the file belongs in, not a placeholder. One target:
             click it to browse, or drag a file onto it. */}
         <section className="beat">
-          <h2 className="beat-title">File</h2>
+          <h2 className="beat-title">{workflow === "compare" ? "Previous file" : "File"}</h2>
           <input
             id="xml-upload"
             ref={inputRef}
             type="file"
-            accept=".xml,text/xml,application/xml"
+            accept=".xml,.xlsm,text/xml,application/xml,application/vnd.ms-excel.sheet.macroEnabled.12"
             aria-describedby="xml-upload-help"
             onChange={(e) => handleNativeFileSelect(e.currentTarget)}
             onInput={(e) => handleNativeFileSelect(e.currentTarget)}
@@ -305,6 +409,106 @@ function HomeView({ onDone, onParsed, activeRules, onRulesChange }: {
             )}
           </button>
         </section>
+
+        {xlsmMeta && (
+          <section className="beat">
+            <h2 className="beat-title">File Info metadata</h2>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
+              Review or update these values before the workbook is converted to STIX XML.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+              {([
+                ["dateCreated", "Date created"], ["timeCreated", "Time created"], ["createdBy", "Created by"],
+                ["contactPhone", "Contact phone"], ["phoneType", "Phone type"], ["contactEmail", "PHU contact email"],
+                ["fullUpload", "Full upload"], ["boardNumber", "Board number"], ["boardName", "Board name"],
+                ["schoolNumber", "School number"], ["schoolName", "School name"],
+              ] as const).map(([key, label]) => (
+                <label key={key} style={{ display: "grid", gap: 4, fontSize: 10, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {label}
+                  {key === "fullUpload" ? (
+                    <select className="input" value={xlsmMeta[key]} onChange={(event) => setXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)}>
+                      <option value="">Select</option><option value="YES">YES</option><option value="NO">NO</option>
+                    </select>
+                  ) : (
+                    <input className="input" value={xlsmMeta[key]} onChange={(event) => setXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)} />
+                  )}
+                </label>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {workflow === "compare" && (
+          <>
+          <section className="beat">
+            <h2 className="beat-title">Current file</h2>
+            <input
+              id="xml-upload-current"
+              ref={currentInputRef}
+              type="file"
+              accept=".xml,.xlsm,text/xml,application/xml,application/vnd.ms-excel.sheet.macroEnabled.12"
+              aria-describedby="xml-upload-current-help"
+              onChange={(e) => handleCurrentFileSelect(e.currentTarget)}
+              onInput={(e) => handleCurrentFileSelect(e.currentTarget)}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => currentInputRef.current?.click()}
+              onDrop={onCurrentDrop}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentDragging(true); }}
+              onDragLeave={() => setCurrentDragging(false)}
+              className={`niche${currentDragging ? " dragging" : ""}`}
+            >
+              {currentFile ? (
+                <>
+                  <CheckCircle2 size={20} style={{ color: "var(--color-text-muted)", margin: "0 auto 16px" }} />
+                  <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>{currentFile.name}</p>
+                  <p id="xml-upload-current-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {(currentFile.size / 1024).toFixed(1)} KB · click, or drop another file, to change
+                  </p>
+                </>
+              ) : (
+                <>
+                  <span style={{ display: "block", fontSize: 20, color: "var(--color-text-muted)", marginBottom: 16 }}>↑</span>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>Drop the current XML file here</p>
+                  <p id="xml-upload-current-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    or click to browse your device
+                  </p>
+                </>
+              )}
+            </button>
+          </section>
+
+          {currentXlsmMeta && (
+            <section className="beat">
+              <h2 className="beat-title">Current file metadata</h2>
+              <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
+                Review or update these values before the current workbook is converted for comparison.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                {([
+                  ["dateCreated", "Date created"], ["timeCreated", "Time created"], ["createdBy", "Created by"],
+                  ["contactPhone", "Contact phone"], ["phoneType", "Phone type"], ["contactEmail", "PHU contact email"],
+                  ["fullUpload", "Full upload"], ["boardNumber", "Board number"], ["boardName", "Board name"],
+                  ["schoolNumber", "School number"], ["schoolName", "School name"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} style={{ display: "grid", gap: 4, fontSize: 10, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {label}
+                    {key === "fullUpload" ? (
+                      <select className="input" value={currentXlsmMeta[key]} onChange={(event) => setCurrentXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)}>
+                        <option value="">Select</option><option value="YES">YES</option><option value="NO">NO</option>
+                      </select>
+                    ) : (
+                      <input className="input" value={currentXlsmMeta[key]} onChange={(event) => setCurrentXlsmMeta((current) => current ? { ...current, [key]: event.target.value } : current)} />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
+          </>
+        )}
 
         {error && (
           <section className="beat">
@@ -429,7 +633,7 @@ function ReviewView({ session, onBack, onDone }: { session: SessionData; onBack:
 // ─── ResultView ───────────────────────────────────────────────────────────────
 
 function ResultView({ session, onStartOver }: { session: SessionData; onStartOver: () => void }) {
-  const baseName = session.fileName.replace(/\.xml$/i, "");
+  const baseName = session.fileName.replace(/\.(xml|xlsm)$/i, "");
 
   const dlXml = (content: string, suffix: string) =>
     downloadText(content, `${baseName}_${suffix}.xml`, "application/xml");
@@ -651,6 +855,378 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
           </>
         );
       })()}
+    </main>
+  );
+}
+
+// ─── CompareView ──────────────────────────────────────────────────────────────
+
+function CompareView({ comparison, onStartOver }: { comparison: StixComparison; onStartOver: () => void }) {
+  const [viewMode, setViewMode] = useState<"schools" | "records" | "fields" | "transfers">("records");
+  const [selectedSchool, setSelectedSchool] = useState("all");
+  const [selectedRecordKey, setSelectedRecordKey] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<Record<string, "confirmed" | "needs-fix">>({});
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [fieldFilter, setFieldFilter] = useState<string[]>([]);
+  const [encryptDialogOpen, setEncryptDialogOpen] = useState(false);
+  const [zipPassword, setZipPassword] = useState("");
+  const [zipPasswordConfirm, setZipPasswordConfirm] = useState("");
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [zipBusy, setZipBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const xmlBaseName = comparison.currentFileName.replace(/\.(xml|xlsm)$/i, "");
+  const exportScope = selectedSchool === "all" ? "full" : safeExportPart(selectedSchool);
+  const xmlDownloadName = `${xmlBaseName}_${exportScope}.xml`;
+  const toggleFieldFilter = (label: string) =>
+    setFieldFilter((current) => current.includes(label) ? current.filter((f) => f !== label) : [...current, label]);
+  const selectSchool = (school: string) => {
+    setSelectedSchool(school);
+    setFieldFilter([]);
+    setSelectedRecordKey(null);
+  };
+  const getExportXml = () => {
+    const sourceXml = extractSchoolXml(comparison.currentXml, selectedSchool);
+    const records = selectedSchool === "all"
+      ? comparison.recordChanges
+      : comparison.recordChanges.filter((record) => record.schoolName === selectedSchool);
+    return applyReviewCorrections(sourceXml, records, corrections);
+  };
+  const downloadFullXml = () => {
+    try {
+      setExportError(null);
+      downloadText(getExportXml(), xmlDownloadName, "application/xml");
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "The XML export could not be created.");
+    }
+  };
+  const closeEncryptDialog = () => {
+    setEncryptDialogOpen(false);
+    setZipPassword("");
+    setZipPasswordConfirm("");
+    setZipError(null);
+    setZipBusy(false);
+  };
+  const downloadEncryptedZip = async () => {
+    if (!zipPassword) { setZipError("Enter a password."); return; }
+    if (zipPassword.length < 8) { setZipError("Password must be at least 8 characters."); return; }
+    if (zipPassword !== zipPasswordConfirm) { setZipError("Passwords do not match."); return; }
+    setZipError(null);
+    setZipBusy(true);
+    try {
+      const zipWriter = new ZipWriter(new BlobWriter("application/zip"), {
+        password: zipPassword,
+        encryptionStrength: 3, // AES-256
+      });
+      await zipWriter.add(xmlDownloadName, new TextReader(getExportXml()));
+      const zipBlob = await zipWriter.close();
+      downloadBlob(zipBlob, `${xmlBaseName}_${exportScope}.zip`);
+      closeEncryptDialog();
+    } catch (error) {
+      setZipError(error instanceof Error ? error.message : "Encryption failed. Please try again.");
+      setZipBusy(false);
+    }
+  };
+  const signalColor = comparison.signal === "stable" ? "var(--color-brand-400)" : comparison.signal === "moderate" ? "var(--color-warning-text)" : "var(--color-error-text)";
+  const signalBackground = comparison.signal === "stable" ? "var(--color-success-bg)" : comparison.signal === "moderate" ? "var(--color-warning-bg)" : "var(--color-error-bg)";
+  const visibleRecords = comparison.recordChanges
+    .filter((record) => selectedSchool === "all" || record.schoolName === selectedSchool)
+    .filter((record) => fieldFilter.length === 0 || record.changedFields.some((field) => fieldFilter.includes(field)));
+  const scopedFieldChanges = comparison.fieldChanges
+    .map((field) => ({
+      ...field,
+      count: comparison.recordChanges.filter((record) =>
+        (selectedSchool === "all" || record.schoolName === selectedSchool) && record.changedFields.includes(field.label)
+      ).length,
+    }))
+    .filter((field) => field.count > 0);
+  const selectedRecord = visibleRecords.find((record) => record.key === selectedRecordKey) ?? null;
+  const decisionKey = (recordKey: string, field: string) => `${recordKey}::${field}`;
+  const reviewedCount = Object.values(decisions).filter((decision) => decision === "confirmed").length;
+  const needsFixCount = Object.values(decisions).filter((decision) => decision === "needs-fix").length;
+  const selectedSchoolSummary = comparison.schoolChanges.find((school) => school.schoolName === selectedSchool);
+  const downloadChanges = () => {
+    const rows = comparison.schoolChanges.map((school) => ({
+      School: school.schoolName,
+      PreviousStudents: school.previousCount,
+      CurrentStudents: school.currentCount,
+      Added: school.added,
+      Removed: school.removed,
+      Changed: school.changed,
+    }));
+    downloadText(toCsv(rows), "stix_comparison_school_changes.csv", "text/csv");
+  };
+  const downloadReviewLog = () => {
+    const rows = comparison.recordChanges.flatMap((record) => record.fieldDiffs.map((diff) => ({
+      Record: record.key,
+      Student: record.studentName,
+      School: record.schoolName,
+      Field: diff.label,
+      PreviousValue: diff.previousValue,
+      CurrentValue: diff.currentValue,
+      ProposedCorrection: corrections[decisionKey(record.key, diff.field)] ?? "",
+      Decision: decisions[decisionKey(record.key, diff.field)] ?? "Pending",
+    })));
+    downloadText(toCsv(rows), "stix_change_review_log.csv", "text/csv");
+  };
+
+  return (
+    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: "none", width: "100%", margin: 0, padding: 0 }}>
+      <button onClick={onStartOver} className="btn btn-ghost compare-back" style={{ marginBottom: 8, padding: "4px 8px", gap: 5, fontSize: 12 }}>
+        <ArrowLeft size={13} /> Compare another pair
+      </button>
+      <div className="compare-dashboard-header" style={{ marginBottom: 12 }}>
+        <div className="compare-dashboard-kicker">OPERATIONS / CHANGE INTELLIGENCE <span>LOCAL ANALYSIS</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <GitCompareArrows size={22} style={{ color: "#f59e0b" }} />
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>STIX file comparison</h1>
+        </div>
+        <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>
+          {comparison.previousFileName} <span style={{ color: "var(--color-text-muted)" }}>previous</span> · {comparison.currentFileName} <span style={{ color: "var(--color-text-muted)" }}>current</span>
+        </p>
+      </div>
+
+      <div className="compare-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 12 }}>
+        <StatCard label="Records added" value={comparison.addedCount} accent="green" />
+        <StatCard label="Records removed" value={comparison.removedCount} accent="red" />
+        <StatCard label="Records changed" value={comparison.changedCount} accent="yellow" />
+        <StatCard label="No change" value={comparison.unchangedCount} accent="teal" />
+        <StatCard label="Moved schools" value={comparison.movedCount} accent="teal" />
+      </div>
+
+      <div className="compare-signal" style={{ background: signalBackground, border: `1px solid ${signalColor}`, borderRadius: 9, padding: "9px 13px", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: signalColor }}>{comparison.recommendation}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: signalColor }}>{comparison.changeRate.toFixed(1)}%</div>
+        </div>
+        <div style={{ color: "var(--color-text-secondary)", fontSize: 11.5, lineHeight: 1.5 }}>{comparison.recommendationDetail}</div>
+        <div style={{ color: "var(--color-text-muted)", fontSize: 10.5, marginTop: 6 }}>Observed change rate = added + removed + changed records ÷ previous records. This is an operational signal, not a replacement for required reporting schedules.</div>
+      </div>
+
+      <div className="compare-context-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
+        <StatCard label="Previous records" value={comparison.previousStudentCount} />
+        <StatCard label="Current records" value={comparison.currentStudentCount} />
+        <StatCard label="Matched records" value={comparison.matchedCount} />
+        <StatCard label="Schools" value={`${comparison.previousSchoolCount} → ${comparison.currentSchoolCount}`} />
+      </div>
+
+      <details className="card compare-collapsible compare-top-detail" style={{ marginBottom: 12 }}>
+        <summary><span><strong>What changed</strong><small>Field changes among matched records</small></span><span className="compare-collapsible-count">{comparison.fieldChanges.length} fields</span></summary>
+        <div className="compare-collapsible-body">
+        {comparison.fieldChanges.length === 0 ? (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No field-level changes were detected.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+            {comparison.fieldChanges.map((field) => (
+              <div key={field.field} style={{ display: "flex", justifyContent: "space-between", background: "var(--color-surface-2)", borderRadius: 7, padding: "9px 12px", fontSize: 12 }}>
+                <span style={{ color: "var(--color-text-secondary)" }}>{field.label}</span>
+                <strong>{field.count}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+        </div>
+      </details>
+
+      <details className="card compare-collapsible compare-top-detail" style={{ marginBottom: 18 }}>
+        <summary><span><strong>Student transfers</strong><small>Students matched across both files whose school changed</small></span><span className="compare-collapsible-count">{comparison.movedCount} moves</span></summary>
+        <div className="compare-collapsible-body">
+        {comparison.schoolTransfers.length === 0 ? (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No student moves between schools were detected.</p>
+        ) : (
+          <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
+            <table className="data-table">
+              <thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead>
+              <tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+        </div>
+      </details>
+
+      <div className="compare-tabs-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+        <div className="compare-tabs" role="tablist" aria-label="Comparison detail view">
+          <button className={viewMode === "schools" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("schools")} role="tab" aria-selected={viewMode === "schools"}><School size={14} /> School overview</button>
+          <button className={viewMode === "records" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("records")} role="tab" aria-selected={viewMode === "records"}><Users size={14} /> Record details</button>
+          <button className={viewMode === "fields" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("fields")} role="tab" aria-selected={viewMode === "fields"}><SlidersHorizontal size={14} /> Field changes</button>
+          <button className={viewMode === "transfers" ? "compare-tab active" : "compare-tab"} onClick={() => setViewMode("transfers")} role="tab" aria-selected={viewMode === "transfers"}><GitCompareArrows size={14} /> Transfers</button>
+        </div>
+        {viewMode === "records" && (
+          <select className="input compare-school-filter" value={selectedSchool} onChange={(event) => selectSchool(event.target.value)} aria-label="Filter records by school">
+            <option value="all">All schools</option>
+            {comparison.schoolChanges.map((school) => <option key={school.schoolName} value={school.schoolName}>{school.schoolName}</option>)}
+          </select>
+        )}
+      </div>
+
+      {viewMode === "schools" ? (
+        <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>School-level impact</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Select a school row to inspect its record-level changes.</p></div>
+            <button onClick={downloadChanges} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 12px" }}><Download size={12} /> CSV</button>
+          </div>
+          <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
+            <table className="data-table">
+              <thead><tr><th>School</th><th>Previous</th><th>Current</th><th>Added</th><th>Removed</th><th>Changed</th></tr></thead>
+          <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => { selectSchool(school.schoolName); setViewMode("records"); }} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{school.schoolName}</td><td>{school.previousCount}</td><td>{school.currentCount}</td><td>{school.added}</td><td>{school.removed}</td><td>{school.changed}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
+      ) : viewMode === "fields" ? (
+        <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
+          <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Field changes</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Fields changed among matched student records, ordered by frequency.</p></div>
+          <div className="compare-table-scroll"><table className="data-table"><thead><tr><th>Field</th><th>Changed records</th></tr></thead><tbody>{comparison.fieldChanges.map((field) => <tr key={field.field}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{field.label}</td><td>{field.count}</td></tr>)}</tbody></table></div>
+        </section>
+      ) : viewMode === "transfers" ? (
+        <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
+          <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Student transfers</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Students matched across both files whose school changed.</p></div>
+          <div className="compare-table-scroll"><table className="data-table"><thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead><tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody></table></div>
+        </section>
+      ) : (
+        <div className="compare-record-layout">
+        <section className="card compare-school-panel" style={{ padding: "16px" }}>
+          <div style={{ marginBottom: 12 }}><h2 style={{ fontSize: 15, margin: "0 0 3px" }}>Schools</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Select a school to focus the records.</p></div>
+          <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
+            <table className="data-table">
+              <thead><tr><th>School</th></tr></thead>
+              <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => selectSchool(school.schoolName)} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: selectedSchool === school.schoolName ? 700 : 500 }}>{school.schoolName}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
+        <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+            <div><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Record details</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>{selectedSchool === "all" ? "Specific records added, removed, or changed across all schools." : `Changes for ${selectedSchool}.`} Select a record to validate each before/after value.</p></div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button onClick={downloadReviewLog} className="btn btn-secondary" style={{ gap: 5, fontSize: 11, padding: "6px 10px" }}><Download size={12} /> Review log</button>
+              <button onClick={downloadFullXml} className="btn btn-secondary" style={{ gap: 5, fontSize: 11, padding: "6px 10px" }} title="Export the selected school with every original STIX field"><FileCode size={12} /> {selectedSchool === "all" ? "Download XML" : "School XML"}</button>
+              <button onClick={() => { setExportError(null); setEncryptDialogOpen(true); }} className="btn btn-secondary" style={{ gap: 5, fontSize: 11, padding: "6px 10px" }} title="Password-protected AES-256 ZIP of the selected XML"><Lock size={12} /> Encrypted ZIP</button>
+            </div>
+          </div>
+          {scopedFieldChanges.length > 0 && (
+            <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 10, marginBottom: 12 }}>
+              <details className="changed-fields-dropdown">
+                <summary>
+                  <span>Changed fields</span>
+                  <span className="changed-fields-dropdown-count">{fieldFilter.length ? `${fieldFilter.length} selected` : "All fields"}</span>
+                </summary>
+                <div className="changed-fields-dropdown-menu">
+                  <div className="changed-fields-dropdown-heading">Filter records by changed field</div>
+                  {scopedFieldChanges.map((field) => (
+                    <label
+                      key={field.field}
+                      className="changed-fields-dropdown-option"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={fieldFilter.includes(field.label)}
+                        onChange={() => toggleFieldFilter(field.label)}
+                      />
+                      <span>{field.label}</span>
+                      <small>{field.count}</small>
+                    </label>
+                  ))}
+                  {fieldFilter.length > 0 && <button className="btn btn-ghost changed-fields-dropdown-clear" onClick={() => setFieldFilter([])}>Clear filter</button>}
+                </div>
+              </details>
+            </div>
+          )}
+          {exportError && <div role="alert" style={{ color: "var(--color-error-text)", fontSize: 11.5, marginBottom: 10 }}>{exportError}</div>}
+          <div className="compare-review-summary"><span>{reviewedCount} confirmed</span><span>{needsFixCount} needs fix</span><span>{visibleRecords.filter((record) => record.kind === "changed").length} changed records</span></div>
+          {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div className="compare-table-scroll" style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th><th>Review</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={`${record.kind}-${record.key}`} onClick={() => setSelectedRecordKey(record.key)} style={{ cursor: "pointer", background: selectedRecordKey === record.key ? "var(--color-surface-2)" : undefined }}><td><span className={`change-badge change-badge--${record.kind}`}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? <div className="field-tag-list">{record.changedFields.map((field) => <span key={field} className="field-tag">{field}</span>)}</div> : <span style={{ color: "var(--color-text-muted)" }}>—</span>}</td><td style={{ color: "var(--color-teal-400)", fontSize: 11 }}>Inspect →</td></tr>)}</tbody></table></div>}
+        </section>
+        {selectedRecord ? (
+          <aside className="card compare-school-summary compare-record-review">
+            <div style={{ marginBottom: 14 }}><div style={{ color: "var(--color-text-muted)", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 5 }}>Reviewing record</div><h2 style={{ fontSize: 17, margin: "0 0 4px" }}>{selectedRecord.studentName}</h2><p style={{ color: "var(--color-text-secondary)", fontSize: 11, margin: 0 }}>{selectedRecord.schoolName} · {selectedRecord.kind}</p></div>
+            {selectedRecord.kind === "changed" ? <div className="compare-diff-list">{selectedRecord.fieldDiffs.map((diff) => { const key = decisionKey(selectedRecord.key, diff.field); const decision = decisions[key]; return <div key={diff.field} className="compare-diff-row"><div className="compare-diff-label"><strong>{diff.label}</strong><span>{diff.field}</span></div><div className="compare-diff-values"><div><small>Previous</small><code>{diff.previousValue || "(blank)"}</code></div><div className="compare-diff-arrow">→</div><div><small>Current</small><code className={decision === "needs-fix" ? "compare-value-alert" : ""}>{diff.currentValue || "(blank)"}</code></div></div><div style={{ display: "flex", gap: 5, marginTop: 8 }}><button className={`compare-decision ${decision === "confirmed" ? "active-confirm" : ""}`} onClick={() => setDecisions((current) => ({ ...current, [key]: "confirmed" }))}><CheckCircle2 size={12} /> Confirm</button><button className={`compare-decision ${decision === "needs-fix" ? "active-fix" : ""}`} onClick={() => setDecisions((current) => ({ ...current, [key]: "needs-fix" }))}><Wrench size={12} /> Needs fix</button></div>{decision === "needs-fix" && <input className="input" value={corrections[key] ?? diff.currentValue} onChange={(event) => setCorrections((current) => ({ ...current, [key]: event.target.value }))} placeholder="Enter corrected value" style={{ marginTop: 7, fontSize: 11, padding: "6px 8px" }} />}</div>; })}</div> : <p style={{ color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.5 }}>{selectedRecord.kind === "added" ? "This record is new in the current file. Validate it against your source system before accepting it." : "This record is missing from the current file. Confirm whether it should be removed or restored."}</p>}
+            <button className="btn btn-ghost" onClick={() => setSelectedRecordKey(null)} style={{ marginTop: 12, padding: "5px 0", fontSize: 12 }}>Close record review</button>
+          </aside>
+        ) : selectedSchoolSummary && (
+          <aside className="card compare-school-summary">
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 16 }}>
+              <div><div style={{ color: "var(--color-text-muted)", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 5 }}>Selected school</div><h2 style={{ fontSize: 17, margin: 0 }}>{selectedSchoolSummary.schoolName}</h2></div>
+              <School size={18} style={{ color: "var(--color-teal-400)" }} />
+            </div>
+            <div className="compare-school-stat-grid">
+              <StatCard label="Previous" value={selectedSchoolSummary.previousCount} />
+              <StatCard label="Current" value={selectedSchoolSummary.currentCount} />
+              <StatCard label="Added" value={selectedSchoolSummary.added} accent="green" />
+              <StatCard label="Removed" value={selectedSchoolSummary.removed} accent="red" />
+              <StatCard label="Changed" value={selectedSchoolSummary.changed} accent="yellow" />
+              <StatCard label="Net movement" value={selectedSchoolSummary.currentCount - selectedSchoolSummary.previousCount} />
+            </div>
+            <div style={{ borderTop: "1px solid var(--color-border)", marginTop: 16, paddingTop: 14, color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.5 }}>
+              School change rate: <strong style={{ color: "var(--color-text-primary)" }}>{((selectedSchoolSummary.added + selectedSchoolSummary.removed + selectedSchoolSummary.changed) / Math.max(selectedSchoolSummary.previousCount, 1) * 100).toFixed(1)}%</strong>
+            </div>
+            <button className="btn btn-ghost" onClick={() => selectSchool("all")} style={{ marginTop: 10, padding: "5px 0", fontSize: 12 }}>Clear school filter</button>
+          </aside>
+        )}
+        </div>
+      )}
+
+      <Dialog.Root open={encryptDialogOpen} onOpenChange={(open) => { if (!open) closeEncryptDialog(); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+          <Dialog.Content
+            aria-describedby={undefined}
+            style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              background: "var(--color-surface-1)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              width: "min(92vw, 420px)",
+              zIndex: 51,
+              color: "var(--color-text-primary)",
+              fontFamily: "var(--font-sans)",
+              padding: "20px 22px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <Dialog.Title style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 6 }}><Lock size={14} /> Encrypted ZIP download</Dialog.Title>
+              <Dialog.Close asChild>
+                <button type="button" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--color-text-muted)", display: "flex" }}><X size={16} /></button>
+              </Dialog.Close>
+            </div>
+            <p style={{ color: "var(--color-text-muted)", fontSize: 11.5, lineHeight: 1.5, margin: "0 0 14px" }}>
+              Zips {xmlDownloadName} (every original field from {comparison.currentFileName}{selectedSchool === "all" ? "" : `, limited to ${selectedSchool}`}) with AES-256 encryption. Anyone opening the ZIP will need this password — it is not saved anywhere.
+            </p>
+            <p style={{ color: "var(--color-warning-text)", fontSize: 11, lineHeight: 1.45, margin: "-4px 0 14px" }}>
+              Use 7-Zip, WinRAR, or PeaZip to extract AES-256 ZIPs. Windows File Explorer does not support AES-encrypted ZIP files.
+            </p>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: "var(--color-text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 5 }}>Password</div>
+              <input
+                className="input"
+                type="password"
+                value={zipPassword}
+                onChange={(event) => setZipPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                autoFocus
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: "var(--color-text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 5 }}>Confirm password</div>
+              <input
+                className="input"
+                type="password"
+                value={zipPasswordConfirm}
+                onChange={(event) => setZipPasswordConfirm(event.target.value)}
+                placeholder="Re-enter password"
+                onKeyDown={(event) => { if (event.key === "Enter") downloadEncryptedZip(); }}
+                style={{ width: "100%" }}
+              />
+            </div>
+            {zipError && <div style={{ color: "var(--color-error-text)", fontSize: 11.5, marginBottom: 12 }}>{zipError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn btn-ghost" onClick={closeEncryptDialog} style={{ fontSize: 12 }}>Cancel</button>
+              <button className="btn btn-primary" onClick={downloadEncryptedZip} disabled={zipBusy} style={{ fontSize: 12, gap: 5, opacity: zipBusy ? 0.7 : 1 }}>
+                {zipBusy ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Lock size={13} />}
+                {zipBusy ? "Encrypting…" : "Encrypt & download"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </main>
   );
 }
@@ -1040,7 +1616,7 @@ function ValidateRevalidateView({
 
   useEffect(() => {
     const fixedXml = applyValidationFixes(session.originalXml, session.fixes);
-    const revalidated = validateXml(fixedXml);
+    const revalidated = validateXml(fixedXml, session.validationRules);
     setResult({
       ...session,
       revalidatedResult: revalidated,
@@ -1299,6 +1875,24 @@ function ValidateDownloadView({
   const xml = session.finalXml ?? session.originalXml;
 
   const dlXml = () => downloadText(xml, `${baseName}_validated.xml`, "application/xml");
+  const [encryptOpen, setEncryptOpen] = useState(false);
+  const [zipPassword, setZipPassword] = useState("");
+  const [zipConfirm, setZipConfirm] = useState("");
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [zipBusy, setZipBusy] = useState(false);
+  const closeEncrypt = () => { setEncryptOpen(false); setZipPassword(""); setZipConfirm(""); setZipError(null); setZipBusy(false); };
+  const dlEncryptedZip = async () => {
+    if (zipPassword.length < 8) { setZipError("Password must be at least 8 characters."); return; }
+    if (zipPassword !== zipConfirm) { setZipError("Passwords do not match."); return; }
+    setZipBusy(true); setZipError(null);
+    try {
+      const writer = new ZipWriter(new BlobWriter("application/zip"), { password: zipPassword, encryptionStrength: 3 });
+      await writer.add(`${baseName}_validated.xml`, new TextReader(xml));
+      const blob = await writer.close();
+      downloadBlob(blob, `${baseName}_validated.zip`);
+      closeEncrypt();
+    } catch (error) { setZipError(error instanceof Error ? error.message : "Encryption failed. Please try again."); setZipBusy(false); }
+  };
 
   const dlReport = () => {
     const csv = generateIssueReportCsv(session.initialResult.issues, session.fixes);
@@ -1435,6 +2029,15 @@ function ValidateDownloadView({
           <button onClick={dlXml} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Download</button>
         </div>
 
+        {/* Encrypted XML */}
+        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Lock size={18} style={{ color: "var(--color-text-muted)" }} /></div>
+            <div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.zip</div><div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>AES-256 encrypted ZIP containing the validated XML</div></div>
+          </div>
+          <button onClick={() => setEncryptOpen(true)} className="btn btn-secondary" style={{ gap: 7 }}><Lock size={14} /> Encrypt &amp; ZIP</button>
+        </div>
+
         {/* Issue report CSV */}
         <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1451,6 +2054,19 @@ function ValidateDownloadView({
           <button onClick={dlReport} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> CSV</button>
         </div>
       </div>
+
+      <Dialog.Root open={encryptOpen} onOpenChange={(open) => { if (!open) closeEncrypt(); }}>
+        <Dialog.Portal><Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+          <Dialog.Content aria-describedby={undefined} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 8, width: "min(92vw, 420px)", zIndex: 51, padding: "20px 22px" }}>
+            <Dialog.Title style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Encrypted ZIP download</Dialog.Title>
+            <p style={{ color: "var(--color-text-muted)", fontSize: 11.5, lineHeight: 1.5, margin: "0 0 14px" }}>The password is not saved. Use 7-Zip, WinRAR, or PeaZip to open the AES-256 ZIP.</p>
+            <input className="input" type="password" value={zipPassword} onChange={(event) => setZipPassword(event.target.value)} placeholder="Password (8+ characters)" style={{ width: "100%", marginBottom: 8 }} autoFocus />
+            <input className="input" type="password" value={zipConfirm} onChange={(event) => setZipConfirm(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") dlEncryptedZip(); }} placeholder="Confirm password" style={{ width: "100%", marginBottom: 10 }} />
+            {zipError && <div style={{ color: "var(--color-error-text)", fontSize: 11.5, marginBottom: 10 }}>{zipError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={closeEncrypt}>Cancel</button><button className="btn btn-primary" onClick={dlEncryptedZip} disabled={zipBusy} style={{ gap: 5 }}>{zipBusy ? "Encrypting…" : "Encrypt & download"}</button></div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* ── Filter & Report section ─────────────────────────────────────────── */}
       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
@@ -1529,6 +2145,16 @@ function ValidateDownloadView({
 
 // ─── File read helper ─────────────────────────────────────────────────────────
 
+async function readInputAsStixXml(f: File, metadata?: Partial<XlsmMetadata>): Promise<string> {
+  if (/\.xlsm?$/i.test(f.name)) {
+    const data = await f.arrayBuffer();
+    return xlsmToStixXml(data, f.name, metadata);
+  }
+  const xmlText = await readFileText(f);
+  if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is neither XML nor a supported Excel workbook.");
+  return xmlText;
+}
+
 async function readFileText(f: File): Promise<string> {
   try {
     if (typeof f.text === "function") return await f.text();
@@ -1553,10 +2179,11 @@ export default function App() {
   const [view, setView]                   = useState<View>("home");
   const [session, setSession]             = useState<SessionData | null>(null);
   const [validateSess, setValidateSess]   = useState<ValidateSession | null>(null);
+  const [comparison, setComparison]       = useState<StixComparison | null>(null);
   // Lifted so CleaningView and validation both see the same ruleset
   const [activeRules, setActiveRules]     = useState<RulesProfile>(defaultRules);
   // Cleaning pipeline state
-  const [pendingFile, setPendingFile]     = useState<{ xml: string; fileName: string } | null>(null);
+  const [pendingFile, setPendingFile]     = useState<{ xml: string; fileName: string; validationRules?: RulesProfile } | null>(null);
   const [parsedRecords, setParsedRecords] = useState<StudentRecord[] | null>(null);
   const [cleanedRecords, setCleanedRecords] = useState<StudentRecord[] | null>(null);
   const [cleaningSummary, setCleaningSummary] = useState<CleaningSummaryEntry[] | null>(null);
@@ -1568,6 +2195,7 @@ export default function App() {
     setView("home");
     setSession(null);
     setValidateSess(null);
+    setComparison(null);
     setPendingFile(null);
     setParsedRecords(null);
     setCleanedRecords(null);
@@ -1575,9 +2203,9 @@ export default function App() {
   };
 
   /** Run validateXml and transition to validate-issues. Used by both skip and apply paths. */
-  function runValidation(xmlText: string, fileName: string) {
-    const result = validateXml(xmlText, activeRules);
-    setValidateSess({ fileName, originalXml: xmlText, initialResult: result, fixes: [] });
+  function runValidation(xmlText: string, fileName: string, validationRules = activeRules) {
+    const result = validateXml(xmlText, validationRules);
+    setValidateSess({ fileName, originalXml: xmlText, initialResult: result, fixes: [], validationRules });
     setPendingFile(null);
     setParsedRecords(null);
     setCleanedRecords(null);
@@ -1592,10 +2220,12 @@ export default function App() {
       {view === "home" && (
         <HomeView
           onDone={(data, next) => { setSession(data); setView(next); }}
+          onCompare={(result) => { setComparison(result); setView("compare"); }}
           activeRules={activeRules}
           onRulesChange={setActiveRules}
-          onParsed={(xmlText, records, fileName) => {
-            setPendingFile({ xml: xmlText, fileName });
+          onParsed={(xmlText, records, fileName, requiredFields) => {
+            const validationRules = requiredFields?.length ? { ...activeRules, requiredFields } : activeRules;
+            setPendingFile({ xml: xmlText, fileName, validationRules });
             setParsedRecords(records);
             setView("clean-step");
           }}
@@ -1614,6 +2244,10 @@ export default function App() {
         <ResultView session={session} onStartOver={goHome} />
       )}
 
+      {view === "compare" && comparison && (
+        <CompareView comparison={comparison} onStartOver={goHome} />
+      )}
+
       {/* ── Cleaning step ── */}
 
       {view === "clean-step" && parsedRecords && pendingFile && (
@@ -1626,7 +2260,7 @@ export default function App() {
             setCleaningSummary(summary);
             setView("clean-summary");
           }}
-          onSkip={() => runValidation(pendingFile.xml, pendingFile.fileName)}
+          onSkip={() => runValidation(pendingFile.xml, pendingFile.fileName, pendingFile.validationRules)}
           onBack={goHome}
           onSaveToRuleset={(profile) => {
             const id = getActiveRulesetId();
@@ -1683,7 +2317,7 @@ export default function App() {
             const xmlToValidate = fixes.length > 0
               ? applyValidationFixes(pendingFile.xml, fixes)
               : pendingFile.xml;
-            runValidation(xmlToValidate, pendingFile.fileName);
+            runValidation(xmlToValidate, pendingFile.fileName, pendingFile.validationRules);
           }}
         />
       )}

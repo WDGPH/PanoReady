@@ -1,4 +1,4 @@
-export type Workflow = "validate" | "clean" | "export" | "pretty";
+export type Workflow = "validate" | "clean" | "export" | "pretty" | "compare";
 
 export interface CleanStats {
   phones_cleaned: number;
@@ -50,9 +50,23 @@ export interface Student {
   StreetNumberSuffix: string;
   StreetName: string;
   StreetType: string;
+  StreetDirection: string;
+  RuralRoute: string;
+  PoBoxNumber: string;
   City: string;
   Province: string;
   PostalCode: string;
+  PhoneType: string;
+  GuardianFirstName: string;
+  GuardianLastName: string;
+  GuardianRelationship: string;
+  GuardianPhoneNumber: string;
+  GuardianPhoneType: string;
+  Guardian2FirstName: string;
+  Guardian2LastName: string;
+  Guardian2Relationship: string;
+  Guardian2PhoneNumber: string;
+  Guardian2PhoneType: string;
 }
 
 export interface ExportResult {
@@ -72,6 +86,72 @@ export interface GradeCount {
   SchoolName: string;
   Grade: string;
   GradeCount: number;
+}
+
+export interface ComparisonFieldChange {
+  field: string;
+  label: string;
+  count: number;
+}
+
+export interface ComparisonSchoolChange {
+  schoolName: string;
+  previousCount: number;
+  currentCount: number;
+  added: number;
+  removed: number;
+  changed: number;
+}
+
+export type ComparisonRecordChangeKind = "added" | "removed" | "changed";
+
+export interface ComparisonRecordChange {
+  key: string;
+  kind: ComparisonRecordChangeKind;
+  studentName: string;
+  schoolName: string;
+  changedFields: string[];
+  fieldDiffs: ComparisonFieldDiff[];
+}
+
+export interface ComparisonFieldDiff {
+  field: string;
+  label: string;
+  previousValue: string;
+  currentValue: string;
+}
+
+export interface ComparisonSchoolTransfer {
+  fromSchool: string;
+  toSchool: string;
+  count: number;
+  students: string[];
+}
+
+export type ComparisonSignal = "stable" | "moderate" | "high";
+
+export interface StixComparison {
+  previousFileName: string;
+  currentFileName: string;
+  currentXml: string;
+  previousStudentCount: number;
+  currentStudentCount: number;
+  previousSchoolCount: number;
+  currentSchoolCount: number;
+  matchedCount: number;
+  unchangedCount: number;
+  addedCount: number;
+  removedCount: number;
+  changedCount: number;
+  movedCount: number;
+  changeRate: number;
+  fieldChanges: ComparisonFieldChange[];
+  recordChanges: ComparisonRecordChange[];
+  schoolTransfers: ComparisonSchoolTransfer[];
+  schoolChanges: ComparisonSchoolChange[];
+  signal: ComparisonSignal;
+  recommendation: string;
+  recommendationDetail: string;
 }
 
 /** Shape stored in sessionStorage between pages */
@@ -190,6 +270,7 @@ export type ValidateSession = {
   originalXml: string;
   initialResult: ValidationResult;
   fixes: AppliedFix[];
+  validationRules?: RulesProfile;
   revalidatedResult?: ValidationResult;
   finalXml?: string;
 };
