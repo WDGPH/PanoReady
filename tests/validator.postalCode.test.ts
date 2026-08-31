@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import defaultRulesJson from "../config/rules.stix.default.json";
 import type { AppliedFix, RulesProfile } from "../lib/types";
@@ -88,5 +89,23 @@ describe("postal-code validator integration", () => {
 
     const result = validateXml(stixWithPostalCodes(["D1D 1D1"]), customRules);
     expect(result.issues.filter((issue) => issue.field === "PostalCode")).toEqual([]);
+  });
+
+  it("keeps the synthetic UI demonstration fixture valid and representative", () => {
+    const fixtureUrl = new URL(
+      "../public/samples/postal-code-validation-demo.stix",
+      import.meta.url
+    );
+    const result = validateXml(readFileSync(fixtureUrl, "utf8"));
+    const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
+
+    expect(result.studentCount).toBe(15);
+    expect(postalIssues).toHaveLength(14);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_NORMALIZE")).toHaveLength(5);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_FORMAT")).toHaveLength(6);
+    expect(result.issues.some((issue) =>
+      issue.field === "PostalCode" && ["WHITESPACE_TRIM", "FIELD_LENGTH"].includes(issue.ruleId)
+    )).toBe(false);
   });
 });

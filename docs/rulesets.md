@@ -198,7 +198,6 @@ You would rarely need to change this.
   "AliasMiddleName": 50,
   "AliasLastName": 50,
   "OEN": 9,
-  "PostalCode": 7,
   "City": 50,
   "StreetName": 80,
   "StreetNumber": 6,
@@ -208,6 +207,11 @@ You would rarely need to change this.
 ```
 
 Only fields listed here are length-checked. If your board's schema permits a longer `City` field, increase the limit rather than removing it.
+
+The bundled JSON retains a legacy `PostalCode` length entry for exported
+ruleset compatibility, but postal-code validation does not use the generic
+length rule or suggest truncation. The dedicated postal-code rule owns the
+complete result.
 
 ---
 
@@ -230,10 +234,16 @@ Fields that must contain a valid `YYYY-MM-DD` date. The default only checks `Bir
 **Type:** string (regular expression)
 
 ```json
-"postalCodePattern": "^[A-Za-z]\\d[A-Za-z]\\s?\\d[A-Za-z]\\d$"
+"postalCodePattern": "^[ABCEGHJKLMNPRSTVXY]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d$"
 ```
 
 The pattern is compiled with JavaScript's `new RegExp()`. Note that backslashes must be double-escaped in JSON (`\\d` not `\d`). The import step will reject an invalid pattern with an error message before saving.
+
+When this built-in pattern is active, PanoReady applies the safe normalization
+and O/I/L repair behavior described in [Validation Rules](./validation-rules.md#rule-postal-code).
+If a custom ruleset changes `postalCodePattern`, that custom expression remains
+authoritative. A canonical Canadian suggestion is offered only when the
+suggested value also passes the custom expression.
 
 ---
 
