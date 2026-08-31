@@ -7,6 +7,7 @@
 
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import { standardizeUnit } from "./cleaner";
+import { normalizeCanadianPostalCode, type PostalCodeResult } from "./postalCode";
 import type {
   ValidationIssue,
   ValidationResult,
@@ -16,6 +17,84 @@ import type {
   RulesProfile,
 } from "./types";
 import defaultRules from "../config/rules.stix.default.json";
+
+function postalCodeIssueDetails(
+  raw: string,
+  rules: RulesProfile
+): {
+  severity: "warning" | "info";
+  message: string;
+  suggestedFix?: string;
+  autoFixable: boolean;
+  ruleId: string;
+} | null {
+  const result = normalizeCanadianPostalCode(raw);
+  const usesBuiltInRule = rules.postalCodePattern === defaultRules.postalCodePattern;
+
+  if (!usesBuiltInRule) {
+    // A custom pattern remains authoritative. Safe Canadian normalization is
+    // suggested only when the resulting value also passes that custom rule.
+    const customPattern = new RegExp(rules.postalCodePattern, "i");
+    const trimmed = raw.trim();
+    if (customPattern.test(trimmed)) {
+      if (raw === trimmed) return null;
+      return {
+        severity: "info",
+        message: `PostalCode "${raw}" has surrounding whitespace; normalize it to "${trimmed}".`,
+        suggestedFix: trimmed,
+        autoFixable: true,
+        ruleId: "POSTAL_CODE_NORMALIZE",
+      };
+    }
+    if (result.status === "invalid" || !customPattern.test(result.value)) {
+      return {
+        severity: "warning",
+        message: `PostalCode "${raw}" does not match the active postal-code pattern.`,
+        autoFixable: false,
+        ruleId: "POSTAL_CODE_FORMAT",
+      };
+    }
+  }
+
+  return postalCodeResultDetails(raw, result);
+}
+
+function postalCodeResultDetails(
+  raw: string,
+  result: PostalCodeResult
+): {
+  severity: "warning" | "info";
+  message: string;
+  suggestedFix?: string;
+  autoFixable: boolean;
+  ruleId: string;
+} | null {
+  if (result.status === "valid") return null;
+  if (result.status === "normalized") {
+    return {
+      severity: "info",
+      message: `PostalCode "${raw}" can be safely normalized to "${result.value}".`,
+      suggestedFix: result.value,
+      autoFixable: true,
+      ruleId: "POSTAL_CODE_NORMALIZE",
+    };
+  }
+  if (result.status === "repaired") {
+    return {
+      severity: "warning",
+      message: `PostalCode "${raw}" contains an O/I/L transcription in a numeric position; repair it to "${result.value}".`,
+      suggestedFix: result.value,
+      autoFixable: true,
+      ruleId: "POSTAL_CODE_REPAIR",
+    };
+  }
+  return {
+    severity: "warning",
+    message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`,
+    autoFixable: false,
+    ruleId: "POSTAL_CODE_FORMAT",
+  };
+}
 
 // ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
 
@@ -489,16 +568,17 @@ export function validateXml(
 
       // 8. Postal code format
       if (postalCode) {
-        const postalPattern = new RegExp(rules.postalCodePattern, "i");
-        if (!postalPattern.test(postalCode.trim())) {
+        const postalIssue = postalCodeIssueDetails(postalCode, rules);
+        if (postalIssue) {
           issues.push({
             ...base,
             id: `${recordId}-postal-format`,
-            severity: "warning",
+            severity: postalIssue.severity,
             field: "PostalCode",
-            message: `PostalCode "${postalCode}" does not match Canadian format (A1A 1A1).`,
-            autoFixable: false,
-            ruleId: "POSTAL_CODE_FORMAT",
+            message: postalIssue.message,
+            suggestedFix: postalIssue.suggestedFix,
+            autoFixable: postalIssue.autoFixable,
+            ruleId: postalIssue.ruleId,
           });
         }
       }
@@ -537,6 +617,9 @@ export function validateXml(
       for (const [field, maxLen] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
         const limit = maxLen as number;
+        // Postal-code length/format is owned by the dedicated rule above. In
+        // particular, never truncate an unresolved value into a guessed code.
+        if (field === "PostalCode") continue;
         if (val.length <= limit) continue;
 
         if (field === "Unit") {
@@ -587,7 +670,7 @@ export function validateXml(
       // 11. Whitespace (leading/trailing) on key text fields
       const textFields = [
         "FirstName", "MiddleName", "LastName", "Grade", "Gender",
-        "OEN", "City", "PostalCode", "StreetName", "StreetNumber", "Unit",
+        "OEN", "City", "StreetName", "StreetNumber", "Unit",
       ];
       for (const field of textFields) {
         const val = fields[field];
