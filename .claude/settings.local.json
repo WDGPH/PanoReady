@@ -43,8 +43,8 @@
       "Bash(env)",
       "Bash(GIT_ASKPASS=/bin/true GIT_TERMINAL_PROMPT=0 timeout 15 git push --force-with-lease origin docs/mkdocs-site)",
       "Bash(grep -oE '#[0-9a-fA-F]{3,8}|rgba?\\\\\\([^\\)]+\\\\\\)' app/page.tsx)",
-      "Bash(grep -oE '#[0-9a-fA-F]{3,8}|rgba?\\\\\\([^\\)]+\\\\\\)' /home/jovyan/twig-stix-web/components/RulesetEditor.tsx /home/jovyan/twig-stix-web/components/RulesetSelector.tsx /home/jovyan/twig-stix-web/components/StatCard.tsx /home/jovyan/twig-stix-web/app/reports/page.tsx /home/jovyan/twig-stix-web/components/NavBar.tsx)",
-      "Bash(grep -oE '#[0-9a-fA-F]{3,8}|rgba?\\\\\\([^\\)]+\\\\\\)' /home/jovyan/twig-stix-web/app/page.tsx)",
+      "Bash(grep -oE '#[0-9a-fA-F]{3,8}|rgba?\\\\\\([^\\)]+\\\\\\)' /home/jovyan/PanoReady/components/RulesetEditor.tsx /home/jovyan/PanoReady/components/RulesetSelector.tsx /home/jovyan/PanoReady/components/StatCard.tsx /home/jovyan/PanoReady/app/reports/page.tsx /home/jovyan/PanoReady/components/NavBar.tsx)",
+      "Bash(grep -oE '#[0-9a-fA-F]{3,8}|rgba?\\\\\\([^\\)]+\\\\\\)' /home/jovyan/PanoReady/app/page.tsx)",
       "Bash(npx tsc *)",
       "Bash(npm run *)",
       "Bash(npx next *)"

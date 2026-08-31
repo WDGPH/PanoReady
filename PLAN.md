@@ -1,4 +1,4 @@
-# Twig STIX Web Plan (Browser-Only)
+# PanoReady Plan (Browser-Only)
 
 ## Product Definition
 Build a client-side remediation utility for STIX XML files used before Panorama/STIX submission.

@@ -45,7 +45,7 @@ export function fmt(n: number) {
   return n.toLocaleString();
 }
 
-const SESSION_KEY = "twig_stix_session";
+const SESSION_KEY = "panoready_session";
 
 export function saveSession(data: unknown) {
   try {

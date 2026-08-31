@@ -1,6 +1,6 @@
-# TWIG STIX Cleaner — Documentation
+# PanoReady Documentation
 
-TWIG STIX Cleaner is a browser-based utility for validating, cleaning, and exporting Ontario school enrollment data in STIX XML format. All processing happens entirely in your browser — no data is ever uploaded to a server.
+PanoReady is a browser-based utility for validating, cleaning, and exporting Ontario school enrollment data in STIX XML format. All processing happens entirely in your browser — no data is ever uploaded to a server.
 
 ## Workflows
 
