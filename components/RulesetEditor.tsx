@@ -454,7 +454,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                       ))}
                     </select>
                     <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 5 }}>
-                      Start with a deep copy of the selected ruleset's settings.
+                      Start with a deep copy of the selected ruleset&apos;s settings.
                     </div>
                   </div>
                 )}
