@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ns1:SchoolUpload xmlns:ns1="http://example.com/stix">
+  <ns1:School>
+    <ns1:Name>Central High</ns1:Name>
+    <ns1:SchoolNumber>12345</ns1:SchoolNumber>
+    <ns1:Students>
+      <!-- Student 0: valid record -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Jane</ns1:First>
+          <ns1:Last>Roe</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2010-05-12</ns1:BirthDate>
+        <ns1:Grade>GR6</ns1:Grade>
+        <ns1:Gender>F</ns1:Gender>
+        <ns1:OEN>123456789</ns1:OEN>
+        <ns1:ContactPhone>416-555-1234</ns1:ContactPhone>
+        <ns1:Address>
+          <ns1:City>Ottawa</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>K1A0B1</ns1:PostalCode>
+          <ns1:StreetNumber>12</ns1:StreetNumber>
+          <ns1:StreetName>Main St</ns1:StreetName>
+          <ns1:Unit>4</ns1:Unit>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 1: missing BirthDate (required), whitespace, alias grade, placeholder phone, invalid province/postal, length issues -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>  John  </ns1:First>
+          <ns1:Last>Smith</ns1:Last>
+        </ns1:Name>
+        <ns1:Grade>K</ns1:Grade>
+        <ns1:Gender>Other</ns1:Gender>
+        <ns1:OEN>000000001</ns1:OEN>
+        <ns1:ContactPhone>519-000-0000</ns1:ContactPhone>
+        <ns1:Address>
+          <ns1:City>Toronto</ns1:City>
+          <ns1:Province>ZZ</ns1:Province>
+          <ns1:PostalCode>12345</ns1:PostalCode>
+          <ns1:StreetNumber>1234567</ns1:StreetNumber>
+          <ns1:StreetName>Very Long Street Name That Exceeds The Normal Length For Testing Purposes</ns1:StreetName>
+          <ns1:Unit>Apartment 123456</ns1:Unit>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 2: invalid OEN format; phone digits-only (auto-fixable) -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Alice</ns1:First>
+          <ns1:Last>Wonder</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2011-07-01</ns1:BirthDate>
+        <ns1:Grade>GR13</ns1:Grade>
+        <ns1:Gender>Unk</ns1:Gender>
+        <ns1:OEN>ABC123</ns1:OEN>
+        <ns1:ContactPhone>4165556789</ns1:ContactPhone>
+        <ns1:Address>
+          <ns1:City>Kingston</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>K7L 3N6</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 3: duplicate name+dob with student 2, valid OEN for duplicate detection -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Alice</ns1:First>
+          <ns1:Last>Wonder</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2011-07-01</ns1:BirthDate>
+        <ns1:Grade>GR11</ns1:Grade>
+        <ns1:Gender>M</ns1:Gender>
+        <ns1:OEN>222333444</ns1:OEN>
+        <ns1:ContactPhone>(416) 555-0000</ns1:ContactPhone>
+        <ns1:Address>
+          <ns1:City>Kingston</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>K7L3N6</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 4: duplicate OEN with student 3 -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Bob</ns1:First>
+          <ns1:Last>Jones</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2012-03-10</ns1:BirthDate>
+        <ns1:Grade>1</ns1:Grade>
+        <ns1:Gender>N</ns1:Gender>
+        <ns1:OEN>222333444</ns1:OEN>
+        <ns1:ContactPhone>1-416-555-9999</ns1:ContactPhone>
+        <ns1:Address>
+          <ns1:City>Ottawa</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>K1A 0B1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Postal-code focused cases: deterministic fixes and unresolved errors -->
+
+      <!-- Student 5: I-to-1 substitutions in numeric positions plus slash normalization -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Indiana</ns1:First>
+          <ns1:Last>Jones</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-01-05</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000005</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>NIG/2WI</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 6: L-to-1 substitution in a numeric position -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Lara</ns1:First>
+          <ns1:Last>Croft</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-02-06</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000006</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>NLG2W1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 7: O-to-0 substitution in a numeric position (valid rural FSA) -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Oscar</ns1:First>
+          <ns1:Last>Grouch</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-03-07</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000007</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>NOG2W1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 8: lowercase plus a Unicode dash; formatting-only normalization -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Princess</ns1:First>
+          <ns1:Last>Peach</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-04-08</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000008</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>n1g—2w1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 9: prohibited D in an alphabetic position; not auto-fixable -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Bugs</ns1:First>
+          <ns1:Last>Bunny</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-05-09</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000009</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>N1D2W1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 10: separator in the wrong position; not auto-fixable -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Kermit</ns1:First>
+          <ns1:Last>Frog</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-06-10</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000010</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>N1/G2W1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 11: arbitrary punctuation; never silently stripped -->
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Darth</ns1:First>
+          <ns1:Last>Tater</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2014-07-11</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000011</ns1:OEN>
+        <ns1:Address>
+          <ns1:City>Guelph</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+          <ns1:PostalCode>N1G!!!2W1</ns1:PostalCode>
+        </ns1:Address>
+      </ns1:Student>
+
+    </ns1:Students>
+  </ns1:School>
+
+  <!-- Second school: empty Students element -->
+  <ns1:School>
+    <ns1:Name>Empty Secondary</ns1:Name>
+    <ns1:Students/>
+  </ns1:School>
+
+  <!-- Third school: missing SchoolNumber and non-ISO BirthDate and invalid grade -->
+  <ns1:School>
+    <ns1:Name>NoNumber School</ns1:Name>
+    <ns1:Students>
+      <ns1:Student>
+        <ns1:Name>
+          <ns1:First>Charlie</ns1:First>
+          <ns1:Last>Brown</ns1:Last>
+        </ns1:Name>
+        <ns1:BirthDate>2013/05/05</ns1:BirthDate>
+        <ns1:Grade>GR100</ns1:Grade>
+        <ns1:Gender>unknown</ns1:Gender>
+        <ns1:OEN>333444555</ns1:OEN>
+      </ns1:Student>
+    </ns1:Students>
+  </ns1:School>
+
+</ns1:SchoolUpload>

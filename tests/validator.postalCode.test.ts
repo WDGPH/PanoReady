@@ -108,4 +108,20 @@ describe("postal-code validator integration", () => {
       issue.field === "PostalCode" && ["WHITESPACE_TRIM", "FIELD_LENGTH"].includes(issue.ruleId)
     )).toBe(false);
   });
+
+  it("preserves the postal-code cases in the general validation fixture", () => {
+    const fixtureUrl = new URL("../test_stix_validation.xml", import.meta.url);
+    const result = validateXml(readFileSync(fixtureUrl, "utf8"));
+    const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
+
+    expect(result.studentCount).toBe(13);
+    expect(postalIssues).toHaveLength(10);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_NORMALIZE")).toHaveLength(3);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_FORMAT")).toHaveLength(4);
+    expect(postalIssues.filter((issue) => issue.autoFixable)).toHaveLength(6);
+    expect(postalIssues.find((issue) => issue.studentName === "Indiana Jones")?.suggestedFix).toBe("N1G2W1");
+    expect(postalIssues.find((issue) => issue.studentName === "Lara Croft")?.suggestedFix).toBe("N1G2W1");
+    expect(postalIssues.find((issue) => issue.studentName === "Oscar Grouch")?.suggestedFix).toBe("N0G2W1");
+  });
 });
