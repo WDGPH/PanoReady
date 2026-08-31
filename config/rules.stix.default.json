@@ -46,7 +46,7 @@
     "Unit": 5
   },
   "dateFields": ["BirthDate"],
-  "postalCodePattern": "^[A-Za-z]\\d[A-Za-z]\\s?\\d[A-Za-z]\\d$",
+  "postalCodePattern": "^[ABCEGHJKLMNPRSTVXY]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d$",
   "phoneConfig": {
     "placeholderNumbers": ["519-000-0000", "000-000-0000"]
   },
