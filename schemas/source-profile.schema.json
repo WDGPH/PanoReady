@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/WDGPH/PanoReady/schemas/source-profile.schema.json",
+  "title": "PanoReady Source Mapping Profile",
+  "description": "Declarative instructions for detecting and mapping a known school, board, private-school, or daycare source into the PanoReady canonical model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "version",
+    "organizationTypes",
+    "formats",
+    "detection",
+    "rowRules",
+    "fields",
+    "metadata",
+    "controlledMappings",
+    "datePolicy",
+    "identityPolicy"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "organizationTypes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["PUBLIC_SCHOOL", "PRIVATE_SCHOOL", "SCHOOL_BOARD", "DAYCARE", "OTHER"]
+      }
+    },
+    "formats": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["xml", "xlsm", "xlsx", "xls", "csv", "tsv", "ods"]
+      }
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheetNamePatterns", "headerSearchRows", "minimumRecognizedHeaders", "requiredHeaderGroups"],
+      "properties": {
+        "sheetNamePatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "headerSearchRows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "minimumRecognizedHeaders": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requiredHeaderGroups": {
+          "type": "array",
+          "description": "Every group must have at least one matching alias for automatic profile selection.",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "rowRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startAfterMarkers", "skipCompletelyEmptyRows", "maximumConsecutiveEmptyRows", "excludeFirstCellPatterns"],
+      "properties": {
+        "startAfterMarkers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "skipCompletelyEmptyRows": {
+          "type": "boolean"
+        },
+        "maximumConsecutiveEmptyRows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "excludeFirstCellPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/definitions/fieldMapping"
+      },
+      "description": "Keys are canonical student paths, for example name.first, birthDate, or guardians[0].phone.number."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/fieldMapping"
+      },
+      "description": "Keys are canonical metadata or school paths."
+    },
+    "controlledMappings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "description": "Per-field raw/label-to-canonical mappings. Matching is normalized according to the field mapping."
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "datePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptedFormats", "ambiguousNumericDates"],
+      "properties": {
+        "acceptedFormats": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["EXCEL_SERIAL", "YYYY-MM-DD", "YYYY/MM/DD", "MM/DD/YYYY", "DD/MM/YYYY", "ISO_DATETIME"]
+          }
+        },
+        "ambiguousNumericDates": {
+          "enum": ["REJECT", "REQUIRE_REVIEW", "ASSUME_MDY", "ASSUME_DMY"]
+        }
+      }
+    },
+    "identityPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preferredIdentifiers", "exactCompositeFields", "corroboratingFields", "automaticMatchThreshold", "reviewThreshold", "neverMatchOnOnly"],
+      "properties": {
+        "preferredIdentifiers": {
+          "type": "array",
+          "items": {
+            "enum": ["oen", "sourceStudentId"]
+          }
+        },
+        "exactCompositeFields": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "corroboratingFields": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "automaticMatchThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reviewThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "neverMatchOnOnly": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "fieldMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aliases", "requiredForAutoDetection", "normalizers"],
+      "properties": {
+        "aliases": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "requiredForAutoDetection": {
+          "type": "boolean"
+        },
+        "normalizers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "TRIM",
+              "COLLAPSE_WHITESPACE",
+              "UNICODE_NFC",
+              "UPPERCASE",
+              "LOWERCASE",
+              "CONTROLLED_VALUE_LOOKUP",
+              "DATE_TO_ISO",
+              "PHONE_TO_CANONICAL",
+              "POSTAL_CODE_TO_CANONICAL",
+              "DIGITS_ONLY"
+            ]
+          }
+        },
+        "defaultValue": {
+          "type": ["string", "number", "boolean", "null"]
+        }
+      }
+    }
+  }
+}

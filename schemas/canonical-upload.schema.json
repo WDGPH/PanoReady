@@ -1,0 +1,437 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/WDGPH/PanoReady/schemas/canonical-upload.schema.json",
+  "title": "PanoReady Canonical Upload",
+  "description": "Source-independent representation of a school enrolment upload before STIX XML serialization. Structural validity does not imply export readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "batchId",
+    "status",
+    "source",
+    "metadata",
+    "schools",
+    "diagnostics",
+    "transformations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "batchId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque identifier generated locally for this import."
+    },
+    "status": {
+      "enum": ["DRAFT", "BLOCKED", "REVIEW_REQUIRED", "READY_WITH_WARNINGS", "READY"]
+    },
+    "source": {
+      "$ref": "#/definitions/source"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    },
+    "schools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/school"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/diagnostic"
+      }
+    },
+    "transformations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/transformation"
+      }
+    }
+  },
+  "definitions": {
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "sourceLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sheet": { "type": "string" },
+        "row": { "type": "integer", "minimum": 1 },
+        "column": { "type": "string", "minLength": 1 },
+        "header": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "fileName", "adapterId", "importedAt"],
+      "properties": {
+        "format": {
+          "enum": ["xml", "xlsm", "xlsx", "xls", "csv", "tsv", "ods"]
+        },
+        "fileName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mimeType": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "adapterId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profileId": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "profileVersion": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "sheetName": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "headerRow": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "importedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "createDate",
+        "createTime",
+        "createdBy",
+        "contactPhone",
+        "contactEmail",
+        "fullUpload"
+      ],
+      "properties": {
+        "createDate": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "createTime": {
+          "type": ["string", "null"],
+          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$"
+        },
+        "createdBy": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "contactPhone": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/phone" }
+          ]
+        },
+        "contactEmail": {
+          "type": ["string", "null"],
+          "format": "email"
+        },
+        "fullUpload": {
+          "enum": ["YES", "NO", null]
+        },
+        "schoolBoard": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "number": { "$ref": "#/definitions/nullableString" },
+                "name": { "$ref": "#/definitions/nullableString" }
+              }
+            }
+          ]
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenanceMap"
+        }
+      }
+    },
+    "school": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schoolId", "schoolNumber", "name", "students"],
+      "properties": {
+        "schoolId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque internal identifier; it is not emitted as a STIX field."
+        },
+        "schoolNumber": {
+          "type": ["string", "null"],
+          "maxLength": 100
+        },
+        "name": {
+          "type": ["string", "null"],
+          "maxLength": 100
+        },
+        "students": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/student"
+          }
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenanceMap"
+        }
+      }
+    },
+    "student": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordId",
+        "oen",
+        "grade",
+        "className",
+        "name",
+        "aliasName",
+        "gender",
+        "birthDate",
+        "language",
+        "countryOfOrigin",
+        "guardians",
+        "address",
+        "phone",
+        "identity",
+        "provenance"
+      ],
+      "properties": {
+        "recordId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier stable within the import batch."
+        },
+        "oen": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{9}$"
+        },
+        "grade": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "className": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "name": {
+          "$ref": "#/definitions/personName"
+        },
+        "aliasName": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/personName" }
+          ]
+        },
+        "gender": {
+          "enum": ["F", "M", "Unk", "Other", null],
+          "description": "Final canonical XML value. Intake X and N remain in provenance and normalize to Other before export."
+        },
+        "birthDate": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "language": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "countryOfOrigin": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "guardians": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/definitions/guardian"
+          }
+        },
+        "address": {
+          "$ref": "#/definitions/address"
+        },
+        "phone": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/phone" }
+          ]
+        },
+        "identity": {
+          "$ref": "#/definitions/identity"
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenanceMap"
+        }
+      }
+    },
+    "personName": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first", "middle", "last"],
+      "properties": {
+        "first": { "type": ["string", "null"], "maxLength": 100 },
+        "middle": { "type": ["string", "null"], "maxLength": 100 },
+        "last": { "type": ["string", "null"], "maxLength": 100 }
+      }
+    },
+    "guardian": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "relationship", "phone"],
+      "properties": {
+        "name": { "$ref": "#/definitions/personName" },
+        "relationship": { "$ref": "#/definitions/nullableString" },
+        "phone": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/phone" }
+          ]
+        }
+      }
+    },
+    "phone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "extension", "type"],
+      "properties": {
+        "number": {
+          "type": "string",
+          "pattern": "^[2-9]\\d{2}-[2-9]\\d{2}-\\d{4}$"
+        },
+        "extension": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{1,5}$"
+        },
+        "type": {
+          "enum": ["HOME", "WORK", "MOBILE", "UNKNOWN", "ALTERNATE", "EMERGENCY", "PAGER", "FAX", null]
+        }
+      }
+    },
+    "address": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "streetNumber",
+        "streetName",
+        "streetType",
+        "streetDirection",
+        "ruralRoute",
+        "poBoxNumber",
+        "city",
+        "province",
+        "postalCode"
+      ],
+      "properties": {
+        "unit": { "type": ["string", "null"], "maxLength": 5 },
+        "streetNumber": { "type": ["string", "null"], "maxLength": 6 },
+        "streetName": { "$ref": "#/definitions/nullableString" },
+        "streetType": { "$ref": "#/definitions/nullableString" },
+        "streetDirection": { "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW", null] },
+        "ruralRoute": { "$ref": "#/definitions/nullableString" },
+        "poBoxNumber": { "$ref": "#/definitions/nullableString" },
+        "city": { "$ref": "#/definitions/nullableString" },
+        "province": { "enum": ["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT", null] },
+        "postalCode": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Z]\\d[A-Z] ?\\d[A-Z]\\d$"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceStudentId", "matchGroupId", "method", "confidence", "reviewRequired"],
+      "properties": {
+        "sourceStudentId": { "$ref": "#/definitions/nullableString" },
+        "matchGroupId": { "$ref": "#/definitions/nullableString" },
+        "method": {
+          "enum": ["UNMATCHED", "OEN", "SOURCE_ID", "COMPOSITE_EXACT", "CANDIDATE_REVIEW", "ANALYST_CONFIRMED"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reviewRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+    "provenanceMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/fieldProvenance"
+      },
+      "description": "Keys are canonical field paths such as name.first or address.postalCode."
+    },
+    "fieldProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawValue", "source", "mappingConfidence"],
+      "properties": {
+        "rawValue": {
+          "type": ["string", "number", "boolean", "null"]
+        },
+        "source": {
+          "$ref": "#/definitions/sourceLocation"
+        },
+        "mappingConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layer", "severity", "code", "message", "path", "status", "safeAutoFix"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "layer": { "enum": ["IMPORT", "CANONICAL", "PROFILE", "IDENTITY", "XML", "XSD", "RECONCILIATION"] },
+        "severity": { "enum": ["BLOCKER", "ERROR", "WARNING", "INFO"] },
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/definitions/nullableString" },
+        "recordId": { "$ref": "#/definitions/nullableString" },
+        "source": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/sourceLocation" }
+          ]
+        },
+        "status": { "enum": ["OPEN", "FIXED", "ACCEPTED"] },
+        "safeAutoFix": { "type": "boolean" },
+        "suggestedValue": { "type": ["string", "number", "boolean", "null"] }
+      }
+    },
+    "transformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ruleId", "path", "before", "after", "safe", "appliedBy", "appliedAt"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "ruleId": { "type": "string", "minLength": 1 },
+        "recordId": { "$ref": "#/definitions/nullableString" },
+        "path": { "type": "string", "minLength": 1 },
+        "before": { "type": ["string", "number", "boolean", "null"] },
+        "after": { "type": ["string", "number", "boolean", "null"] },
+        "safe": { "type": "boolean" },
+        "appliedBy": { "enum": ["AUTOMATIC", "ANALYST"] },
+        "appliedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
