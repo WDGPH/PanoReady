@@ -164,16 +164,57 @@ The `BirthDate` field must be in `YYYY-MM-DD` format and represent a parseable c
 
 ### Rule: `postal-code`
 
-**Severity:** warning  
+**Severity:** info or warning
 **Field:** `PostalCode`
 
-The `PostalCode` field must match the Canadian postal code pattern.
+The built-in rule validates Canadian postal-code structure and produces the
+canonical six-character STIX value `A1A1A1` (uppercase, no separator). Canada
+Post normally displays the same code as `A1A 1A1`; PanoReady accepts that form
+as input and suggests the unspaced machine representation used in its output.
 
-**Pattern:** `^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$`
+**Allowed characters:**
 
-Examples of valid values: `K1A 0A9`, `M5V3L9`
+- Position 1: `A B C E G H J K L M N P R S T V X Y`
+- Positions 3 and 5: `A B C E G H J K L M N P R S T V W X Y Z`
+- Positions 2, 4, and 6: digits `0`–`9`; zero in position 2 is valid and
+  identifies a rural forward sortation area
+- Letters `D F I O Q U` are never valid; `W Z` are additionally excluded from
+  position 1
 
-**Auto-fix:** No. Postal codes must be corrected manually.
+**Built-in canonical pattern:**
+
+```text
+^[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\d[ABCEGHJKLMNPRSTVWXYZ]\d$
+```
+
+The following input connectors are accepted only between the first and last
+three characters: one or more whitespace characters, `-`, en dash (`–`), em
+dash (`—`), `/`, `\`, `_`, and `.`. Whitespace may surround a punctuation
+connector. For example, `N1G / 2W1` safely normalizes to `N1G2W1`. A connector
+in any other position, repeated punctuation, or arbitrary punctuation remains
+invalid; PanoReady does not globally strip punctuation.
+
+The validator reports one of three issue outcomes:
+
+| Outcome | Severity | Auto-fix | Example |
+|---|---|---|---|
+| Formatting/case normalization | info | Yes | `n1g 2w1` → `N1G2W1` |
+| Numeric-position transcription repair | warning | Yes | `NIG2W1` → `N1G2W1` |
+| Unresolved invalid structure | warning | No | `N1/G2W1` |
+
+Only `O → 0`, `I → 1`, and `L → 1` are repaired, and only in positions that
+must be numeric. PanoReady does not truncate, stitch, reverse a digit into a
+letter, or make speculative substitutions such as `S → 5`.
+
+These checks prove syntactic structure only. They do not prove that Canada Post
+currently assigns the postal code or that it belongs to the supplied address.
+
+**Rule sources:**
+
+- [Canada Post — Addressing guidelines: Postal codes](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/postal-codes.page)
+- [Canada Post — Addressing guidelines: Important information](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/important-information.page)
+- [Statistics Canada — Postal Code Conversion File Reference Guide](https://www150.statcan.gc.ca/n1/pub/92-154-g/92-154-g2017001-eng.htm)
+- [PowerSchool Ontario — Student Public Health Unit (STIX) Data Extract](https://ps-compliance.powerschool-docs.com/pssis-on/latest/student-public-health-unit-stix-data-extract)
 
 ---
 
@@ -214,9 +255,11 @@ Field values must not exceed the maximum length for that field.
 | `Unit` | 10 |
 | `City` | 50 |
 | `OEN` | 9 |
-| `PostalCode` | 7 |
 
 **Auto-fix:** No. Values exceeding the limit must be shortened manually.
+
+`PostalCode` is intentionally handled by its dedicated structural rule rather
+than this generic length rule. Invalid postal codes are never auto-truncated.
 
 ---
 
@@ -227,7 +270,9 @@ Field values must not exceed the maximum length for that field.
 
 Fields with leading or trailing whitespace are flagged.
 
-**Affected fields:** `FirstName`, `LastName`, `MiddleName`, `Grade`, `Gender`, `BirthDate`, `OEN`, `PostalCode`
+`PostalCode` is intentionally excluded: its dedicated rule supplies the full
+canonical value so the same input does not also receive a generic whitespace
+issue.
 
 **Auto-fix:** Yes. The suggested fix is the trimmed value (whitespace removed from both ends).
 

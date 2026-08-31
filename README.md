@@ -28,7 +28,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run build        # Production build (webpack)
 npm run start        # Serve the production build
 npm run lint         # Run ESLint
+npm test             # Run unit and validation integration tests
 ```
+
+### Postal-code validation demo
+
+Download the synthetic
+[postal-code validation demo](public/samples/postal-code-validation-demo.stix)
+and upload it through **Validate & Fix** to review canonical values, safe
+separator normalization, O/I/L transcription repairs, and deliberately invalid
+examples. The fixture contains synthetic records only.
 
 ## Custom Validation Rulesets
 
