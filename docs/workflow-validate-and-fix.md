@@ -146,6 +146,9 @@ The Fix screen presents every issue that has either a suggested fix or can accep
 
 - Leave the New Value blank to skip that issue — the original value is preserved.
 - Any non-blank value you type will be applied as-is; ensure it matches the expected format for that field (see [Validation Rules](./validation-rules.md)).
+- Postal-code normalization and numeric-position O/I/L repairs are bulk-safe
+  suggestions. They are staged, audited, applied, and revalidated through this
+  same screen; unresolved postal-code values remain manual issues.
 
 **Action:**
 
