@@ -20,6 +20,12 @@
 
 # production
 /build
+/site
+
+# Python documentation tooling
+/.venv
+__pycache__/
+*.py[cod]
 
 # misc
 .DS_Store

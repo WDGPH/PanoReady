@@ -660,6 +660,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
   const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[] });
 
+  /* eslint-disable react-hooks/set-state-in-effect -- initialize all report filters when the source result changes */
   useEffect(() => {
     const students = session.exportResult?.allStudents ?? [];
     const schoolsSet = new Set<string>();
@@ -686,6 +687,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
     setMinAge(lo);
     setMaxAge(hi);
   }, [session.exportResult]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const customStudents = (session.exportResult?.allStudents ?? []).filter((s) => {
     const age = computeAge(s.BirthDate);
@@ -1614,6 +1616,7 @@ function ValidateRevalidateView({
 }) {
   const [result, setResult] = useState<ValidateSession | null>(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- this intermediate screen computes and stores one revalidation result */
   useEffect(() => {
     const fixedXml = applyValidationFixes(session.originalXml, session.fixes);
     const revalidated = validateXml(fixedXml, session.validationRules);
@@ -1623,6 +1626,7 @@ function ValidateRevalidateView({
       finalXml: fixedXml,
     });
   }, [session]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!result) {
     return (
@@ -1912,6 +1916,7 @@ function ValidateDownloadView({
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
   const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[] });
 
+  /* eslint-disable react-hooks/set-state-in-effect -- initialize all download filters when validation results change */
   useEffect(() => {
     const records = result.records ?? [];
     const schoolsSet = new Set<string>();
@@ -1939,6 +1944,7 @@ function ValidateDownloadView({
     setMinAge(lo);
     setMaxAge(hi);
   }, [result]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const filteredRecords = (result.records ?? []).filter((r) => {
     const sn     = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim() || "(unknown)";
@@ -1952,8 +1958,8 @@ function ValidateDownloadView({
     return true;
   });
 
-  const filteredIds = new Set(filteredRecords.map((r: any) => r.id));
-  const filteredIssues = result.issues.filter((i: any) => {
+  const filteredIds = new Set(filteredRecords.map((r) => r.id));
+  const filteredIssues = result.issues.filter((i) => {
     if (i.recordId && filteredIds.has(i.recordId)) return true;
     const sn = i.schoolNumber || "";
     return selectedSchools.includes(sn || "(unknown)");
@@ -2189,6 +2195,7 @@ export default function App() {
   const [cleaningSummary, setCleaningSummary] = useState<CleaningSummaryEntry[] | null>(null);
 
   // Sync activeRules from localStorage on mount
+  /* eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is available only after the client mounts */
   useEffect(() => { setActiveRules(getActiveRules()); }, []);
 
   const goHome = () => {

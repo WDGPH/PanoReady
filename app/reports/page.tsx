@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   validateXml,
   generateSchoolSummaryCsv,
   generateAgeGroupReportCsv,
   generateIssueReportCsv,
 } from "../../lib/validator";
-import type { RulesProfile } from "../../lib/types";
+import type { RulesProfile, StudentRecord, ValidationIssue } from "../../lib/types";
 import { defaultRules, getActiveRules } from "../../lib/rulesets";
 import RulesetSelector from "../../components/RulesetSelector";
 
@@ -313,8 +313,8 @@ function AgeRangeFilter({
 export default function ReportsPage() {
   const [xml, setXml] = useState("");
   const [activeRules, setActiveRules] = useState<RulesProfile>(defaultRules);
-  const [rawRecords, setRawRecords] = useState<any[] | null>(null);
-  const [rawIssues, setRawIssues] = useState<any[] | null>(null);
+  const [rawRecords, setRawRecords] = useState<StudentRecord[] | null>(null);
+  const [rawIssues, setRawIssues] = useState<ValidationIssue[] | null>(null);
   const [summary, setSummary] = useState<{
     schoolCount?: number;
     studentCount?: number;
@@ -334,6 +334,7 @@ export default function ReportsPage() {
   const [maxAge, setMaxAge] = useState(99);
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
 
+  /* eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is available only after the client mounts */
   useEffect(() => { setActiveRules(getActiveRules()); }, []);
 
   const [options, setOptions] = useState({
@@ -378,6 +379,7 @@ export default function ReportsPage() {
   }
 
   // Derive filter options from records
+  /* eslint-disable react-hooks/set-state-in-effect -- initialize all report filters when records change */
   useEffect(() => {
     if (!rawRecords) return;
     const schoolsSet = new Set<string>();
@@ -414,8 +416,10 @@ export default function ReportsPage() {
     setMinAge(resolvedMin);
     setMaxAge(resolvedMax);
   }, [rawRecords]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Recompute filtered CSVs on any filter change
+  /* eslint-disable react-hooks/set-state-in-effect -- cache generated report content when filters change */
   useEffect(() => {
     if (!rawRecords || !rawIssues) return;
 
@@ -434,8 +438,8 @@ export default function ReportsPage() {
       return true;
     });
 
-    const recordIds = new Set(recs.map((r: any) => r.id));
-    const issues = rawIssues.filter((i: any) => {
+    const recordIds = new Set(recs.map((r) => r.id));
+    const issues = rawIssues.filter((i) => {
       if (i.recordId && recordIds.has(i.recordId)) return true;
       const sn = i.schoolNumber || "";
       return selectedSchools.includes(sn || "(unknown)");
@@ -447,6 +451,7 @@ export default function ReportsPage() {
       issueCsv: generateIssueReportCsv(issues, []),
     });
   }, [rawRecords, rawIssues, selectedSchools, selectedGrades, selectedGenders, minAge, maxAge]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function download(filename: string, content?: string) {
     if (!content) return;
