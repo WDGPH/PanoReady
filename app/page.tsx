@@ -1477,10 +1477,11 @@ function ValidateFixView({
   });
 
   const [onlyFixable, setOnlyFixable] = useState(true);
+  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
 
-  const visibleIssues = onlyFixable
-    ? issues.filter(i => i.autoFixable || i.field)
-    : issues;
+  const visibleIssues = issues
+    .filter(i => !onlyFixable || i.autoFixable || i.field)
+    .filter(i => severityFilter === "all" || i.severity === severityFilter);
 
   const autoFillAll = () => {
     const next: Record<string, string> = { ...pending };
@@ -1547,8 +1548,19 @@ function ValidateFixView({
         Manual fields require you to type a correction — leave blank to skip.
       </div>
 
-      {/* Filter toggle */}
-      <div style={{ marginBottom: 14 }}>
+      {/* Filters */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", marginBottom: 14 }}>
+        <select
+          className="input"
+          value={severityFilter}
+          onChange={e => setSeverityFilter(e.target.value as typeof severityFilter)}
+          style={{ flex: "0 0 140px" }}
+        >
+          <option value="all">All severities</option>
+          <option value="error">Errors only</option>
+          <option value="warning">Warnings only</option>
+          <option value="info">Info only</option>
+        </select>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer" }}>
           <input type="checkbox" checked={onlyFixable} onChange={e => setOnlyFixable(e.target.checked)} />
           Show only editable issues (fields with suggested fixes or manual edits)
