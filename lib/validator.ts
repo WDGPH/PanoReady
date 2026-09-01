@@ -598,6 +598,24 @@ function validRealDate(value: string): boolean {
   return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
 
+const STREET_NUMBER_NON_NAME_WORDS = /^(unit|apt|apartment|suite|ste|basement|bsmt|floor|fl|upper|lower|box|po|rr|rear|front)\b/i;
+
+/**
+ * Real Panorama rejections show StreetNumber overflow is almost always the street name
+ * concatenated onto the number (e.g. "46 Curzon", "97 Lynch") rather than a genuinely long
+ * number. Detects that shape and proposes moving the trailing text into StreetName, but only
+ * when StreetName is empty (so nothing gets silently overwritten) and the trailing text looks
+ * like a name fragment, not another number or a unit/box keyword that landed in the wrong field.
+ */
+function splitStreetNumber(value: string, existingStreetName: string): { streetNumber: string; streetName: string } | undefined {
+  if (existingStreetName.trim()) return undefined;
+  const match = value.match(/^(\d+[A-Za-z]?)[\s-]+(.+)$/);
+  if (!match) return undefined;
+  const [, streetNumber, remainder] = match;
+  if (!/[A-Za-z]/.test(remainder) || STREET_NUMBER_NON_NAME_WORDS.test(remainder)) return undefined;
+  return { streetNumber, streetName: remainder.trim() };
+}
+
 function canonicalPhoneIssue(value: string): string | null {
   if (!/^\d{3}-\d{3}-\d{4}(?:x\d{1,5})?$/.test(value)) return "must use 999-999-9999 with an optional x1–5 digit extension";
   const digits = value.replace(/\D/g, "");
@@ -605,10 +623,18 @@ function canonicalPhoneIssue(value: string): string | null {
   return null;
 }
 
+/**
+ * Trailing "call note" text (e.g. "call 1st", "(Call 1st)", "**1st", "call first", "(cell)")
+ * that registrars append to a phone number. Stripped before digit extraction because an
+ * ordinal like "1st"/"2nd" contains a digit that would otherwise corrupt the phone number.
+ */
+const CALL_NOTE_PATTERN = /[\s\-*/(),.!]*(?:(?:please\s+)?call\b[\s\-*/(),.!]*)?\b(?:1st|first|2nd|second|3rd|third)\b[\s\-*/(),.!]*(?:call\b[\s\-*/(),.!]*)?$|[\s\-*/(),.!]*\bcell\b[\s\-*/(),.!]*$/i;
+
 /** Reformats a raw 10-digit phone number into 999-999-9999; returns undefined if it can't be deterministically fixed. */
 function canonicalPhoneFix(value: string): string | undefined {
-  const extension = value.match(/(?:x|ext\.?|extension)\s*(\d{1,5})\s*$/i)?.[1] ?? "";
-  const withoutExtension = extension ? value.replace(/(?:x|ext\.?|extension)\s*\d{1,5}\s*$/i, "") : value;
+  const withoutNote = value.replace(CALL_NOTE_PATTERN, "");
+  const extension = withoutNote.match(/(?:x|ext\.?|extension|ex)\s*(\d{1,5})\s*$/i)?.[1] ?? "";
+  const withoutExtension = extension ? withoutNote.replace(/(?:x|ext\.?|extension|ex)\s*\d{1,5}\s*$/i, "") : withoutNote;
   let digits = withoutExtension.replace(/\D/g, "");
   if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
   if (digits.length !== 10) return undefined;
@@ -660,7 +686,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
     const school = upload.schools[schoolIndex];
     if (!school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
     else if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
-    if (school.students.length === 0) issue(issues, { severity: "warning", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students.` });
+    if (school.students.length === 0) issue(issues, { severity: "error", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records.` });
     for (let studentIndex = 0; studentIndex < school.students.length; studentIndex++) {
       const student = school.students[studentIndex];
       const fields = flattenCanonicalStudent(student, school);
@@ -704,7 +730,9 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
           const canFix = changed && standardized.length <= limit;
           issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: canFix ? standardized : undefined, autoFixable: canFix });
         } else if (field === "StreetNumber") {
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.` });
+          const split = splitStreetNumber(val, fields.StreetName ?? "");
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `StreetNumber "${val}" exceeds the ${limit}-character limit${split ? "; it looks like the street name is combined with the number" : ""}.`, suggestedFix: split?.streetNumber, autoFixable: !!split });
+          if (split) issue(issues, { ...base, severity: "warning", field: "StreetName", ruleId: "STREET_NUMBER_SPLIT", message: `StreetName appears to be missing "${split.streetName}", currently combined into StreetNumber "${val}".`, suggestedFix: split.streetName, autoFixable: true });
         } else {
           issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
         }
