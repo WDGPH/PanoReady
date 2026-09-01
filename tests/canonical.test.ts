@@ -72,7 +72,7 @@ test("workbook adapter detects alternate sheets and headers and normalizes value
   assert.equal(result.preview.canonicalStudentCount, 1);
   assert.equal(result.preview.diagnostics.filter((finding) => finding.severity === "error").length, 0);
   const imported = result.upload.schools[0].students[0];
-  assert.equal(imported.gender, "X");
+  assert.equal(imported.gender, "Other");
   assert.equal(imported.phone?.number, "519-555-3333");
   assert.equal(imported.guardians[0].name.first, "Ann");
 });
@@ -176,20 +176,41 @@ test("validateXml suggests deterministic fixes for aliasable, oversized, and ref
   assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
 });
 
-test("Gender X and N are accepted, matching the Aug2026 template's official six-value list", () => {
+test("canonical XML Gender only accepts M/F/Unk/Other, matching the real 4-value schema enum", () => {
   const genderXml = (gender: string) => xml().replace("<Gender>F</Gender>", `<Gender>${gender}</Gender>`);
-  for (const gender of ["M", "F", "Unk", "Other", "X", "N"]) {
+  for (const gender of ["M", "F", "Unk", "Other"]) {
     const result = validateXml(genderXml(gender));
     assert.ok(!result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be accepted`);
   }
-  const invalid = validateXml(genderXml("Bogus"));
-  assert.ok(invalid.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"));
+  // X and N are valid choices in the template's data-entry dropdown, but the official
+  // export macro maps both to "Other" before writing XML — a compliant file should never
+  // contain a literal Gender of X or N, so the validator must still reject them.
+  for (const gender of ["X", "N", "Bogus"]) {
+    const result = validateXml(genderXml(gender));
+    assert.ok(result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be rejected`);
+  }
 });
 
-test("standardizeUnit abbreviates 'Top Floor' the same way it does other floor designators", () => {
-  assert.deepEqual(standardizeUnit("Top Floor"), ["TOP", true, false]);
-  assert.deepEqual(standardizeUnit("Top Flo"), ["TOP", true, false]);
-  assert.deepEqual(standardizeUnit("top floor"), ["TOP", true, false]);
+test("Excel import maps Gender x/n to Other, matching the official export macro", () => {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["First Name", "Last Name", "DOB", "Gender"],
+    ["Ada", "Lovelace", "2015-04-12", "x"],
+    ["Bob", "Smith", "2015-04-12", "n"],
+  ]), "Students");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
+    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+  ]), "Submission Details");
+  const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  const result = importWorkbook(bytes, "gender-xn.xlsx");
+  assert.deepEqual(result.upload.schools[0].students.map((s) => s.gender), ["Other", "Other"]);
+});
+
+test("standardizeUnit treats 'Top Floor' as the same real-world unit as 'Upper', not a separate invented code", () => {
+  assert.deepEqual(standardizeUnit("Top Floor"), ["UPPR", true, false]);
+  assert.deepEqual(standardizeUnit("Top Flo"), ["UPPR", true, false]);
+  assert.deepEqual(standardizeUnit("top floor"), ["UPPR", true, false]);
 });
 
 test("standardizeUnit abbreviates 'Upper Un'/'Upper Ap' the same way it already did 'Lower Un'", () => {

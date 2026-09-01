@@ -58,9 +58,8 @@ export function standardizeUnit(text: string): [string, boolean, boolean] {
   if (/^basem/i.test(trimmed)) return ["BSMT", true, false];
   if (/^d\s*lower/i.test(trimmed)) return ["LOWR", true, false];
   if (/^lower\s*(un|ap|fl)/i.test(trimmed)) return ["LOWR", true, false];
-  if (/^upper\s*(lev|un|ap|fl)/i.test(trimmed)) return ["UPPR", true, false];
+  if (/^(upper|top)\s*(lev|un|ap|fl)/i.test(trimmed)) return ["UPPR", true, false];
   if (/^(main\s*flo|mainflo)/i.test(trimmed)) return ["MAIN", true, false];
-  if (/^top\s*flo/i.test(trimmed)) return ["TOP", true, false];
   if (/^second$/i.test(trimmed)) return ["2ND", true, false];
   if (/^2nd\s*fl/i.test(trimmed)) return ["2F", true, false];
   if (/^ground/i.test(trimmed)) return ["GRD", true, false];
