@@ -72,7 +72,7 @@ test("workbook adapter detects alternate sheets and headers and normalizes value
   assert.equal(result.preview.canonicalStudentCount, 1);
   assert.equal(result.preview.diagnostics.filter((finding) => finding.severity === "error").length, 0);
   const imported = result.upload.schools[0].students[0];
-  assert.equal(imported.gender, "Other");
+  assert.equal(imported.gender, "X");
   assert.equal(imported.phone?.number, "519-555-3333");
   assert.equal(imported.guardians[0].name.first, "Ann");
 });
@@ -174,6 +174,16 @@ test("validateXml suggests deterministic fixes for aliasable, oversized, and ref
   assert.equal(byRule.FIELD_LENGTH?.autoFixable, true);
   assert.equal(byRule.PHONE_FORMAT?.suggestedFix, "519-555-3333");
   assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
+});
+
+test("Gender X and N are accepted, matching the Aug2026 template's official six-value list", () => {
+  const genderXml = (gender: string) => xml().replace("<Gender>F</Gender>", `<Gender>${gender}</Gender>`);
+  for (const gender of ["M", "F", "Unk", "Other", "X", "N"]) {
+    const result = validateXml(genderXml(gender));
+    assert.ok(!result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be accepted`);
+  }
+  const invalid = validateXml(genderXml("Bogus"));
+  assert.ok(invalid.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"));
 });
 
 test("standardizeUnit abbreviates 'Top Floor' the same way it does other floor designators", () => {

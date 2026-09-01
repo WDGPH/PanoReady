@@ -675,7 +675,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
   const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
   const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
   const allowedByField: Record<string, string[]> = {
-    Grade: rules.allowedGradeValues, Gender: ["F", "M", "Unk", "Other"], Province: rules.allowedProvinceValues,
+    Grade: rules.allowedGradeValues, Gender: rules.allowedGenderValues, Province: rules.allowedProvinceValues,
     Language: rules.allowedLanguageValues, CountryOfOrigin: rules.allowedCountryValues, StreetType: rules.allowedStreetTypeValues,
     StreetDirection: rules.allowedStreetDirectionValues, GuardianRelationship: rules.allowedRelationshipValues,
     Guardian2Relationship: rules.allowedRelationshipValues, PhoneType: rules.allowedPhoneTypeValues,
