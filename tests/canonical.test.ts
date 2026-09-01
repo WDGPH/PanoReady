@@ -49,11 +49,10 @@ test("validator enforces metadata and every populated controlled field", () => {
   assert.equal(result.gate, "BLOCKED");
 });
 
-test("valid canonical checks require XSD review until the official schema is bundled", () => {
+test("a fully clean canonical file reaches READY with zero issues", () => {
   const result = validateXml(xml());
-  assert.equal(result.issues.filter((finding) => finding.severity === "error").length, 0);
-  assert.equal(result.gate, "REVIEW_REQUIRED");
-  assert.ok(result.issues.some((finding) => finding.ruleId === "XSD_SCHEMA_UNAVAILABLE"));
+  assert.deepEqual(result.issues, []);
+  assert.equal(result.gate, "READY");
 });
 
 test("workbook adapter detects alternate sheets and headers and normalizes values", () => {
@@ -159,6 +158,21 @@ test("a decorative row that only repeats the column headers is skipped, not impo
   assert.equal(result.preview.canonicalStudentCount, 1);
   assert.equal(result.upload.schools[0].students[0].name.first, "Luke");
   assert.ok(result.preview.diagnostics.some((finding) => finding.ruleId === "IMPORT_HEADER_ECHO_ROW"));
+});
+
+test("validateXml suggests deterministic fixes for aliasable, oversized, and reformattable values", () => {
+  const source = xml()
+    .replace("<Gender>F</Gender>", "<Gender>MALE</Gender>")
+    .replace("<Last>Lovelace</Last>", `<Last>${"X".repeat(55)}</Last>`)
+    .replace("519-555-3333", "5195553333");
+  const result = validateXml(source);
+  const byRule = Object.fromEntries(result.issues.map((i) => [i.ruleId, i]));
+  assert.equal(byRule.GENDER_ALLOWED_VALUE?.suggestedFix, "M");
+  assert.equal(byRule.GENDER_ALLOWED_VALUE?.autoFixable, true);
+  assert.equal(byRule.FIELD_LENGTH?.suggestedFix, "X".repeat(50));
+  assert.equal(byRule.FIELD_LENGTH?.autoFixable, true);
+  assert.equal(byRule.PHONE_FORMAT?.suggestedFix, "519-555-3333");
+  assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
 });
 
 test("fixes operate through the canonical model for default-namespace XML", () => {
