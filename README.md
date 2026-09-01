@@ -38,7 +38,9 @@ Download the synthetic
 through **Validate & Fix** to review the same general, postal-code, and
 phone-number cases exercised by the integration tests. It demonstrates safe
 postal and phone normalization, structural failures, placeholder handling, and
-the non-blocking Canadian geographic area-code policy. The fixture contains
+the non-blocking Canadian geographic area-code policy. Its metadata, student,
+and nested guardian phones include canonical extensions, safe common variants,
+and cases that intentionally require manual correction. The fixture contains
 synthetic names and data only.
 
 ## Custom Validation Rulesets
