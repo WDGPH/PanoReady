@@ -8,6 +8,11 @@
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import { standardizeUnit } from "./cleaner";
 import { normalizeCanadianPostalCode, type PostalCodeResult } from "./postalCode";
+import {
+  analyzePhoneNumber,
+  isActiveCanadianGeographicNpa,
+  type PhoneNumberAnalysis,
+} from "./phoneNumber";
 import type {
   ValidationIssue,
   ValidationResult,
@@ -135,67 +140,88 @@ function setTextValue(parent: XmlNode, key: string, value: string) {
   }
 }
 
-// ─── Phone number validation helper ──────────────────────────────────────────
+// ─── Phone-number issue presentation ─────────────────────────────────────────
 
-const VALID_PHONE_RE = /^\d{3}-\d{3}-\d{4}$/;
+type PhoneIssueDetails = {
+  severity: "error" | "warning" | "info";
+  message: string;
+  autoFixable: boolean;
+  suggestedFix?: string;
+  ruleId: string;
+};
 
-function checkPhone(
+function phoneIssueDetails(
   rawPhone: string,
   fieldLabel: string,
-  placeholderPhones: Set<string>
-): { message: string; autoFixable: boolean; suggestedFix?: string } | null {
-  const trimmed = rawPhone.trim();
-
-  // Already in correct format
-  if (VALID_PHONE_RE.test(trimmed)) {
-    const areaCode = trimmed.slice(0, 3);
-    // NANP: area codes cannot start with 0 or 1
-    if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
-      return { message: `${fieldLabel} "${rawPhone}" has an invalid area code (${areaCode}).`, autoFixable: false };
+  placeholderPhones: Set<string>,
+  canadianAreaCodeCheck: "off" | "info" | "warning"
+): PhoneIssueDetails[] {
+  const analysis = analyzePhoneNumber(rawPhone);
+  if (analysis.status === "invalid") {
+    const issues = [invalidPhoneIssue(rawPhone, fieldLabel, analysis)];
+    if (analysis.value && placeholderPhones.has(analysis.value)) {
+      issues.push({
+        severity: "error",
+        message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`,
+        autoFixable: false,
+        ruleId: "PHONE_PLACEHOLDER",
+      });
     }
-    if (placeholderPhones.has(trimmed)) {
-      return { message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`, autoFixable: false };
-    }
-    return null; // valid
+    return issues;
   }
 
-  // Multiple numbers
-  if (/[;\/]/.test(trimmed)) {
-    return { message: `${fieldLabel} "${rawPhone}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, autoFixable: false };
+  const issues: PhoneIssueDetails[] = [];
+  if (analysis.status === "normalized") {
+    issues.push({
+      severity: "error",
+      message: `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`,
+      suggestedFix: analysis.value,
+      autoFixable: true,
+      ruleId: "PHONE_FORMAT",
+    });
   }
-
-  // Letters indicate appended notes, extensions, or other text (e.g., "call 1st", "ex 233", "(cell)")
-  if (/[a-z]/i.test(trimmed)) {
-    return { message: `${fieldLabel} "${rawPhone}" contains non-numeric characters or notes. Enter only the 10-digit number in XXX-XXX-XXXX format.`, autoFixable: false };
+  if (placeholderPhones.has(analysis.value)) {
+    issues.push({
+      severity: "error",
+      message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`,
+      autoFixable: false,
+      ruleId: "PHONE_PLACEHOLDER",
+    });
   }
-
-  // Extract digits and attempt normalization
-  const digits = trimmed.replace(/\D/g, "");
-  let effective = digits;
-
-  // Strip leading country code 1 if exactly 11 digits
-  if (digits.length === 11 && digits.startsWith("1")) {
-    effective = digits.slice(1);
+  if (
+    canadianAreaCodeCheck !== "off" &&
+    !isActiveCanadianGeographicNpa(analysis.npa)
+  ) {
+    issues.push({
+      severity: canadianAreaCodeCheck,
+      message: `Area code ${analysis.npa} is not a currently active Canadian geographic area code. Confirm that this non-Canadian number is intended.`,
+      autoFixable: false,
+      ruleId: "PHONE_CANADIAN_AREA_CODE",
+    });
   }
+  return issues;
+}
 
-  if (effective.length < 10) {
-    return { message: `${fieldLabel} "${rawPhone}" has too few digits (${effective.length}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, autoFixable: false };
+function invalidPhoneIssue(
+  rawPhone: string,
+  fieldLabel: string,
+  analysis: Extract<PhoneNumberAnalysis, { status: "invalid" }>
+): PhoneIssueDetails {
+  const shared = { severity: "error" as const, autoFixable: false };
+  switch (analysis.reason) {
+    case "multiple-numbers":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, ruleId: "PHONE_FORMAT" };
+    case "appended-text":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" contains non-numeric characters or notes. Enter only the 10-digit number in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "too-few-digits":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has too few digits (${analysis.digitCount}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "too-many-digits":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "invalid-npa":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid NANP area code (${analysis.npa}). Its first digit must be 2-9.`, ruleId: "PHONE_NPA_STRUCTURE" };
+    case "invalid-nxx":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid NANP exchange code (${analysis.nxx}). Its first digit must be 2-9.`, ruleId: "PHONE_NXX_STRUCTURE" };
   }
-  if (effective.length > 10) {
-    return { message: `${fieldLabel} "${rawPhone}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, autoFixable: false };
-  }
-
-  const areaCode = effective.slice(0, 3);
-  const formatted = `${effective.slice(0, 3)}-${effective.slice(3, 6)}-${effective.slice(6, 10)}`;
-
-  if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
-    return { message: `${fieldLabel} "${rawPhone}" has an invalid area code (${areaCode}).`, autoFixable: false };
-  }
-  if (placeholderPhones.has(formatted)) {
-    return { message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`, autoFixable: false };
-  }
-
-  return { message: `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`, autoFixable: true, suggestedFix: formatted };
 }
 
 // ─── XML parser (standalone) ──────────────────────────────────────────────────
@@ -306,7 +332,7 @@ export function parseStixXml(xmlText: string): StudentRecord[] {
 
 export function validateXml(
   xmlText: string,
-  rules: RulesProfile = defaultRules
+  rules: RulesProfile = defaultRules as RulesProfile
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const records: StudentRecord[] = [];
@@ -715,17 +741,24 @@ export function validateXml(
         const placeholderPhones = new Set(
           (rules.phoneConfig?.placeholderNumbers ?? []) as string[]
         );
-        const phoneIssue = checkPhone(contactPhone, "ContactPhone", placeholderPhones);
-        if (phoneIssue) {
+        const canadianAreaCodeCheck =
+          rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
+        const phoneIssues = phoneIssueDetails(
+          contactPhone,
+          "ContactPhone",
+          placeholderPhones,
+          canadianAreaCodeCheck
+        );
+        for (const [index, phoneIssue] of phoneIssues.entries()) {
           issues.push({
             ...base,
-            id: `${recordId}-phone`,
-            severity: "error",
+            id: `${recordId}-phone-${index}`,
+            severity: phoneIssue.severity,
             field: "ContactPhone",
             message: phoneIssue.message,
             suggestedFix: phoneIssue.suggestedFix,
             autoFixable: phoneIssue.autoFixable,
-            ruleId: "PHONE_FORMAT",
+            ruleId: phoneIssue.ruleId,
           });
         }
       }

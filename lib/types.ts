@@ -183,7 +183,10 @@ export interface RulesProfile {
   fieldLengths: Record<string, number>;
   dateFields: string[];
   postalCodePattern: string;
-  phoneConfig: { placeholderNumbers: string[] };
+  phoneConfig: {
+    placeholderNumbers: string[];
+    canadianAreaCodeCheck?: "off" | "info" | "warning";
+  };
   gradeAliases: Record<string, string>;
   genderAliases: Record<string, string>;
   duplicateDetection: { checkOen: boolean; checkNameDobSchool: boolean };
