@@ -227,6 +227,48 @@
         </ns1:Address>
       </ns1:Student>
 
+      <!-- Phone-focused cases retained from the former dedicated demo -->
+
+      <!-- Student 12: NPA begins with 1; not auto-fixable -->
+      <ns1:Student>
+        <ns1:Name><ns1:First>One NPA</ns1:First><ns1:Last>Structure</ns1:Last></ns1:Name>
+        <ns1:BirthDate>2014-08-12</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000012</ns1:OEN>
+        <ns1:ContactPhone>119-824-1234</ns1:ContactPhone>
+      </ns1:Student>
+
+      <!-- Student 13: too many phone digits; not auto-fixable -->
+      <ns1:Student>
+        <ns1:Name><ns1:First>Too Many</ns1:First><ns1:Last>Digits</ns1:Last></ns1:Name>
+        <ns1:BirthDate>2014-09-13</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000013</ns1:OEN>
+        <ns1:ContactPhone>519-824-12345</ns1:ContactPhone>
+      </ns1:Student>
+
+      <!-- Student 14: multiple numbers; not auto-fixable -->
+      <ns1:Student>
+        <ns1:Name><ns1:First>Multiple</ns1:First><ns1:Last>Numbers</ns1:Last></ns1:Name>
+        <ns1:BirthDate>2014-10-14</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000014</ns1:OEN>
+        <ns1:ContactPhone>519-824-1234 / 416-555-1234</ns1:ContactPhone>
+      </ns1:Student>
+
+      <!-- Student 15: future Canadian relief NPA; warning only -->
+      <ns1:Student>
+        <ns1:Name><ns1:First>Future Relief</ns1:First><ns1:Last>Policy</ns1:Last></ns1:Name>
+        <ns1:BirthDate>2014-11-15</ns1:BirthDate>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:OEN>500000015</ns1:OEN>
+        <ns1:ContactPhone>851-555-1234</ns1:ContactPhone>
+      </ns1:Student>
+
     </ns1:Students>
   </ns1:School>
 

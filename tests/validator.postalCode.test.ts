@@ -91,30 +91,12 @@ describe("postal-code validator integration", () => {
     expect(result.issues.filter((issue) => issue.field === "PostalCode")).toEqual([]);
   });
 
-  it("keeps the synthetic UI demonstration fixture valid and representative", () => {
-    const fixtureUrl = new URL(
-      "../public/samples/postal-code-validation-demo.stix",
-      import.meta.url
-    );
+  it("preserves the postal-code cases in the canonical test and demo fixture", () => {
+    const fixtureUrl = new URL("../public/samples/stix-validation-demo.stix", import.meta.url);
     const result = validateXml(readFileSync(fixtureUrl, "utf8"));
     const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
 
-    expect(result.studentCount).toBe(15);
-    expect(postalIssues).toHaveLength(14);
-    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_NORMALIZE")).toHaveLength(5);
-    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);
-    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_FORMAT")).toHaveLength(6);
-    expect(result.issues.some((issue) =>
-      issue.field === "PostalCode" && ["WHITESPACE_TRIM", "FIELD_LENGTH"].includes(issue.ruleId)
-    )).toBe(false);
-  });
-
-  it("preserves the postal-code cases in the general validation fixture", () => {
-    const fixtureUrl = new URL("../test_stix_validation.xml", import.meta.url);
-    const result = validateXml(readFileSync(fixtureUrl, "utf8"));
-    const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
-
-    expect(result.studentCount).toBe(13);
+    expect(result.studentCount).toBe(17);
     expect(postalIssues).toHaveLength(10);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_NORMALIZE")).toHaveLength(3);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);
