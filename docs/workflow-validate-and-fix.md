@@ -149,6 +149,12 @@ The Fix screen presents every issue that has either a suggested fix or can accep
 - Postal-code normalization and numeric-position O/I/L repairs are bulk-safe
   suggestions. They are staged, audited, applied, and revalidated through this
   same screen; unresolved postal-code values remain manual issues.
+- Deterministic phone formatting and leading-country-code removal use the same
+  staged and audited path. Unambiguous extension variants (`X`, spaced `x`,
+  `ext`, `ext.`, `extension`, and `#`) are normalized to canonical form: lowercase
+  `x` followed by 1–5 digits. Missing, overlong, or non-numeric extensions,
+  invalid NPA/NXX digits, placeholders, and Canadian geographic area-code
+  policy findings are never auto-fixed.
 
 **Action:**
 
