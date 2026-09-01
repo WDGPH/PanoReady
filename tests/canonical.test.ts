@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { flattenCanonicalStudent, parseCanonicalXml, serializeCanonicalXml } from "../lib/canonical";
 import { importWorkbook } from "../lib/excel";
 import { applyValidationFixes, parseStixXml, validateXml } from "../lib/validator";
+import { standardizeUnit } from "../lib/cleaner";
 
 const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-1234</ContactPhone><ContactEmail>analyst@example.ca</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
 const student = `<Student><Name><First>Ada</First><Last>Lovelace</Last></Name><Gender>F</Gender><BirthDate>2015-04-12</BirthDate><Language>en</Language><CountryOfOrigin>CA</CountryOfOrigin><Guardian><Name><First>Ann</First><Last>Lovelace</Last></Name><Relationship>MOTHER</Relationship><Phone type="MOBILE">519-555-2222</Phone></Guardian><Address><StreetName>Main</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G 1A1</PostalCode></Address><Phone type="HOME">519-555-3333</Phone></Student>`;
@@ -173,6 +174,12 @@ test("validateXml suggests deterministic fixes for aliasable, oversized, and ref
   assert.equal(byRule.FIELD_LENGTH?.autoFixable, true);
   assert.equal(byRule.PHONE_FORMAT?.suggestedFix, "519-555-3333");
   assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
+});
+
+test("standardizeUnit abbreviates 'Top Floor' the same way it does other floor designators", () => {
+  assert.deepEqual(standardizeUnit("Top Floor"), ["TOP", true, false]);
+  assert.deepEqual(standardizeUnit("Top Flo"), ["TOP", true, false]);
+  assert.deepEqual(standardizeUnit("top floor"), ["TOP", true, false]);
 });
 
 test("fixes operate through the canonical model for default-namespace XML", () => {
