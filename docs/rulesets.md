@@ -58,7 +58,7 @@ Every ruleset file must include these fields:
 **Type:** array of strings
 
 ```json
-"requiredFields": ["FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber"]
+"requiredFields": ["FirstName", "LastName", "Gender", "BirthDate", "SchoolNumber"]
 ```
 
 Field names that must be non-empty on every student record. Any element name from the STIX XML schema is valid here. The built-in default requires the five fields above.

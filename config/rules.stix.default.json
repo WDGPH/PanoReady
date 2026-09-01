@@ -1,5 +1,5 @@
 {
-  "requiredFields": ["FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber"],
+  "requiredFields": ["FirstName", "LastName", "Gender", "BirthDate", "SchoolNumber"],
   "allowedGradeValues": [
     "CCL", "CCNL", "CL-CGP", "GR1", "GR10", "GR11", "GR12", "GR13", "GR2", "GR3", "GR4", "GR5", "GR6",
     "GR7", "GR8", "GR9", "JK", "PRE", "SK", "UNIV"

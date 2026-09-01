@@ -2,9 +2,9 @@
 
 ## Status
 
-This is a proposed PanoReady contract, version `1.0.0`. It is based on the inspected official STIX workbook, its VBA source, hidden XML mappings, controlled-value tables, and validation rules.
+This is the PanoReady canonical contract, version `1.0.0`. The canonical workbook adapter, namespace-aware XML parser, layered validation, import diagnostics, deterministic serialization, and count reconciliation are implemented in the browser runtime. It is based on the inspected official STIX workbook, its VBA source, hidden XML mappings, controlled-value tables, and validation rules.
 
-It is not a replacement for the official `studentuploaddata.xsd`. XML-specific requirements in this document remain provisional until they are tested against the official XSD and representative accepted XML files.
+It is not a replacement for the official `studentuploaddata.xsd`. The supplied official workbook references that filename but does not embed the schema or perform XSD validation. PanoReady therefore returns `REVIEW_REQUIRED`, never `READY`, after all implemented checks pass until an authoritative XSD is bundled and representative accepted XML files are tested.
 
 The machine-readable companions are:
 

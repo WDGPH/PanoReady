@@ -7,7 +7,7 @@ import {
   generateAgeGroupReportCsv,
   generateIssueReportCsv,
 } from "../../lib/validator";
-import type { RulesProfile } from "../../lib/types";
+import type { RulesProfile, StudentRecord, ValidationIssue } from "../../lib/types";
 import { defaultRules, getActiveRules } from "../../lib/rulesets";
 import RulesetSelector from "../../components/RulesetSelector";
 
@@ -313,8 +313,8 @@ function AgeRangeFilter({
 export default function ReportsPage() {
   const [xml, setXml] = useState("");
   const [activeRules, setActiveRules] = useState<RulesProfile>(defaultRules);
-  const [rawRecords, setRawRecords] = useState<any[] | null>(null);
-  const [rawIssues, setRawIssues] = useState<any[] | null>(null);
+  const [rawRecords, setRawRecords] = useState<StudentRecord[] | null>(null);
+  const [rawIssues, setRawIssues] = useState<ValidationIssue[] | null>(null);
   const [summary, setSummary] = useState<{
     schoolCount?: number;
     studentCount?: number;
@@ -434,8 +434,8 @@ export default function ReportsPage() {
       return true;
     });
 
-    const recordIds = new Set(recs.map((r: any) => r.id));
-    const issues = rawIssues.filter((i: any) => {
+    const recordIds = new Set(recs.map((r) => r.id));
+    const issues = rawIssues.filter((i) => {
       if (i.recordId && recordIds.has(i.recordId)) return true;
       const sn = i.schoolNumber || "";
       return selectedSchools.includes(sn || "(unknown)");
