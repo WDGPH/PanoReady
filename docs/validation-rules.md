@@ -218,15 +218,16 @@ currently assigns the postal code or that it belongs to the supplied address.
 
 ---
 
-### Rules: `PHONE_FORMAT`, `PHONE_NPA_STRUCTURE`, `PHONE_NXX_STRUCTURE`, `PHONE_PLACEHOLDER`
+### Rules: `PHONE_FORMAT`, `PHONE_EXTENSION_NORMALIZE`, `PHONE_EXTENSION_FORMAT`, `PHONE_NPA_STRUCTURE`, `PHONE_NXX_STRUCTURE`, `PHONE_PLACEHOLDER`
 
 **Severity:** error
-**Field:** `ContactPhone`
+**Fields:** metadata `ContactPhone`, student `Phone`, and each guardian `Phone`
 
 The built-in phone rule expects the canonical North American Numbering Plan
-(NANP) form `NPA-NXX-XXXX`. Both the area code (`NPA`) and central-office or
-exchange code (`NXX`) have the form `NXX`, where `N` is a digit from `2` through
-`9` and each `X` is a digit from `0` through `9`.
+(NANP) form `NPA-NXX-XXXX`, optionally followed immediately by a lowercase `x`
+and an extension of 1–5 digits: `NPA-NXX-XXXXx12345`. Both the area code (`NPA`)
+and central-office or exchange code (`NXX`) have the form `NXX`, where `N` is a
+digit from `2` through `9` and each `X` is a digit from `0` through `9`.
 
 For example, `519-824-1234` is structurally valid. `019-824-1234` has an
 invalid NPA, and `519-124-1234` has an invalid NXX. PanoReady never guesses a
@@ -235,13 +236,22 @@ replacement digit for either structural failure.
 Common numeric presentation variants are interpreted deterministically. Ten
 digits, parentheses and spaces, and an optional leading NANP country code `1`
 (including `+1`) can be normalized to `XXX-XXX-XXXX`. The resulting suggestion
-uses the existing apply-and-revalidate workflow. Too few or too many digits,
-appended text, extensions, and multiple numbers remain manual errors. Numbers
+uses the existing apply-and-revalidate workflow. Common unambiguous extension
+markers—uppercase `X`, spaced `x`, `ext`, `ext.`, `extension`, and `#`—are
+similarly normalized. For example, `519-824-1234 ext. 12`
+becomes `519-824-1234x12`.
+
+An extension marker with no digits, more than five digits, non-numeric extension
+text, too few or too many base-number digits, appended notes, and multiple
+numbers require manual correction. PanoReady does not guess or truncate those
+values. Numbers
 listed in `phoneConfig.placeholderNumbers` are also errors; a placeholder may
 receive both the applicable structural issue and the placeholder issue.
 
-**Auto-fix:** Formatting only. NPA/NXX structural failures and placeholders are
-not auto-fixable.
+**Auto-fix:** Base-number formatting and unambiguous extension-marker
+normalization only. Missing, overlong, or non-numeric extensions, NPA/NXX
+structural failures, multiple numbers, appended notes, and placeholders are not
+auto-fixable.
 
 **Rule sources:**
 
@@ -254,7 +264,7 @@ not auto-fixable.
 ### Rule: `PHONE_CANADIAN_AREA_CODE`
 
 **Severity:** off, info, or warning
-**Field:** `ContactPhone`
+**Fields:** metadata `ContactPhone`, student `Phone`, and each guardian `Phone`
 
 After a number passes NANP structural validation, this optional policy rule
 checks whether its NPA is a currently active Canadian **geographic** area code.
