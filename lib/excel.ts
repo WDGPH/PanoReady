@@ -159,11 +159,10 @@ function diagnostic(id: string, severity: "error" | "warning" | "info", message:
 
 function canonicalValue(field: CanonicalField | "FullUpload", raw: string, lookups: Record<string, Lookup>, diagnostics: ValidationIssue[], location: string): string {
   if (!raw) return "";
-  if (field === "Gender" && ["x", "n"].includes(raw.trim().toLowerCase())) return "Other";
   const group = GROUP_BY_FIELD[field];
   if (!group) return raw.trim();
   const value = lookups[normalizeLabel(group)]?.get(normalizeLabel(raw));
-  if (value) return field === "Gender" && ["X", "N"].includes(value.toUpperCase()) ? "Other" : value;
+  if (value) return value;
   diagnostics.push(diagnostic(`import-controlled-${location}-${field}`, "error", `${field} value "${raw}" is not in the official controlled-value list.`, "IMPORT_CONTROLLED_VALUE", location, field));
   return raw.trim();
 }
