@@ -277,7 +277,7 @@ export type ValidationResult = {
   xsdValidated?: boolean;
 };
 
-export type ImportMappingStatus = "MAPPED" | "AMBIGUOUS" | "DUPLICATE" | "UNMAPPED";
+export type ImportMappingStatus = "MAPPED" | "AMBIGUOUS" | "DUPLICATE" | "UNMAPPED" | "IGNORED";
 
 export type ImportColumnMapping = {
   column: number;

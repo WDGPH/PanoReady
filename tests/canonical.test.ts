@@ -113,6 +113,54 @@ test("cross-school OEN and name+DOB matches warn about dual enrollment instead o
   assert.equal(result.gate, "REVIEW_REQUIRED");
 });
 
+test("column overrides resolve unmapped and duplicate columns that would otherwise block import", () => {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["First Name", "Last Name", "DOB", "Gender", "Notes", "Phone", "Phone Number"],
+    ["Ada", "Lovelace", "2015-04-12", "F", "stray column", "519-555-3333", "519-555-4444"],
+  ]), "Students");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
+    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+  ]), "Submission Details");
+  const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+
+  const blocked = importWorkbook(bytes, "unresolved.xlsx");
+  const blockedRuleIds = blocked.preview.diagnostics.filter((finding) => finding.severity === "error").map((finding) => finding.ruleId);
+  assert.ok(blockedRuleIds.includes("IMPORT_UNMAPPED_COLUMN"));
+  assert.ok(blockedRuleIds.includes("IMPORT_DUPLICATE_COLUMN"));
+
+  const notesColumn = blocked.preview.columns.find((c) => c.sourceHeader === "Notes")!.column;
+  const phoneNumberColumn = blocked.preview.columns.find((c) => c.sourceHeader === "Phone Number")!.column;
+  const resolved = importWorkbook(bytes, "resolved.xlsx", undefined, { [notesColumn]: "IGNORE", [phoneNumberColumn]: "IGNORE" });
+  assert.equal(resolved.preview.diagnostics.filter((finding) => finding.severity === "error").length, 0);
+  const statuses = Object.fromEntries(resolved.preview.columns.map((c) => [c.sourceHeader, c.status]));
+  assert.equal(statuses["Notes"], "IGNORED");
+  assert.equal(statuses["Phone Number"], "IGNORED");
+  assert.equal(statuses["Phone"], "MAPPED");
+  assert.equal(resolved.upload.schools[0].students[0].phone?.number, "519-555-3333");
+});
+
+test("a decorative row that only repeats the column headers is skipped, not imported as a student", () => {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["Field", "OEN", "First Name", "Last Name", "DOB", "Gender"],
+    ["Required", "", "Y", "Y", "Y", "Y"],
+    // Header-echo row: leading cell blank, every other populated cell restates its header.
+    ["", "OEN", "First Name", "Last Name", "", ""],
+    ["", "123456789", "Luke", "Ball", "2015-04-12", "M"],
+  ]), "Students");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
+    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+  ]), "Submission Details");
+  const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  const result = importWorkbook(bytes, "echo-row.xlsx", undefined, { 1: "IGNORE" });
+  assert.equal(result.preview.canonicalStudentCount, 1);
+  assert.equal(result.upload.schools[0].students[0].name.first, "Luke");
+  assert.ok(result.preview.diagnostics.some((finding) => finding.ruleId === "IMPORT_HEADER_ECHO_ROW"));
+});
+
 test("fixes operate through the canonical model for default-namespace XML", () => {
   const records = parseStixXml(xml());
   assert.equal(records[0].fields.FirstName, "Ada");
