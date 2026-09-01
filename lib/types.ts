@@ -183,7 +183,10 @@ export interface RulesProfile {
   fieldLengths: Record<string, number>;
   dateFields: string[];
   postalCodePattern: string;
-  phoneConfig: { placeholderNumbers: string[] };
+  phoneConfig: {
+    placeholderNumbers: string[];
+    canadianAreaCodeCheck?: "off" | "info" | "warning";
+  };
   gradeAliases: Record<string, string>;
   genderAliases: Record<string, string>;
   duplicateDetection: { checkOen: boolean; checkNameDobSchool: boolean };
@@ -232,6 +235,8 @@ export type ValidationIssue = {
   schoolNumber?: string;
   studentName?: string;
   field?: string;
+  /** Source value for issues outside a student record, such as file metadata. */
+  currentValue?: string;
   message: string;
   suggestedFix?: string;
   autoFixable: boolean;
