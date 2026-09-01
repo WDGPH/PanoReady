@@ -1363,7 +1363,7 @@ function ValidateIssuesView({
               <tbody>
                 {filtered.map(issue => {
                   const record = initialResult.records.find(r => r.id === issue.recordId);
-                  const currentValue = issue.field && record ? (record.fields[issue.field] ?? "") : "";
+                  const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                   return (
                     <tr key={issue.id}>
                       <td><SeverityBadge severity={issue.severity} /></td>
@@ -1470,8 +1470,8 @@ function ValidateFixView({
       if (newValue === undefined || newValue === "") continue;
       if (!issue.recordId || !issue.field) continue;
       const record = records.find(r => r.id === issue.recordId);
-      if (!record) continue;
-      const oldValue = record.fields[issue.field] ?? "";
+      const oldValue = issue.currentValue ?? (record ? (record.fields[issue.field] ?? "") : "");
+      if (!record && issue.currentValue === undefined) continue;
       fixes.push({
         issueId: issue.id,
         recordId: issue.recordId,
@@ -1539,7 +1539,7 @@ function ValidateFixView({
             <tbody>
               {visibleIssues.map(issue => {
                 const record = records.find(r => r.id === issue.recordId);
-                const currentValue = issue.field && record ? (record.fields[issue.field] ?? "") : "";
+                const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                 const pendingVal = pending[issue.id] ?? "";
                 return (
                   <tr key={issue.id} style={{ opacity: !issue.field ? 0.5 : 1 }}>

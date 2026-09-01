@@ -5,6 +5,8 @@
  * NPAs: https://cnac.ca/npa_codes/npa_codes.htm
  * NANPA defines central-office codes as NXX, with N=2-9 and X=0-9:
  * https://www.nanpa.com/index.php/numbering/co-codesthousands-blocks
+ * Accepted extensions follow the NANP base number as a lowercase x and 1-5
+ * digits.
  *
  * The Canadian geographic NPA set below was verified 2026-09-01 against CNAC's
  * current CO Code Status list and relief notices. It includes only geographic
@@ -28,22 +30,29 @@ export type PhoneNumberInvalidReason =
   | "too-few-digits"
   | "too-many-digits"
   | "invalid-npa"
-  | "invalid-nxx";
+  | "invalid-nxx"
+  | "extension-missing"
+  | "extension-too-long"
+  | "extension-invalid";
 
 export type PhoneNumberAnalysis =
   | {
       status: "valid" | "normalized";
       value: string;
+      baseValue: string;
       npa: string;
       nxx: string;
+      extension?: string;
     }
   | {
       status: "invalid";
       reason: PhoneNumberInvalidReason;
       digitCount?: number;
       value?: string;
+      baseValue?: string;
       npa?: string;
       nxx?: string;
+      extension?: string;
     };
 
 /** Parse supported numeric formatting and enforce NANP NPA-NXX-XXXX structure. */
@@ -53,11 +62,33 @@ export function analyzePhoneNumber(raw: string): PhoneNumberAnalysis {
   if (/[;\/]/.test(trimmed)) {
     return { status: "invalid", reason: "multiple-numbers" };
   }
-  if (/[a-z]/i.test(trimmed)) {
+
+  const missingExtension = trimmed.match(/(?:\b(?:ext(?:ension)?\.?)|x|#)\s*$/i);
+  if (missingExtension) {
+    return { status: "invalid", reason: "extension-missing" };
+  }
+
+  const extensionMatch = trimmed.match(
+    /\s*(?:x|ext(?:ension)?\.?|#)\s*([0-9]+)\s*$/i
+  );
+  let baseInput = trimmed;
+  let extension: string | undefined;
+  if (extensionMatch) {
+    extension = extensionMatch[1];
+    baseInput = trimmed.slice(0, extensionMatch.index).trim();
+    if (extension.length > 5) {
+      return { status: "invalid", reason: "extension-too-long", extension };
+    }
+    if (/(?:\b(?:ext(?:ension)?\.?)|x|#)/i.test(baseInput)) {
+      return { status: "invalid", reason: "extension-invalid", extension };
+    }
+  } else if (/(?:\b(?:ext(?:ension)?\.?)|x|#)/i.test(trimmed)) {
+    return { status: "invalid", reason: "extension-invalid" };
+  } else if (/[a-z]/i.test(trimmed)) {
     return { status: "invalid", reason: "appended-text" };
   }
 
-  const digits = trimmed.replace(/\D/g, "");
+  const digits = baseInput.replace(/\D/g, "");
   const effective = digits.length === 11 && digits.startsWith("1")
     ? digits.slice(1)
     : digits;
@@ -71,15 +102,23 @@ export function analyzePhoneNumber(raw: string): PhoneNumberAnalysis {
 
   const npa = effective.slice(0, 3);
   const nxx = effective.slice(3, 6);
-  const value = `${npa}-${nxx}-${effective.slice(6)}`;
+  const baseValue = `${npa}-${nxx}-${effective.slice(6)}`;
+  const value = extension ? `${baseValue}x${extension}` : baseValue;
   if (!/^[2-9]\d{2}$/.test(npa)) {
-    return { status: "invalid", reason: "invalid-npa", value, npa, nxx };
+    return { status: "invalid", reason: "invalid-npa", value, baseValue, npa, nxx, extension };
   }
   if (!/^[2-9]\d{2}$/.test(nxx)) {
-    return { status: "invalid", reason: "invalid-nxx", value, npa, nxx };
+    return { status: "invalid", reason: "invalid-nxx", value, baseValue, npa, nxx, extension };
   }
 
-  return { status: raw === value ? "valid" : "normalized", value, npa, nxx };
+  return {
+    status: raw === value ? "valid" : "normalized",
+    value,
+    baseValue,
+    npa,
+    nxx,
+    ...(extension ? { extension } : {}),
+  };
 }
 
 /** Return whether an NPA was an active Canadian geographic area code on the verification date above. */

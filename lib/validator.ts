@@ -159,7 +159,7 @@ function phoneIssueDetails(
   const analysis = analyzePhoneNumber(rawPhone);
   if (analysis.status === "invalid") {
     const issues = [invalidPhoneIssue(rawPhone, fieldLabel, analysis)];
-    if (analysis.value && placeholderPhones.has(analysis.value)) {
+    if (analysis.baseValue && placeholderPhones.has(analysis.baseValue)) {
       issues.push({
         severity: "error",
         message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`,
@@ -172,15 +172,18 @@ function phoneIssueDetails(
 
   const issues: PhoneIssueDetails[] = [];
   if (analysis.status === "normalized") {
+    const hasExtension = analysis.extension !== undefined;
     issues.push({
       severity: "error",
-      message: `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`,
+      message: hasExtension
+        ? `${fieldLabel} "${rawPhone}" can be safely normalized to "${analysis.value}" (lowercase x followed by 1-5 digits).`
+        : `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`,
       suggestedFix: analysis.value,
       autoFixable: true,
-      ruleId: "PHONE_FORMAT",
+      ruleId: hasExtension ? "PHONE_EXTENSION_NORMALIZE" : "PHONE_FORMAT",
     });
   }
-  if (placeholderPhones.has(analysis.value)) {
+  if (placeholderPhones.has(analysis.baseValue)) {
     issues.push({
       severity: "error",
       message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`,
@@ -212,7 +215,7 @@ function invalidPhoneIssue(
     case "multiple-numbers":
       return { ...shared, message: `${fieldLabel} "${rawPhone}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, ruleId: "PHONE_FORMAT" };
     case "appended-text":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" contains non-numeric characters or notes. Enter only the 10-digit number in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" contains unrecognized text or notes. Enter one phone number, optionally followed by lowercase x and 1-5 extension digits.`, ruleId: "PHONE_FORMAT" };
     case "too-few-digits":
       return { ...shared, message: `${fieldLabel} "${rawPhone}" has too few digits (${analysis.digitCount}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
     case "too-many-digits":
@@ -221,6 +224,12 @@ function invalidPhoneIssue(
       return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid NANP area code (${analysis.npa}). Its first digit must be 2-9.`, ruleId: "PHONE_NPA_STRUCTURE" };
     case "invalid-nxx":
       return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid NANP exchange code (${analysis.nxx}). Its first digit must be 2-9.`, ruleId: "PHONE_NXX_STRUCTURE" };
+    case "extension-missing":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an extension marker but no extension. Enter lowercase x followed by 1-5 digits, or remove the marker.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+    case "extension-too-long":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an extension longer than the maximum of 5 digits. Confirm and enter 1-5 digits after lowercase x.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+    case "extension-invalid":
+      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid extension. Use lowercase x followed by 1-5 digits.`, ruleId: "PHONE_EXTENSION_FORMAT" };
   }
 }
 
@@ -278,6 +287,14 @@ export function parseStixXml(xmlText: string): StudentRecord[] {
       const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
       const aliasNode = (s["ns1:AliasName"] ?? {}) as XmlNode;
       const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
+      const phoneNode = (s["ns1:Phone"] ?? {}) as XmlNode;
+      const guardians = ensureArray(s["ns1:Guardian"] as XmlNode | XmlNode[]);
+      const guardian1 = (guardians[0] ?? {}) as XmlNode;
+      const guardian2 = (guardians[1] ?? {}) as XmlNode;
+      const guardian1Name = (guardian1["ns1:Name"] ?? {}) as XmlNode;
+      const guardian2Name = (guardian2["ns1:Name"] ?? {}) as XmlNode;
+      const guardian1Phone = (guardian1["ns1:Phone"] ?? {}) as XmlNode;
+      const guardian2Phone = (guardian2["ns1:Phone"] ?? {}) as XmlNode;
 
       const fields: Record<string, string> = {
         SchoolName:          str(school["ns1:Name"]),
@@ -293,22 +310,22 @@ export function parseStixXml(xmlText: string): StudentRecord[] {
         Gender:              str(s["ns1:Gender"]),
         OEN:                 str(s["ns1:OEN"]),
         Language:            str(s["ns1:Language"]),
-        ContactPhone:        str(s["ns1:ContactPhone"]),
+        Phone:               str(phoneNode),
         StreetType:          str(addrNode["ns1:StreetType"]),
         StreetDirection:     str(s["ns1:StreetDirection"]),
         RuralRoute:          str(s["ns1:RuralRoute"]),
         PoBoxNumber:         str(s["ns1:PoBoxNumber"]),
-        PhoneType:           str(s["ns1:PhoneType"]),
-        GuardianFirstName:   str(s["ns1:GuardianFirstName"]),
-        GuardianLastName:    str(s["ns1:GuardianLastName"]),
-        GuardianRelationship: str(s["ns1:GuardianRelationship"]),
-        GuardianPhoneNumber: str(s["ns1:GuardianPhoneNumber"]),
-        GuardianPhoneType:   str(s["ns1:GuardianPhoneType"]),
-        Guardian2FirstName:  str(s["ns1:Guardian2FirstName"]),
-        Guardian2LastName:   str(s["ns1:Guardian2LastName"]),
-        Guardian2Relationship: str(s["ns1:Guardian2Relationship"]),
-        Guardian2PhoneNumber: str(s["ns1:Guardian2PhoneNumber"]),
-        Guardian2PhoneType:  str(s["ns1:Guardian2PhoneType"]),
+        PhoneType:           str(phoneNode["@_type"]),
+        GuardianFirstName:   str(guardian1Name["ns1:First"]),
+        GuardianLastName:    str(guardian1Name["ns1:Last"]),
+        GuardianRelationship: str(guardian1["ns1:Relationship"]),
+        GuardianPhoneNumber: str(guardian1Phone),
+        GuardianPhoneType:   str(guardian1Phone["@_type"]),
+        Guardian2FirstName:  str(guardian2Name["ns1:First"]),
+        Guardian2LastName:   str(guardian2Name["ns1:Last"]),
+        Guardian2Relationship: str(guardian2["ns1:Relationship"]),
+        Guardian2PhoneNumber: str(guardian2Phone),
+        Guardian2PhoneType:  str(guardian2Phone["@_type"]),
         City:                str(addrNode["ns1:City"]),
         Province:            str(addrNode["ns1:Province"]),
         PostalCode:          str(addrNode["ns1:PostalCode"]),
@@ -389,6 +406,36 @@ export function validateXml(
   // Alias lookups
   const gradeAliases = rules.gradeAliases as Record<string, string>;
   const genderAliases = rules.genderAliases as Record<string, string>;
+  const placeholderPhones = new Set(
+    (rules.phoneConfig?.placeholderNumbers ?? []) as string[]
+  );
+  const canadianAreaCodeCheck =
+    rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
+
+  // File-level, student, and guardian phones share the same number rules.
+  const metadataNode = (root["ns1:Metadata"] ?? {}) as XmlNode;
+  const metadataPhone = str(metadataNode["ns1:ContactPhone"]);
+  if (metadataPhone) {
+    for (const [index, phoneIssue] of phoneIssueDetails(
+      metadataPhone,
+      "Metadata ContactPhone",
+      placeholderPhones,
+      canadianAreaCodeCheck
+    ).entries()) {
+      issues.push({
+        id: `metadata-phone-${index}`,
+        recordId: "metadata",
+        studentName: "File metadata",
+        field: "MetadataContactPhone",
+        currentValue: metadataPhone,
+        severity: phoneIssue.severity,
+        message: phoneIssue.message,
+        suggestedFix: phoneIssue.suggestedFix,
+        autoFixable: phoneIssue.autoFixable,
+        ruleId: phoneIssue.ruleId,
+      });
+    }
+  }
 
   let totalStudents = 0;
   const seenOens = new Map<string, string>();
@@ -433,6 +480,14 @@ export function validateXml(
       const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
       const aliasNode = (s["ns1:AliasName"] ?? {}) as XmlNode;
       const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
+      const phoneNode = (s["ns1:Phone"] ?? {}) as XmlNode;
+      const guardians = ensureArray(s["ns1:Guardian"] as XmlNode | XmlNode[]);
+      const guardian1 = (guardians[0] ?? {}) as XmlNode;
+      const guardian2 = (guardians[1] ?? {}) as XmlNode;
+      const guardian1Name = (guardian1["ns1:Name"] ?? {}) as XmlNode;
+      const guardian2Name = (guardian2["ns1:Name"] ?? {}) as XmlNode;
+      const guardian1PhoneNode = (guardian1["ns1:Phone"] ?? {}) as XmlNode;
+      const guardian2PhoneNode = (guardian2["ns1:Phone"] ?? {}) as XmlNode;
 
       const firstName = str(nameNode["ns1:First"]);
       const middleName = str(nameNode["ns1:Middle"]);
@@ -445,7 +500,9 @@ export function validateXml(
       const gender = str(s["ns1:Gender"]);
       const oen = str(s["ns1:OEN"]);
       const language = str(s["ns1:Language"]);
-      const contactPhone = str(s["ns1:ContactPhone"]);
+      const phone = str(phoneNode);
+      const guardianPhone = str(guardian1PhoneNode);
+      const guardian2Phone = str(guardian2PhoneNode);
       const city = str(addrNode["ns1:City"]);
       const province = str(addrNode["ns1:Province"]);
       const postalCode = str(addrNode["ns1:PostalCode"]);
@@ -473,7 +530,18 @@ export function validateXml(
         Gender: gender,
         OEN: oen,
         Language: language,
-        ContactPhone: contactPhone,
+        Phone: phone,
+        PhoneType: str(phoneNode["@_type"]),
+        GuardianFirstName: str(guardian1Name["ns1:First"]),
+        GuardianLastName: str(guardian1Name["ns1:Last"]),
+        GuardianRelationship: str(guardian1["ns1:Relationship"]),
+        GuardianPhoneNumber: guardianPhone,
+        GuardianPhoneType: str(guardian1PhoneNode["@_type"]),
+        Guardian2FirstName: str(guardian2Name["ns1:First"]),
+        Guardian2LastName: str(guardian2Name["ns1:Last"]),
+        Guardian2Relationship: str(guardian2["ns1:Relationship"]),
+        Guardian2PhoneNumber: guardian2Phone,
+        Guardian2PhoneType: str(guardian2PhoneNode["@_type"]),
         City: city,
         Province: province,
         PostalCode: postalCode,
@@ -736,25 +804,26 @@ export function validateXml(
         }
       }
 
-      // 13. Phone number format
-      if (contactPhone) {
-        const placeholderPhones = new Set(
-          (rules.phoneConfig?.placeholderNumbers ?? []) as string[]
-        );
-        const canadianAreaCodeCheck =
-          rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
+      // 13. Phone-number format at every student-level phone location.
+      const phones = [
+        { value: phone, field: "Phone", label: "Student Phone" },
+        { value: guardianPhone, field: "GuardianPhoneNumber", label: "Guardian 1 Phone" },
+        { value: guardian2Phone, field: "Guardian2PhoneNumber", label: "Guardian 2 Phone" },
+      ];
+      for (const phoneField of phones) {
+        if (!phoneField.value) continue;
         const phoneIssues = phoneIssueDetails(
-          contactPhone,
-          "ContactPhone",
+          phoneField.value,
+          phoneField.label,
           placeholderPhones,
           canadianAreaCodeCheck
         );
         for (const [index, phoneIssue] of phoneIssues.entries()) {
           issues.push({
             ...base,
-            id: `${recordId}-phone-${index}`,
+            id: `${recordId}-${phoneField.field}-phone-${index}`,
             severity: phoneIssue.severity,
-            field: "ContactPhone",
+            field: phoneField.field,
             message: phoneIssue.message,
             suggestedFix: phoneIssue.suggestedFix,
             autoFixable: phoneIssue.autoFixable,
@@ -784,7 +853,7 @@ export function validateXml(
  * Field-name → XML path within a student node.
  * Name sub-fields live under ns1:Name, address sub-fields under ns1:Address.
  */
-const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct" | "school"; tag: string }> = {
+const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct" | "school" | "guardian1" | "guardian2"; tag: string }> = {
   SchoolName:         { parent: "school", tag: "ns1:Name" },
   SchoolNumber:       { parent: "school", tag: "ns1:SchoolNumber" },
   FirstName:          { parent: "name",   tag: "ns1:First" },
@@ -799,7 +868,7 @@ const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct
   OEN:                { parent: "direct", tag: "ns1:OEN" },
   Language:           { parent: "direct", tag: "ns1:Language" },
   Class:              { parent: "direct", tag: "ns1:Class" },
-  ContactPhone:       { parent: "direct", tag: "ns1:ContactPhone" },
+  Phone:              { parent: "direct", tag: "ns1:Phone" },
   City:               { parent: "addr",   tag: "ns1:City" },
   Province:           { parent: "addr",   tag: "ns1:Province" },
   PostalCode:         { parent: "addr",   tag: "ns1:PostalCode" },
@@ -814,12 +883,12 @@ const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct
   GuardianFirstName:  { parent: "direct", tag: "ns1:GuardianFirstName" },
   GuardianLastName:   { parent: "direct", tag: "ns1:GuardianLastName" },
   GuardianRelationship: { parent: "direct", tag: "ns1:GuardianRelationship" },
-  GuardianPhoneNumber: { parent: "direct", tag: "ns1:GuardianPhoneNumber" },
+  GuardianPhoneNumber: { parent: "guardian1", tag: "ns1:Phone" },
   GuardianPhoneType:  { parent: "direct", tag: "ns1:GuardianPhoneType" },
   Guardian2FirstName: { parent: "direct", tag: "ns1:Guardian2FirstName" },
   Guardian2LastName:  { parent: "direct", tag: "ns1:Guardian2LastName" },
   Guardian2Relationship: { parent: "direct", tag: "ns1:Guardian2Relationship" },
-  Guardian2PhoneNumber: { parent: "direct", tag: "ns1:Guardian2PhoneNumber" },
+  Guardian2PhoneNumber: { parent: "guardian2", tag: "ns1:Phone" },
   Guardian2PhoneType:  { parent: "direct", tag: "ns1:Guardian2PhoneType" },
   Unit:               { parent: "addr",   tag: "ns1:Unit" },
 };
@@ -842,6 +911,10 @@ function applyFieldFix(studentNode: XmlNode, schoolNode: XmlNode, field: string,
     const addrNode = (studentNode["ns1:Address"] ?? {}) as XmlNode;
     studentNode["ns1:Address"] = addrNode;
     setTextValue(addrNode, mapping.tag, value);
+  } else if (mapping.parent === "guardian1" || mapping.parent === "guardian2") {
+    const guardians = ensureArray(studentNode["ns1:Guardian"] as XmlNode | XmlNode[]);
+    const guardian = guardians[mapping.parent === "guardian1" ? 0 : 1];
+    if (guardian) setTextValue(guardian, mapping.tag, value);
   } else {
     setTextValue(studentNode, mapping.tag, value);
   }
@@ -880,6 +953,16 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   const schools = ensureArray(root["ns1:School"] as XmlNode | XmlNode[]);
 
   for (const [recordId, recordFixes] of byRecord) {
+    if (recordId === "metadata") {
+      const metadata = (root["ns1:Metadata"] ?? {}) as XmlNode;
+      root["ns1:Metadata"] = metadata;
+      for (const fix of recordFixes) {
+        if (fix.field === "MetadataContactPhone") {
+          setTextValue(metadata, "ns1:ContactPhone", fix.newValue);
+        }
+      }
+      continue;
+    }
     const coords = decodeRecordId(recordId);
     if (!coords) continue;
     const school = schools[coords.si];
