@@ -115,6 +115,15 @@ describe("phone-number validator integration", () => {
     expect(result.gate).toBe("READY");
   });
 
+  it("retains the previous off behavior when a legacy ruleset omits the policy setting", () => {
+    const legacyRules = structuredClone(defaultRules);
+    delete legacyRules.phoneConfig.canadianAreaCodeCheck;
+    const result = validateXml(stixWithPhones(["212-555-1234"]), legacyRules);
+
+    expect(result.issues.filter((issue) => issue.field === "ContactPhone")).toEqual([]);
+    expect(result.gate).toBe("READY");
+  });
+
   it("distinguishes active Canadian geographic NPAs from future and non-geographic resources", () => {
     const result = validateXml(stixWithPhones([
       "519-824-1234",

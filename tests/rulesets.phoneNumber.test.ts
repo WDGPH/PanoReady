@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import defaultRulesJson from "../config/rules.stix.default.json";
 import type { CustomRuleset, RulesProfile } from "../lib/types";
-import { validateRulesetSchema } from "../lib/rulesets";
+import { importRulesetFromJson, validateRulesetSchema } from "../lib/rulesets";
 
 function customRuleset(rules: RulesProfile): CustomRuleset {
   return {
@@ -22,7 +22,8 @@ describe("phone ruleset schema", () => {
   it("accepts a legacy custom ruleset without the policy property", () => {
     const rules = structuredClone(defaultRulesJson) as RulesProfile;
     delete rules.phoneConfig.canadianAreaCodeCheck;
-    expect(validateRulesetSchema(customRuleset(rules)).rules.phoneConfig).toEqual({
+    const imported = importRulesetFromJson(JSON.stringify(customRuleset(rules)));
+    expect(imported.rules.phoneConfig).toEqual({
       placeholderNumbers: ["519-000-0000", "000-000-0000"],
     });
   });
