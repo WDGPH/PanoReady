@@ -32,13 +32,14 @@ import type {
   ValidateSession, ValidationIssue, AppliedFix,
   ValidationSeverity, RulesProfile, StixComparison,
   StudentRecord, CleaningProfile, CleaningSummaryEntry,
+  ImportPreview,
 } from "@/lib/types";
 import { defaultRules, getActiveRules, getActiveCleaning, getActiveRulesetId, listCustomRulesets, saveCustomRuleset, BUILTIN_ID } from "@/lib/rulesets";
 import RulesetSelector from "@/components/RulesetSelector";
 import CleaningView from "@/components/CleaningView";
 import CleaningSummaryView from "@/components/CleaningSummaryView";
 import * as XLSX from "xlsx";
-import { xlsmMetadata, xlsmToStixXml } from "@/lib/excel";
+import { importWorkbook, xlsmMetadata } from "@/lib/excel";
 import type { XlsmMetadata } from "@/lib/excel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ function SeverityBadge({ severity }: { severity: ValidationSeverity }) {
 
 function GateBadge({ gate }: { gate: string }) {
   const isReady = gate === "READY";
-  const isPending = gate === "PENDING";
+  const isPending = gate === "PENDING" || gate === "REVIEW_REQUIRED";
   const color  = isReady ? "var(--verde)" : isPending ? "var(--color-text-muted)" : "var(--color-error-text)";
   const icon   = isReady ? <CheckCircle2 size={14} /> : isPending ? <Loader2 size={14} />   : <ShieldX size={14} />;
   return (
@@ -142,12 +143,14 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
+  const [xlsmPreview, setXlsmPreview] = useState<ImportPreview | null>(null);
   const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
     setFile(f);
     setXlsmMeta(null);
+    setXlsmPreview(null);
   }, []);
 
   useEffect(() => {
@@ -161,9 +164,12 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
       const workbookMeta = xlsmMetadata(data, file.name);
       try {
         const saved = window.localStorage.getItem(storageKey);
-        setXlsmMeta(saved ? { ...workbookMeta, ...JSON.parse(saved) as Partial<XlsmMetadata> } : workbookMeta);
+        const effective = saved ? { ...workbookMeta, ...JSON.parse(saved) as Partial<XlsmMetadata> } : workbookMeta;
+        setXlsmMeta(effective);
+        setXlsmPreview(importWorkbook(data, file.name, effective).preview);
       } catch {
         setXlsmMeta(workbookMeta);
+        setXlsmPreview(importWorkbook(data, file.name, workbookMeta).preview);
       }
     }).catch((err) => {
       if (!cancelled) setError(`Could not read workbook metadata: ${err instanceof Error ? err.message : String(err)}`);
@@ -302,7 +308,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
       if (workflow === "validate") {
         // Parse records first; errors throw and are caught below.
         const parsed = parseStixXml(xmlText);
-        onParsed(xmlText, parsed, selectedFile.name, xlsmMeta?.requiredFields);
+        onParsed(xmlText, parsed, selectedFile.name);
         return;
       }
 
@@ -435,6 +441,34 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
                 </label>
               ))}
             </div>
+          </section>
+        )}
+
+        {xlsmPreview && (
+          <section className="beat">
+            <h2 className="beat-title">Import preview</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 12 }}>
+              <StatCard label="Worksheet" value={xlsmPreview.worksheet} />
+              <StatCard label="Student rows" value={xlsmPreview.canonicalStudentCount} />
+              <StatCard label="Import findings" value={xlsmPreview.diagnostics.length} accent={xlsmPreview.diagnostics.some((finding) => finding.severity === "error") ? "red" : "default"} />
+            </div>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: "0 0 10px" }}>
+              Header row {xlsmPreview.headerRow}; data starts at row {xlsmPreview.firstDataRow}. Populated unmapped or duplicate columns block processing.
+            </p>
+            <div style={{ maxHeight: 230, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: 4 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead><tr><th style={{ textAlign: "left", padding: 7 }}>Source column</th><th style={{ textAlign: "left", padding: 7 }}>Canonical field</th><th style={{ textAlign: "left", padding: 7 }}>Status</th><th style={{ textAlign: "right", padding: 7 }}>Values</th></tr></thead>
+                <tbody>{xlsmPreview.columns.map((column) => (
+                  <tr key={column.column} style={{ borderTop: "1px solid var(--color-border)" }}>
+                    <td style={{ padding: 7 }}>{column.sourceHeader || `(column ${column.column})`}</td>
+                    <td style={{ padding: 7, fontFamily: "var(--font-mono)" }}>{column.canonicalField || "—"}</td>
+                    <td style={{ padding: 7, color: column.status === "MAPPED" ? "var(--color-text-secondary)" : column.populatedCount ? "var(--color-error-text)" : "var(--color-text-muted)" }}>{column.status}</td>
+                    <td style={{ padding: 7, textAlign: "right" }}>{column.populatedCount}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            {xlsmPreview.diagnostics.map((finding) => <p key={finding.id} style={{ fontSize: 11, color: finding.severity === "error" ? "var(--color-error-text)" : "var(--color-warning-text)", margin: "8px 0 0" }}>{finding.message}</p>)}
           </section>
         )}
 
@@ -1872,6 +1906,7 @@ function ValidateDownloadView({
   const baseName = session.fileName.replace(/\.xml$/i, "");
   const result = session.revalidatedResult ?? session.initialResult;
   const gate = result.gate;
+  const needsReview = gate === "REVIEW_REQUIRED";
   const xml = session.finalXml ?? session.originalXml;
 
   const dlXml = () => downloadText(xml, `${baseName}_validated.xml`, "application/xml");
@@ -1952,8 +1987,8 @@ function ValidateDownloadView({
     return true;
   });
 
-  const filteredIds = new Set(filteredRecords.map((r: any) => r.id));
-  const filteredIssues = result.issues.filter((i: any) => {
+  const filteredIds = new Set(filteredRecords.map((r) => r.id));
+  const filteredIssues = result.issues.filter((i) => {
     if (i.recordId && filteredIds.has(i.recordId)) return true;
     const sn = i.schoolNumber || "";
     return selectedSchools.includes(sn || "(unknown)");
@@ -1978,17 +2013,18 @@ function ValidateDownloadView({
         gap: 16,
         marginBottom: 34,
       }}>
-        {gate === "READY" ? <CheckCircle2 size={28} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} /> : <ShieldX size={28} style={{ color: "var(--color-error-text)", flexShrink: 0 }} />}
+        {gate === "READY" ? <CheckCircle2 size={28} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} /> : needsReview ? <AlertTriangle size={28} style={{ color: "var(--color-warning-text)", flexShrink: 0 }} /> : <ShieldX size={28} style={{ color: "var(--color-error-text)", flexShrink: 0 }} />}
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <span style={{ fontWeight: 700, fontSize: 16, color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }}>
-              {gate === "READY" ? "File is READY" : "File is BLOCKED"}
+              {gate === "READY" ? "File is READY" : needsReview ? "File requires review" : "File is BLOCKED"}
             </span>
             <GateBadge gate={gate} />
           </div>
           <div style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
             {gate === "READY"
               ? `No blocking errors · ${warningCount > 0 ? `${warningCount} warning${warningCount !== 1 ? "s" : ""} for review` : "All clear"}`
+              : needsReview ? "Canonical checks passed; official XSD validation is still required before submission."
               : `${errorCount} blocking error${errorCount !== 1 ? "s" : ""} must be resolved before submission`}
           </div>
           <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 4 }}>
@@ -2148,7 +2184,11 @@ function ValidateDownloadView({
 async function readInputAsStixXml(f: File, metadata?: Partial<XlsmMetadata>): Promise<string> {
   if (/\.xlsm?$/i.test(f.name)) {
     const data = await f.arrayBuffer();
-    return xlsmToStixXml(data, f.name, metadata);
+    const result = importWorkbook(data, f.name, metadata);
+    const structuralBlockers = new Set(["IMPORT_UNMAPPED_COLUMN", "IMPORT_DUPLICATE_COLUMN", "IMPORT_DATE_AMBIGUOUS", "IMPORT_PHONE_AMBIGUOUS", "IMPORT_FORMULA", "RECONCILIATION_COUNT"]);
+    const blockers = result.preview.diagnostics.filter((finding) => finding.severity === "error" && structuralBlockers.has(finding.ruleId));
+    if (blockers.length) throw new Error(`Workbook import is blocked: ${blockers[0].message}${blockers.length > 1 ? ` (+${blockers.length - 1} more)` : ""}`);
+    return result.xml;
   }
   const xmlText = await readFileText(f);
   if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is neither XML nor a supported Excel workbook.");
@@ -2223,8 +2263,8 @@ export default function App() {
           onCompare={(result) => { setComparison(result); setView("compare"); }}
           activeRules={activeRules}
           onRulesChange={setActiveRules}
-          onParsed={(xmlText, records, fileName, requiredFields) => {
-            const validationRules = requiredFields?.length ? { ...activeRules, requiredFields } : activeRules;
+          onParsed={(xmlText, records, fileName) => {
+            const validationRules = activeRules;
             setPendingFile({ xml: xmlText, fileName, validationRules });
             setParsedRecords(records);
             setView("clean-step");

@@ -5,6 +5,7 @@
 
 import { XMLParser } from "fast-xml-parser";
 import type { Student, ExportResult, SchoolCount, GradeCount } from "./types";
+import { flattenCanonicalStudent, parseCanonicalXml } from "./canonical";
 
 function ensureArray<T>(x: T | T[] | null | undefined): T[] {
   if (x === null || x === undefined) return [];
@@ -21,7 +22,7 @@ function str(x: unknown): string {
   return String(x);
 }
 
-export function parseXml(xmlText: string): Student[] {
+export function legacyParseXml(xmlText: string): Student[] {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
@@ -105,6 +106,15 @@ export function parseXml(xmlText: string): Student[] {
   }
 
   return students;
+}
+
+export function parseXml(xmlText: string): Student[] {
+  const upload = parseCanonicalXml(xmlText);
+  return upload.schools.flatMap((school) => school.students.map((student) => {
+    const fields = flattenCanonicalStudent(student, school);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(student.birthDate) ? new Date(`${student.birthDate}T00:00:00Z`) : null;
+    return { ...fields, BirthYear: date && !Number.isNaN(date.getTime()) ? date.getUTCFullYear() : null } as unknown as Student;
+  }));
 }
 
 export function filterStudents(students: Student[]): Student[] {
