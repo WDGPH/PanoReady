@@ -56,8 +56,9 @@ export function standardizeUnit(text: string): [string, boolean, boolean] {
 
   // Named floor/location designators (Panorama-safe abbreviations)
   if (/^basem/i.test(trimmed)) return ["BSMT", true, false];
-  if (/^(lower un|lower ap|d lower|lower fl)/i.test(trimmed)) return ["LOWR", true, false];
-  if (/^(upper(lev|un|ap|fl)|upperlev)/i.test(trimmed)) return ["UPPR", true, false];
+  if (/^d\s*lower/i.test(trimmed)) return ["LOWR", true, false];
+  if (/^lower\s*(un|ap|fl)/i.test(trimmed)) return ["LOWR", true, false];
+  if (/^upper\s*(lev|un|ap|fl)/i.test(trimmed)) return ["UPPR", true, false];
   if (/^(main\s*flo|mainflo)/i.test(trimmed)) return ["MAIN", true, false];
   if (/^top\s*flo/i.test(trimmed)) return ["TOP", true, false];
   if (/^second$/i.test(trimmed)) return ["2ND", true, false];

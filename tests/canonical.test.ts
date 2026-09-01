@@ -182,6 +182,66 @@ test("standardizeUnit abbreviates 'Top Floor' the same way it does other floor d
   assert.deepEqual(standardizeUnit("top floor"), ["TOP", true, false]);
 });
 
+test("standardizeUnit abbreviates 'Upper Un'/'Upper Ap' the same way it already did 'Lower Un'", () => {
+  assert.deepEqual(standardizeUnit("Upper Un"), ["UPPR", true, false]);
+  assert.deepEqual(standardizeUnit("Upper Ap"), ["UPPR", true, false]);
+  assert.deepEqual(standardizeUnit("UpperLev"), ["UPPR", true, false]);
+});
+
+test("an empty Students element is an error, matching Panorama's real rejection of it", () => {
+  const emptySchool = xml().replace(`<Students>${student}</Students>`, "<Students></Students>");
+  const result = validateXml(emptySchool);
+  const issue = result.issues.find((i) => i.ruleId === "EMPTY_STUDENTS");
+  assert.equal(issue?.severity, "error");
+  assert.equal(result.gate, "BLOCKED");
+});
+
+test("phone fixes strip real-world trailing call notes and recognize 'ex' as an extension marker", () => {
+  const cases: Array<[string, string]> = [
+    ["519-938-0734 call 1st", "519-938-0734"],
+    ["519-546-8814 CALL 2ND", "519-546-8814"],
+    ["519-830 6506-call first", "519-830-6506"],
+    ["519-362-0305 **1st", "519-362-0305"],
+    ["226-500-2616(call 1st)", "226-500-2616"],
+    ["416-894-8985 (1St)", "416-894-8985"],
+    ["905-877-5200 ex 233", "905-877-5200x233"],
+    ["548) 255-2714", "548-255-2714"],
+    ["226-929-13-92", "226-929-1392"],
+  ];
+  for (const [raw, expected] of cases) {
+    const source = xml().replace("519-555-3333", raw);
+    const result = validateXml(source);
+    const issue = result.issues.find((i) => i.ruleId === "PHONE_FORMAT");
+    assert.equal(issue?.suggestedFix, expected, `expected fix for "${raw}"`);
+    assert.equal(issue?.autoFixable, true, `expected autoFixable for "${raw}"`);
+  }
+});
+
+test("StreetNumber overflow splits into StreetNumber + StreetName when the shape is confident, stays manual when ambiguous", () => {
+  const confident: Array<[string, string, string]> = [
+    ["46 Curzon", "46", "Curzon"],
+    ["97 Lynch", "97", "Lynch"],
+    ["66 Downey", "66", "Downey"],
+  ];
+  const addressXml = (streetNumber: string) => xml().replace(
+    `<Address><StreetName>Main</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G 1A1</PostalCode></Address>`,
+    `<Address><StreetNumber>${streetNumber}</StreetNumber><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G 1A1</PostalCode></Address>`
+  );
+  for (const [raw, expectedNumber, expectedName] of confident) {
+    const result = validateXml(addressXml(raw));
+    const numberIssue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
+    const nameIssue = result.issues.find((i) => i.ruleId === "STREET_NUMBER_SPLIT");
+    assert.equal(numberIssue?.suggestedFix, expectedNumber, `expected StreetNumber fix for "${raw}"`);
+    assert.equal(nameIssue?.suggestedFix, expectedName, `expected StreetName fix for "${raw}"`);
+  }
+  for (const ambiguous of ["406 unit", "13 - 142", "302-380", "B-2C-360"]) {
+    const result = validateXml(addressXml(ambiguous));
+    const numberIssue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
+    assert.equal(numberIssue?.suggestedFix, undefined, `expected no auto-split for "${ambiguous}"`);
+    assert.equal(numberIssue?.autoFixable, false);
+  }
+});
+
 test("fixes operate through the canonical model for default-namespace XML", () => {
   const records = parseStixXml(xml());
   assert.equal(records[0].fields.FirstName, "Ada");
