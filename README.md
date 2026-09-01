@@ -31,22 +31,15 @@ npm run lint         # Run ESLint
 npm test             # Run unit and validation integration tests
 ```
 
-### Postal-code validation demo
+### Validation demo
 
 Download the synthetic
-[postal-code validation demo](public/samples/postal-code-validation-demo.stix)
-and upload it through **Validate & Fix** to review canonical values, safe
-separator normalization, O/I/L transcription repairs, and deliberately invalid
-examples. The fixture contains synthetic records only.
-
-### Phone-number validation demo
-
-Download the synthetic
-[phone-number validation demo](public/samples/phone-number-validation-demo.stix)
-and upload it through **Validate & Fix** to review NANP NPA/NXX structure,
-deterministic formatting fixes, placeholder handling, and the non-blocking
-Canadian geographic area-code policy. The fixture contains synthetic names and
-numbers only.
+[STIX validation demo](public/samples/stix-validation-demo.stix) and upload it
+through **Validate & Fix** to review the same general, postal-code, and
+phone-number cases exercised by the integration tests. It demonstrates safe
+postal and phone normalization, structural failures, placeholder handling, and
+the non-blocking Canadian geographic area-code policy. The fixture contains
+synthetic names and data only.
 
 ## Custom Validation Rulesets
 
