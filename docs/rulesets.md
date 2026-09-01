@@ -249,16 +249,31 @@ suggested value also passes the custom expression.
 
 ### `phoneConfig`
 
-**Controls:** `phone-placeholder` rule  
+**Controls:** `PHONE_PLACEHOLDER` and `PHONE_CANADIAN_AREA_CODE` rules
 **Type:** object
 
 ```json
 "phoneConfig": {
-  "placeholderNumbers": ["519-000-0000", "000-000-0000"]
+  "placeholderNumbers": ["519-000-0000", "000-000-0000"],
+  "canadianAreaCodeCheck": "warning"
 }
 ```
 
-Phone numbers in this list are flagged as placeholders. Add your board's commonly-used placeholder numbers here. Format must match exactly what appears in the XML (hyphens, spaces, etc.).
+`placeholderNumbers` lists canonical phone numbers that are flagged as
+placeholders. Add your board's commonly used placeholder numbers in
+`XXX-XXX-XXXX` form. PanoReady compares the canonicalized value, so supported
+numeric formatting variants still match the configured placeholder.
+
+`canadianAreaCodeCheck` controls the optional policy finding for a structurally
+valid NANP number whose NPA is not a currently active Canadian geographic area
+code. Allowed values are `"off"`, `"info"`, and `"warning"`. The built-in STIX
+ruleset uses `"warning"`; the finding never blocks the validation gate. The
+area-code list is maintained by the application and is not editable in a
+ruleset. Legacy custom rulesets that omit this property remain valid and retain
+the previous behavior (`off`) until the setting is explicitly selected.
+
+See [Validation Rules](./validation-rules.md#rule-phone_canadian_area_code) for
+the structural/policy distinction, source provenance, and verification date.
 
 ---
 

@@ -111,6 +111,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000005</ns1:OEN>
+        <ns1:ContactPhone>519-824-1234</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -128,6 +129,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000006</ns1:OEN>
+        <ns1:ContactPhone>519-124-1234</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -145,6 +147,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000007</ns1:OEN>
+        <ns1:ContactPhone>212-555-1234</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -162,6 +165,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000008</ns1:OEN>
+        <ns1:ContactPhone>+1 (519) 824-1234</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -179,6 +183,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000009</ns1:OEN>
+        <ns1:ContactPhone>019-824-1234</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -196,6 +201,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000010</ns1:OEN>
+        <ns1:ContactPhone>519-824-123</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -213,6 +219,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000011</ns1:OEN>
+        <ns1:ContactPhone>519-824-1234 ext 2</ns1:ContactPhone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -242,6 +249,7 @@
         <ns1:Grade>GR100</ns1:Grade>
         <ns1:Gender>unknown</ns1:Gender>
         <ns1:OEN>333444555</ns1:OEN>
+        <ns1:ContactPhone>600-555-1234</ns1:ContactPhone>
       </ns1:Student>
     </ns1:Students>
   </ns1:School>

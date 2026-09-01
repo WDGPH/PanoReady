@@ -39,6 +39,15 @@ and upload it through **Validate & Fix** to review canonical values, safe
 separator normalization, O/I/L transcription repairs, and deliberately invalid
 examples. The fixture contains synthetic records only.
 
+### Phone-number validation demo
+
+Download the synthetic
+[phone-number validation demo](public/samples/phone-number-validation-demo.stix)
+and upload it through **Validate & Fix** to review NANP NPA/NXX structure,
+deterministic formatting fixes, placeholder handling, and the non-blocking
+Canadian geographic area-code policy. The fixture contains synthetic names and
+numbers only.
+
 ## Custom Validation Rulesets
 
 The built-in ruleset validates against STIX Wellington-Dufferin-Guelph defaults. If your board uses different grade codes, allows additional phone placeholder numbers, or has stricter required-field rules, you can create a custom ruleset without touching any code — changes only affect your browser session.

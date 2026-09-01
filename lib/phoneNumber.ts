@@ -4,7 +4,7 @@
  * CNAC defines an NPA as NXX and distinguishes geographic from non-geographic
  * NPAs: https://cnac.ca/npa_codes/npa_codes.htm
  * NANPA defines central-office codes as NXX, with N=2-9 and X=0-9:
- * https://www.nanpa.com/numbering/central-office-code-nxx
+ * https://www.nanpa.com/index.php/numbering/co-codesthousands-blocks
  *
  * The Canadian geographic NPA set below was verified 2026-09-01 against CNAC's
  * current CO Code Status list and relief notices. It includes only geographic
