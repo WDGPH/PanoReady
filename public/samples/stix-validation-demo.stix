@@ -1,20 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ns1:SchoolUpload xmlns:ns1="http://example.com/stix">
+<ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
+  <!-- File-level, student, and guardian phones share the same rules. -->
+  <ns1:Metadata>
+    <ns1:CreateDate>2026-09-01</ns1:CreateDate>
+    <ns1:CreateTime>12:00:00</ns1:CreateTime>
+    <ns1:CreatedBy>Pear Orchard</ns1:CreatedBy>
+    <!-- Auto-fix: common "ext." variant becomes lowercase x plus 1-5 digits. -->
+    <ns1:ContactPhone type="WORK">519-824-1000 ext. 10</ns1:ContactPhone>
+    <ns1:ContactEmail>pear.orchard@example.invalid</ns1:ContactEmail>
+    <ns1:FullUpload>YES</ns1:FullUpload>
+  </ns1:Metadata>
   <ns1:School>
-    <ns1:Name>Central High</ns1:Name>
     <ns1:SchoolNumber>12345</ns1:SchoolNumber>
+    <ns1:Name>Synthetic Produce Academy</ns1:Name>
     <ns1:Students>
-      <!-- Student 0: valid record -->
+      <!-- Student 0: canonical extension plus two manual guardian-extension errors -->
       <ns1:Student>
         <ns1:Name>
-          <ns1:First>Jane</ns1:First>
-          <ns1:Last>Roe</ns1:Last>
+          <ns1:First>Apple</ns1:First>
+          <ns1:Last>Crisp</ns1:Last>
         </ns1:Name>
         <ns1:BirthDate>2010-05-12</ns1:BirthDate>
         <ns1:Grade>GR6</ns1:Grade>
         <ns1:Gender>F</ns1:Gender>
         <ns1:OEN>123456789</ns1:OEN>
-        <ns1:ContactPhone>416-555-1234</ns1:ContactPhone>
+        <ns1:Guardian>
+          <ns1:Name><ns1:First>Captain</ns1:First><ns1:Last>Carrot</ns1:Last></ns1:Name>
+          <ns1:Relationship>LEGALGRD</ns1:Relationship>
+          <!-- Manual: extension marker has no digits. -->
+          <ns1:Phone type="HOME">416-555-1111x</ns1:Phone>
+        </ns1:Guardian>
+        <ns1:Guardian>
+          <ns1:Name><ns1:First>Princess</ns1:First><ns1:Last>Pea</ns1:Last></ns1:Name>
+          <ns1:Relationship>OTHER</ns1:Relationship>
+          <!-- Manual: extension is not numeric. -->
+          <ns1:Phone type="MOBILE">416-555-2222 ext ABC</ns1:Phone>
+        </ns1:Guardian>
+        <ns1:Phone type="MOBILE">416-555-1234x12345</ns1:Phone>
         <ns1:Address>
           <ns1:City>Ottawa</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -28,13 +50,13 @@
       <!-- Student 1: missing BirthDate (required), whitespace, alias grade, placeholder phone, invalid province/postal, length issues -->
       <ns1:Student>
         <ns1:Name>
-          <ns1:First>  John  </ns1:First>
-          <ns1:Last>Smith</ns1:Last>
+          <ns1:First>  Broccoli  </ns1:First>
+          <ns1:Last>Sprout</ns1:Last>
         </ns1:Name>
         <ns1:Grade>K</ns1:Grade>
         <ns1:Gender>Other</ns1:Gender>
         <ns1:OEN>000000001</ns1:OEN>
-        <ns1:ContactPhone>519-000-0000</ns1:ContactPhone>
+        <ns1:Phone>519-000-0000</ns1:Phone>
         <ns1:Address>
           <ns1:City>Toronto</ns1:City>
           <ns1:Province>ZZ</ns1:Province>
@@ -49,13 +71,13 @@
       <ns1:Student>
         <ns1:Name>
           <ns1:First>Alice</ns1:First>
-          <ns1:Last>Wonder</ns1:Last>
+          <ns1:Last>Wonderland</ns1:Last>
         </ns1:Name>
         <ns1:BirthDate>2011-07-01</ns1:BirthDate>
         <ns1:Grade>GR13</ns1:Grade>
         <ns1:Gender>Unk</ns1:Gender>
         <ns1:OEN>ABC123</ns1:OEN>
-        <ns1:ContactPhone>4165556789</ns1:ContactPhone>
+        <ns1:Phone>4165556789</ns1:Phone>
         <ns1:Address>
           <ns1:City>Kingston</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -67,13 +89,13 @@
       <ns1:Student>
         <ns1:Name>
           <ns1:First>Alice</ns1:First>
-          <ns1:Last>Wonder</ns1:Last>
+          <ns1:Last>Wonderland</ns1:Last>
         </ns1:Name>
         <ns1:BirthDate>2011-07-01</ns1:BirthDate>
         <ns1:Grade>GR11</ns1:Grade>
         <ns1:Gender>M</ns1:Gender>
         <ns1:OEN>222333444</ns1:OEN>
-        <ns1:ContactPhone>(416) 555-0000</ns1:ContactPhone>
+        <ns1:Phone>(416) 555-0000</ns1:Phone>
         <ns1:Address>
           <ns1:City>Kingston</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -84,14 +106,14 @@
       <!-- Student 4: duplicate OEN with student 3 -->
       <ns1:Student>
         <ns1:Name>
-          <ns1:First>Bob</ns1:First>
-          <ns1:Last>Jones</ns1:Last>
+          <ns1:First>Blue</ns1:First>
+          <ns1:Last>Berry</ns1:Last>
         </ns1:Name>
         <ns1:BirthDate>2012-03-10</ns1:BirthDate>
         <ns1:Grade>1</ns1:Grade>
         <ns1:Gender>N</ns1:Gender>
         <ns1:OEN>222333444</ns1:OEN>
-        <ns1:ContactPhone>1-416-555-9999</ns1:ContactPhone>
+        <ns1:Phone>1-416-555-9999</ns1:Phone>
         <ns1:Address>
           <ns1:City>Ottawa</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -111,7 +133,8 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000005</ns1:OEN>
-        <ns1:ContactPhone>519-824-1234</ns1:ContactPhone>
+        <!-- Auto-fix: uppercase X becomes canonical lowercase x. -->
+        <ns1:Phone>519-824-1234X12</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -129,7 +152,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000006</ns1:OEN>
-        <ns1:ContactPhone>519-124-1234</ns1:ContactPhone>
+        <ns1:Phone>519-124-1234</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -147,7 +170,8 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000007</ns1:OEN>
-        <ns1:ContactPhone>212-555-1234</ns1:ContactPhone>
+        <!-- Auto-fix: hash extension marker becomes canonical x. -->
+        <ns1:Phone>212-555-1234 #23</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -165,7 +189,8 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000008</ns1:OEN>
-        <ns1:ContactPhone>+1 (519) 824-1234</ns1:ContactPhone>
+        <!-- Auto-fix: country code, formatting, and spaced extension marker. -->
+        <ns1:Phone>+1 (519) 824-1234 x 45</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -183,7 +208,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000009</ns1:OEN>
-        <ns1:ContactPhone>019-824-1234</ns1:ContactPhone>
+        <ns1:Phone>019-824-1234</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -201,7 +226,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000010</ns1:OEN>
-        <ns1:ContactPhone>519-824-123</ns1:ContactPhone>
+        <ns1:Phone>519-824-123</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -209,7 +234,7 @@
         </ns1:Address>
       </ns1:Student>
 
-      <!-- Student 11: arbitrary punctuation; never silently stripped -->
+      <!-- Student 11: full-word extension variant; safely normalized -->
       <ns1:Student>
         <ns1:Name>
           <ns1:First>Darth</ns1:First>
@@ -219,7 +244,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000011</ns1:OEN>
-        <ns1:ContactPhone>519-824-1234 ext 2</ns1:ContactPhone>
+        <ns1:Phone>519-824-1234 extension 2</ns1:Phone>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City>
           <ns1:Province>ON</ns1:Province>
@@ -236,17 +261,17 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000012</ns1:OEN>
-        <ns1:ContactPhone>119-824-1234</ns1:ContactPhone>
+        <ns1:Phone>119-824-1234</ns1:Phone>
       </ns1:Student>
 
-      <!-- Student 13: too many phone digits; not auto-fixable -->
+      <!-- Student 13: extension exceeds the maximum; not auto-fixable -->
       <ns1:Student>
         <ns1:Name><ns1:First>Too Many</ns1:First><ns1:Last>Digits</ns1:Last></ns1:Name>
         <ns1:BirthDate>2014-09-13</ns1:BirthDate>
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000013</ns1:OEN>
-        <ns1:ContactPhone>519-824-12345</ns1:ContactPhone>
+        <ns1:Phone>519-824-1234x123456</ns1:Phone>
       </ns1:Student>
 
       <!-- Student 14: multiple numbers; not auto-fixable -->
@@ -256,7 +281,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000014</ns1:OEN>
-        <ns1:ContactPhone>519-824-1234 / 416-555-1234</ns1:ContactPhone>
+        <ns1:Phone>519-824-1234 / 416-555-1234</ns1:Phone>
       </ns1:Student>
 
       <!-- Student 15: future Canadian relief NPA; warning only -->
@@ -266,7 +291,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000015</ns1:OEN>
-        <ns1:ContactPhone>851-555-1234</ns1:ContactPhone>
+        <ns1:Phone>851-555-1234</ns1:Phone>
       </ns1:Student>
 
     </ns1:Students>
@@ -274,13 +299,13 @@
 
   <!-- Second school: empty Students element -->
   <ns1:School>
-    <ns1:Name>Empty Secondary</ns1:Name>
+    <ns1:Name>Empty Eggplant Secondary</ns1:Name>
     <ns1:Students/>
   </ns1:School>
 
   <!-- Third school: missing SchoolNumber and non-ISO BirthDate and invalid grade -->
   <ns1:School>
-    <ns1:Name>NoNumber School</ns1:Name>
+    <ns1:Name>No-Number Nectarine School</ns1:Name>
     <ns1:Students>
       <ns1:Student>
         <ns1:Name>
@@ -291,7 +316,7 @@
         <ns1:Grade>GR100</ns1:Grade>
         <ns1:Gender>unknown</ns1:Gender>
         <ns1:OEN>333444555</ns1:OEN>
-        <ns1:ContactPhone>600-555-1234</ns1:ContactPhone>
+        <ns1:Phone>600-555-1234</ns1:Phone>
       </ns1:Student>
     </ns1:Students>
   </ns1:School>
