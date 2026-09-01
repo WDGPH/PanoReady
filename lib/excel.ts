@@ -15,7 +15,10 @@ const CANONICAL_FIELDS = [
   "GuardianFirstName", "GuardianLastName", "GuardianRelationship", "GuardianPhoneNumber", "GuardianPhoneType",
   "Guardian2FirstName", "Guardian2LastName", "Guardian2Relationship", "Guardian2PhoneNumber", "Guardian2PhoneType",
 ] as const;
-type CanonicalField = typeof CANONICAL_FIELDS[number];
+export type CanonicalField = typeof CANONICAL_FIELDS[number];
+export { CANONICAL_FIELDS };
+/** Column overrides, keyed by 1-based column number (matches ImportColumnMapping.column). "IGNORE" drops the column instead of mapping it. */
+export type ColumnOverrides = Record<number, CanonicalField | "IGNORE">;
 
 const BASE_LABELS: Record<CanonicalField, string[]> = {
   OEN: ["oen", "o e n", "ontario education number", "student oen"],
@@ -229,7 +232,7 @@ function makeStudent(values: Record<string, string>, index: number, worksheet: s
   };
 }
 
-export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>): WorkbookImportResult {
+export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): WorkbookImportResult {
   if (data.byteLength > 50_000_000) throw new Error("Workbook exceeds the 50 MB local processing limit.");
   const workbook = XLSX.read(data, { type: "array", cellDates: false, raw: false });
   const source = findStudentSheet(workbook);
@@ -246,23 +249,53 @@ export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOver
   const sheetInfo = workbook.Workbook?.Sheets?.find((sheet) => sheet.name === source.name);
   if (sheetInfo?.Hidden) diagnostics.push(diagnostic("import-hidden-sheet", "warning", `The selected student worksheet "${source.name}" is hidden.`, "IMPORT_HIDDEN_CONTENT", source.name));
   const headers = source.rows[source.headerIndex];
-  const destinations = headers.map((header) => FIELD_BY_LABEL.get(normalizeLabel(header)));
+  const autoDestinations = headers.map((header) => FIELD_BY_LABEL.get(normalizeLabel(header)));
+  const ignoredColumns = new Set(Object.entries(columnOverrides ?? {}).filter(([, value]) => value === "IGNORE").map(([column]) => Number(column)));
+  const destinations = autoDestinations.map((field, index) => {
+    const override = columnOverrides?.[index + 1];
+    if (override === "IGNORE") return undefined;
+    if (override) return override;
+    return field;
+  });
   const duplicateFields = new Set(destinations.filter((field, index) => field && destinations.indexOf(field) !== index));
   const markerIndex = source.rows.findIndex((row, index) => index > source.headerIndex && normalizeLabel(row[0]).startsWith("enterdata"));
   const scanStart = markerIndex >= 0 ? markerIndex + 1 : source.headerIndex + 1;
   const excludedLabels = new Set(["required", "example", "notesformat", "notes", "field", "enterdataselectvaluesinthisrow"]);
+  // A row whose every populated mapped cell exactly restates its own column header (e.g. a
+  // decorative repeated-header row with a blank leading cell) is never real student data —
+  // no actual record has FirstName "First Name" and OEN "OEN" at once.
+  const isHeaderEchoRow = (row: unknown[]) => {
+    let populated = 0;
+    let echoed = 0;
+    destinations.forEach((field, index) => {
+      if (!field) return;
+      const value = display(row[index]);
+      if (!value) return;
+      populated++;
+      if (normalizeLabel(value) === normalizeLabel(headers[index])) echoed++;
+    });
+    return populated >= 2 && echoed === populated;
+  };
+  let skippedHeaderEchoRows = 0;
   const candidates = source.rows.slice(scanStart).map((row, offset) => ({ row, index: scanStart + offset }))
     .filter(({ row }) => !excludedLabels.has(normalizeLabel(row[0])))
+    .filter(({ row }) => {
+      if (!isHeaderEchoRow(row)) return true;
+      skippedHeaderEchoRows++;
+      return false;
+    })
     .filter(({ row }) => {
       const values = Object.fromEntries(destinations.map((field, index) => field ? [field, display(row[index])] : ["", ""]));
       const identity = [values.FirstName, values.LastName, values.BirthDate, values.OEN].filter(Boolean).length;
       const populated = destinations.filter((field, index) => field && display(row[index])).length;
       return identity > 0 && populated >= 2;
     });
+  if (skippedHeaderEchoRows > 0) diagnostics.push(diagnostic("import-header-echo-rows", "warning", `Skipped ${skippedHeaderEchoRows} row(s) that only repeated the column headers as values.`, "IMPORT_HEADER_ECHO_ROW", source.name));
   const columns: ImportColumnMapping[] = headers.map((header, index) => {
     const canonicalField = destinations[index];
     const populatedCount = candidates.filter(({ row }) => display(row[index])).length;
-    const status = !canonicalField ? "UNMAPPED" : duplicateFields.has(canonicalField) ? "DUPLICATE" : "MAPPED";
+    const status: ImportColumnMapping["status"] = ignoredColumns.has(index + 1) ? "IGNORED"
+      : !canonicalField ? "UNMAPPED" : duplicateFields.has(canonicalField) ? "DUPLICATE" : "MAPPED";
     if (status === "UNMAPPED" && populatedCount > 0) diagnostics.push(diagnostic(`import-unmapped-${index}`, "error", `Populated column "${display(header)}" is not mapped.`, "IMPORT_UNMAPPED_COLUMN", `${source.name}!${XLSX.utils.encode_col(index)}`));
     if (status === "DUPLICATE") diagnostics.push(diagnostic(`import-duplicate-${index}`, "error", `Column "${display(header)}" duplicates the ${canonicalField} destination.`, "IMPORT_DUPLICATE_COLUMN", `${source.name}!${XLSX.utils.encode_col(index)}`, canonicalField));
     return { column: index + 1, sourceHeader: display(header), canonicalField, status, populatedCount };
@@ -308,6 +341,6 @@ export function xlsmMetadata(data: ArrayBuffer, fileName: string): XlsmMetadata 
   return metadata;
 }
 
-export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>): string {
-  return importWorkbook(data, fileName, metadataOverrides).xml;
+export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): string {
+  return importWorkbook(data, fileName, metadataOverrides, columnOverrides).xml;
 }
