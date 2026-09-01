@@ -588,6 +588,28 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                 </div>
 
                 <div>
+                  <label style={labelStyle}>Canadian Geographic Area-Code Check</label>
+                  <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
+                    Flag structurally valid NANP numbers whose area code is not an active Canadian geographic area code. This policy check never blocks validation.
+                  </div>
+                  <select
+                    value={rules.phoneConfig.canadianAreaCodeCheck ?? "off"}
+                    onChange={(e) => setRules((r) => ({
+                      ...r,
+                      phoneConfig: {
+                        ...r.phoneConfig,
+                        canadianAreaCodeCheck: e.target.value as "off" | "info" | "warning",
+                      },
+                    }))}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, cursor: "pointer" }}
+                  >
+                    <option value="off">Off</option>
+                    <option value="info">Info</option>
+                    <option value="warning">Warning</option>
+                  </select>
+                </div>
+
+                <div>
                   <label style={labelStyle}>Date Fields</label>
                   <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
                     Fields that must contain a valid YYYY-MM-DD date.

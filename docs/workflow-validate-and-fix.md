@@ -149,6 +149,9 @@ The Fix screen presents every issue that has either a suggested fix or can accep
 - Postal-code normalization and numeric-position O/I/L repairs are bulk-safe
   suggestions. They are staged, audited, applied, and revalidated through this
   same screen; unresolved postal-code values remain manual issues.
+- Deterministic phone formatting and leading-country-code removal use the same
+  staged and audited path. Invalid NPA/NXX digits, placeholders, and Canadian
+  geographic area-code policy findings are never auto-fixed.
 
 **Action:**
 

@@ -18,7 +18,7 @@ This page documents every rule checked during the [Validate & Fix](./workflow-va
 
 ### Rule: `xml-wellformed`
 
-**Severity:** error  
+**Severity:** error
 **Field:** (structural)
 
 Checks that the uploaded file is valid XML. This is the first check — if it fails, no other rules run.
@@ -218,6 +218,72 @@ currently assigns the postal code or that it belongs to the supplied address.
 
 ---
 
+### Rules: `PHONE_FORMAT`, `PHONE_NPA_STRUCTURE`, `PHONE_NXX_STRUCTURE`, `PHONE_PLACEHOLDER`
+
+**Severity:** error
+**Field:** `ContactPhone`
+
+The built-in phone rule expects the canonical North American Numbering Plan
+(NANP) form `NPA-NXX-XXXX`. Both the area code (`NPA`) and central-office or
+exchange code (`NXX`) have the form `NXX`, where `N` is a digit from `2` through
+`9` and each `X` is a digit from `0` through `9`.
+
+For example, `519-824-1234` is structurally valid. `019-824-1234` has an
+invalid NPA, and `519-124-1234` has an invalid NXX. PanoReady never guesses a
+replacement digit for either structural failure.
+
+Common numeric presentation variants are interpreted deterministically. Ten
+digits, parentheses and spaces, and an optional leading NANP country code `1`
+(including `+1`) can be normalized to `XXX-XXX-XXXX`. The resulting suggestion
+uses the existing apply-and-revalidate workflow. Too few or too many digits,
+appended text, extensions, and multiple numbers remain manual errors. Numbers
+listed in `phoneConfig.placeholderNumbers` are also errors; a placeholder may
+receive both the applicable structural issue and the placeholder issue.
+
+**Auto-fix:** Formatting only. NPA/NXX structural failures and placeholders are
+not auto-fixable.
+
+**Rule sources:**
+
+- [Canadian Numbering Administrator — NPA Code (Area Code)](https://cnac.ca/npa_codes/npa_codes.htm)
+- [NANPA — CO Codes/Thousands-Blocks](https://www.nanpa.com/index.php/numbering/co-codesthousands-blocks)
+- [NANPA — About the North American Numbering Plan](https://www.nanpa.com/about)
+
+---
+
+### Rule: `PHONE_CANADIAN_AREA_CODE`
+
+**Severity:** off, info, or warning
+**Field:** `ContactPhone`
+
+After a number passes NANP structural validation, this optional policy rule
+checks whether its NPA is a currently active Canadian **geographic** area code.
+It does not classify a structurally valid US or other NANP number as invalid.
+The built-in STIX ruleset uses `warning`; custom rulesets can choose `off`,
+`info`, or `warning`. The rule can never produce an error and therefore never
+changes a READY gate to BLOCKED.
+
+PanoReady bundles a static CNAC-derived set rather than making a runtime network
+request. The set was verified on **2026-09-01** against CNAC's current CO Code
+Status data and relief notices. It excludes future or reserved relief NPAs such
+as `273` and `851`, and Canadian non-geographic numbering resources such as
+`600`. Because area codes change, that source date is part of the rule and the
+set must be reviewed over time.
+
+No Canadian policy issue is emitted unless the number first passes both the NPA
+and NXX structural checks. Policy findings have no suggested fix.
+
+Passing the structural and Canadian-geographic checks proves neither that the
+subscriber number exists nor that it is active or belongs to the stated person.
+
+**Rule sources:**
+
+- [Canadian Numbering Administrator — CO Code Status](https://www.cnac.ca/co_codes/co_code_status.htm)
+- [Canadian Numbering Administrator — Non-Geographic (6YY) Codes](https://www.cnac.ca/other_codes/nongeo/nongeo_codes.htm)
+- [Canadian Numbering Administrator — 782/902 relief planning for future NPA 851](https://cnac.ca/npa_codes/relief/782-902/relief_782-902.htm)
+
+---
+
 ### Rule: `oen-format`
 
 **Severity:** error  
@@ -322,7 +388,12 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 | `gender-value` | Yes (alias match) | Canonical gender code |
 | `province-value` | No | — |
 | `birthdate-format` | Yes (parseable alternate format) | `YYYY-MM-DD` |
-| `postal-code` | No | — |
+| `postal-code` | Yes (safe normalization or O/I/L numeric-position repair) | Canonical six-character value |
+| `PHONE_FORMAT` | Yes (deterministic formatting only) | `XXX-XXX-XXXX` |
+| `PHONE_NPA_STRUCTURE` | No | — |
+| `PHONE_NXX_STRUCTURE` | No | — |
+| `PHONE_PLACEHOLDER` | No | — |
+| `PHONE_CANADIAN_AREA_CODE` | No | — |
 | `oen-format` | No | — |
 | `field-length` | No | — |
 | `whitespace` | Yes | Trimmed value |

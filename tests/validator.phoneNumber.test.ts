@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import defaultRulesJson from "../config/rules.stix.default.json";
 import type { AppliedFix, RulesProfile } from "../lib/types";
@@ -133,5 +134,35 @@ describe("phone-number validator integration", () => {
   it("does not emit Canadian policy findings for structurally invalid NANP numbers", () => {
     const issues = phoneIssues(["119-824-1234", "519-124-1234", "212-555-123"]);
     expect(issues.some((issue) => issue.ruleId === "PHONE_CANADIAN_AREA_CODE")).toBe(false);
+  });
+
+  it("keeps the synthetic UI demonstration fixture representative", () => {
+    const fixtureUrl = new URL(
+      "../public/samples/phone-number-validation-demo.stix",
+      import.meta.url
+    );
+    const result = validateXml(readFileSync(fixtureUrl, "utf8"));
+    const issues = result.issues.filter((issue) => issue.field === "ContactPhone");
+
+    expect(result.studentCount).toBe(16);
+    expect(issues).toHaveLength(15);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_FORMAT")).toHaveLength(6);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_NPA_STRUCTURE")).toHaveLength(2);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_NXX_STRUCTURE")).toHaveLength(3);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_CANADIAN_AREA_CODE")).toHaveLength(3);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_PLACEHOLDER")).toHaveLength(1);
+  });
+
+  it("preserves representative phone cases in the general validation fixture", () => {
+    const fixtureUrl = new URL("../test_stix_validation.xml", import.meta.url);
+    const result = validateXml(readFileSync(fixtureUrl, "utf8"));
+    const issues = result.issues.filter((issue) => issue.field === "ContactPhone");
+
+    expect(result.studentCount).toBe(13);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_FORMAT")).toHaveLength(6);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_NPA_STRUCTURE")).toHaveLength(1);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_NXX_STRUCTURE")).toHaveLength(2);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_PLACEHOLDER")).toHaveLength(1);
+    expect(issues.filter((issue) => issue.ruleId === "PHONE_CANADIAN_AREA_CODE")).toHaveLength(2);
   });
 });
