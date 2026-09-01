@@ -635,8 +635,8 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
     if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
   }
 
-  const seenOens = new Map<string, string>();
-  const seenIdentity = new Map<string, string>();
+  const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
   const allowedByField: Record<string, string[]> = {
     Grade: rules.allowedGradeValues, Gender: ["F", "M", "Unk", "Other"], Province: rules.allowedProvinceValues,
     Language: rules.allowedLanguageValues, CountryOfOrigin: rules.allowedCountryValues, StreetType: rules.allowedStreetTypeValues,
@@ -667,8 +667,14 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
       }
       if (fields.OEN) {
         if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
-        else if (seenOens.has(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${seenOens.get(fields.OEN)}.` });
-        else seenOens.set(fields.OEN, studentName);
+        else if (rules.duplicateDetection.checkOen && seenOens.has(fields.OEN)) {
+          const prior = seenOens.get(fields.OEN)!;
+          if (prior.schoolNumber === school.schoolNumber) {
+            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}).` });
+          } else {
+            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment.` });
+          }
+        } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
       }
       if (fields.PostalCode && !new RegExp(rules.postalCodePattern, "i").test(fields.PostalCode)) issue(issues, { ...base, severity: "error", field: "PostalCode", ruleId: "POSTAL_CODE_FORMAT", message: `PostalCode "${fields.PostalCode}" is invalid.` });
       for (const [field, limit] of Object.entries(rules.fieldLengths)) if ((fields[field] ?? "").length > limit) issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.` });
@@ -679,9 +685,15 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
         if (message) issue(issues, { ...base, severity: "error", field, ruleId: "PHONE_FORMAT", message: `${field} ${message}.` });
       }
       const identity = `${fields.FirstName.toLowerCase()}|${fields.LastName.toLowerCase()}|${fields.BirthDate}`;
-      if (fields.FirstName && fields.LastName && fields.BirthDate) {
-        if (seenIdentity.has(identity)) issue(issues, { ...base, severity: "warning", ruleId: "IDENTITY_REVIEW", layer: "IDENTITY", message: `Possible duplicate identity also seen in ${seenIdentity.get(identity)}; review is required.` });
-        else seenIdentity.set(identity, studentName);
+      if (rules.duplicateDetection.checkNameDobSchool && fields.FirstName && fields.LastName && fields.BirthDate) {
+        const priorIdentity = seenIdentity.get(identity);
+        if (priorIdentity && priorIdentity.schoolNumber === school.schoolNumber) {
+          issue(issues, { ...base, severity: "error", ruleId: "NAME_DOB_DUPLICATE", layer: "IDENTITY", message: `Possible duplicate: ${studentName} (DOB ${fields.BirthDate}) also appears as ${priorIdentity.studentName} in the same school (${school.name || school.schoolNumber}).` });
+        } else if (priorIdentity) {
+          issue(issues, { ...base, severity: "warning", ruleId: "IDENTITY_REVIEW", layer: "IDENTITY", message: `Same name and birth date also appear at ${priorIdentity.schoolName || priorIdentity.schoolNumber} (${priorIdentity.schoolNumber}) as ${priorIdentity.studentName}; review for dual enrollment.` });
+        } else {
+          seenIdentity.set(identity, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+        }
       }
     }
   }

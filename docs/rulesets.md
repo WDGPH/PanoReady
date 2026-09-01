@@ -293,7 +293,7 @@ Same pattern as `gradeAliases`. Aliases are case-sensitive (both the key and the
 
 ### `duplicateDetection`
 
-**Controls:** `duplicate-oen` and `duplicate-name-dob-school` rules  
+**Controls:** `OEN_DUPLICATE`/`OEN_DUAL_ENROLLMENT` and `NAME_DOB_DUPLICATE`/`IDENTITY_REVIEW` rules  
 **Type:** object
 
 ```json
@@ -303,7 +303,12 @@ Same pattern as `gradeAliases`. Aliases are case-sensitive (both the key and the
 }
 ```
 
-Set either value to `false` to disable that duplicate check entirely. This is useful if your export process intentionally includes the same OEN across records (for example, a student enrolled in multiple schools).
+Each check compares matching records (same OEN, or same first name + last name + birth date) and reacts differently depending on where the match was found:
+
+- **Same school** — treated as a real duplicate record. Raised as an `error` (`OEN_DUPLICATE` / `NAME_DOB_DUPLICATE`) and blocks the gate.
+- **Different schools** — treated as a possible dual enrollment (e.g. a student taking a co-op or off-site course at another school). Raised as a `warning` (`OEN_DUAL_ENROLLMENT` / `IDENTITY_REVIEW`), naming both schools so it's easy to review, and does **not** block the gate.
+
+Set either value to `false` to disable that duplicate check entirely, in both its same-school and cross-school forms.
 
 ---
 
