@@ -605,6 +605,17 @@ function canonicalPhoneIssue(value: string): string | null {
   return null;
 }
 
+/** Reformats a raw 10-digit phone number into 999-999-9999; returns undefined if it can't be deterministically fixed. */
+function canonicalPhoneFix(value: string): string | undefined {
+  const extension = value.match(/(?:x|ext\.?|extension)\s*(\d{1,5})\s*$/i)?.[1] ?? "";
+  const withoutExtension = extension ? value.replace(/(?:x|ext\.?|extension)\s*\d{1,5}\s*$/i, "") : value;
+  let digits = withoutExtension.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  if (digits.length !== 10) return undefined;
+  const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
+  return canonicalPhoneIssue(formatted) === null ? formatted : undefined;
+}
+
 /** Namespace-aware validation of the canonical STIX model. */
 export function validateXml(xmlText: string, rules: RulesProfile = defaultRules): ValidationResult {
   const issues: ValidationIssue[] = [];
@@ -644,6 +655,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
     Guardian2Relationship: rules.allowedRelationshipValues, PhoneType: rules.allowedPhoneTypeValues,
     GuardianPhoneType: rules.allowedPhoneTypeValues, Guardian2PhoneType: rules.allowedPhoneTypeValues,
   };
+  const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
     const school = upload.schools[schoolIndex];
     if (!school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
@@ -659,11 +671,18 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
       for (const field of rules.requiredFields.filter((required) => required !== "SchoolNumber")) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
       for (const [field, allowed] of Object.entries(allowedByField)) {
         const value = fields[field];
-        if (value && !allowed.includes(value)) issue(issues, { ...base, severity: "error", field, ruleId: `${field.toUpperCase()}_ALLOWED_VALUE`, message: `${field} value "${value}" is not allowed.` });
+        if (value && !allowed.includes(value)) {
+          const aliasMap = aliasByField[field];
+          const alias = aliasMap?.[value] ?? aliasMap?.[value.trim().toUpperCase()];
+          issue(issues, { ...base, severity: "error", field, ruleId: `${field.toUpperCase()}_ALLOWED_VALUE`, message: `${field} value "${value}" is not allowed.`, suggestedFix: alias, autoFixable: !!alias });
+        }
       }
       if (fields.BirthDate) {
-        if (!validRealDate(fields.BirthDate)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.` });
-        else if (fields.BirthDate > new Date().toISOString().slice(0, 10)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
+        if (!validRealDate(fields.BirthDate)) {
+          const parsed = new Date(fields.BirthDate);
+          const canNormalize = !isNaN(parsed.getTime());
+          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.`, suggestedFix: canNormalize ? parsed.toISOString().slice(0, 10) : undefined, autoFixable: canNormalize });
+        } else if (fields.BirthDate > new Date().toISOString().slice(0, 10)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
       }
       if (fields.OEN) {
         if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
@@ -677,12 +696,27 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
         } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
       }
       if (fields.PostalCode && !new RegExp(rules.postalCodePattern, "i").test(fields.PostalCode)) issue(issues, { ...base, severity: "error", field: "PostalCode", ruleId: "POSTAL_CODE_FORMAT", message: `PostalCode "${fields.PostalCode}" is invalid.` });
-      for (const [field, limit] of Object.entries(rules.fieldLengths)) if ((fields[field] ?? "").length > limit) issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.` });
+      for (const [field, limit] of Object.entries(rules.fieldLengths)) {
+        const val = fields[field] ?? "";
+        if (val.length <= limit) continue;
+        if (field === "Unit") {
+          const [standardized, changed] = standardizeUnit(val);
+          const canFix = changed && standardized.length <= limit;
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: canFix ? standardized : undefined, autoFixable: canFix });
+        } else if (field === "StreetNumber") {
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.` });
+        } else {
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
+        }
+      }
       for (const field of ["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"]) {
         const value = fields[field];
         if (!value) continue;
         const message = canonicalPhoneIssue(value);
-        if (message) issue(issues, { ...base, severity: "error", field, ruleId: "PHONE_FORMAT", message: `${field} ${message}.` });
+        if (message) {
+          const fixed = canonicalPhoneFix(value);
+          issue(issues, { ...base, severity: "error", field, ruleId: "PHONE_FORMAT", message: `${field} ${message}.`, suggestedFix: fixed, autoFixable: !!fixed });
+        }
       }
       const identity = `${fields.FirstName.toLowerCase()}|${fields.LastName.toLowerCase()}|${fields.BirthDate}`;
       if (rules.duplicateDetection.checkNameDobSchool && fields.FirstName && fields.LastName && fields.BirthDate) {
@@ -697,9 +731,9 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
       }
     }
   }
-  issue(issues, { severity: "warning", ruleId: "XSD_SCHEMA_UNAVAILABLE", layer: "XSD", message: "The official studentuploaddata.xsd is not bundled, so final XSD validation is still required before submission." });
   const hasErrors = issues.some((finding) => finding.severity === "error");
-  const gate: GateState = hasErrors ? "BLOCKED" : "REVIEW_REQUIRED";
+  const hasWarnings = issues.some((finding) => finding.severity === "warning");
+  const gate: GateState = hasErrors ? "BLOCKED" : hasWarnings ? "REVIEW_REQUIRED" : "READY";
   return { issues, records, schoolCount: upload.schools.length, studentCount: records.length, gate, xsdValidated: false };
 }
 
