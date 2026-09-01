@@ -77,6 +77,42 @@ test("workbook adapter detects alternate sheets and headers and normalizes value
   assert.equal(imported.guardians[0].name.first, "Ann");
 });
 
+function duplicateStudent(oen: string, first: string, last: string, birthDate = "2015-04-12") {
+  return `<Student><OEN>${oen}</OEN><Name><First>${first}</First><Last>${last}</Last></Name><Gender>F</Gender><BirthDate>${birthDate}</BirthDate></Student>`;
+}
+
+function twoSchoolXml(schoolAStudents: string, schoolBStudents: string) {
+  const schoolA = `<School><SchoolNumber>111</SchoolNumber><Name>School A</Name><Students>${schoolAStudents}</Students></School>`;
+  const schoolB = `<School><SchoolNumber>222</SchoolNumber><Name>School B</Name><Students>${schoolBStudents}</Students></School>`;
+  return `<?xml version="1.0"?><SchoolUpload xmlns="http://ontario.ca">${metadata}${schoolA}${schoolB}</SchoolUpload>`;
+}
+
+test("same-school OEN and name+DOB matches block the gate as errors", () => {
+  const source = twoSchoolXml(
+    duplicateStudent("123456789", "Priya", "Nair") + duplicateStudent("123456789", "Priya", "Nair"),
+    "",
+  );
+  const result = validateXml(source);
+  const errorRuleIds = result.issues.filter((i) => i.severity === "error").map((i) => i.ruleId);
+  assert.ok(errorRuleIds.includes("OEN_DUPLICATE"));
+  assert.ok(errorRuleIds.includes("NAME_DOB_DUPLICATE"));
+  assert.equal(result.gate, "BLOCKED");
+});
+
+test("cross-school OEN and name+DOB matches warn about dual enrollment instead of blocking", () => {
+  const source = twoSchoolXml(
+    duplicateStudent("987654321", "Jordan", "Reyes"),
+    duplicateStudent("987654321", "Jordan", "Reyes"),
+  );
+  const result = validateXml(source);
+  const dupRuleIds = result.issues.filter((i) => ["OEN_DUPLICATE", "NAME_DOB_DUPLICATE", "OEN_DUAL_ENROLLMENT", "IDENTITY_REVIEW"].includes(i.ruleId));
+  assert.ok(dupRuleIds.every((i) => i.severity === "warning"));
+  assert.ok(dupRuleIds.some((i) => i.ruleId === "OEN_DUAL_ENROLLMENT" && i.message.includes("School A")));
+  assert.ok(dupRuleIds.some((i) => i.ruleId === "IDENTITY_REVIEW" && i.message.includes("School A")));
+  assert.equal(result.issues.filter((i) => i.severity === "error").length, 0);
+  assert.equal(result.gate, "REVIEW_REQUIRED");
+});
+
 test("fixes operate through the canonical model for default-namespace XML", () => {
   const records = parseStixXml(xml());
   assert.equal(records[0].fields.FirstName, "Ada");

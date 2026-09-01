@@ -610,8 +610,8 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                 </div>
                 {(
                   [
-                    { key: "checkOen" as const, label: "Check for duplicate OEN", desc: "Flag records that share an OEN value." },
-                    { key: "checkNameDobSchool" as const, label: "Check for duplicate Name + DOB + School", desc: "Flag records with matching first name, last name, date of birth, and school number." },
+                    { key: "checkOen" as const, label: "Check for duplicate OEN", desc: "Error and block when two records in the same school share an OEN; warn (without blocking) when the match is across different schools, e.g. dual enrollment." },
+                    { key: "checkNameDobSchool" as const, label: "Check for duplicate Name + DOB", desc: "Error and block when two records in the same school share a first name, last name, and birth date; warn (without blocking) when the match is across different schools." },
                   ] as const
                 ).map(({ key, label, desc }) => (
                   <label
