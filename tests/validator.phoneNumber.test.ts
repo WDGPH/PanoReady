@@ -231,7 +231,7 @@ describe("phone-number validator integration", () => {
     const result = validateXml(readFileSync(fixtureUrl, "utf8"));
     const issues = result.issues.filter((issue) => issue.field?.includes("Phone"));
 
-    expect(result.studentCount).toBe(26);
+    expect(result.studentCount).toBe(29);
     expect(issues.filter((issue) => issue.ruleId === "PHONE_FORMAT")).toHaveLength(5);
     expect(issues.filter((issue) => issue.ruleId === "PHONE_EXTENSION_NORMALIZE")).toHaveLength(5);
     expect(issues.filter((issue) => issue.ruleId === "PHONE_EXTENSION_FORMAT")).toHaveLength(3);

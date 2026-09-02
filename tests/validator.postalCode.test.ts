@@ -96,7 +96,7 @@ describe("postal-code validator integration", () => {
     const result = validateXml(readFileSync(fixtureUrl, "utf8"));
     const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
 
-    expect(result.studentCount).toBe(26);
+    expect(result.studentCount).toBe(29);
     expect(postalIssues).toHaveLength(10);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_NORMALIZE")).toHaveLength(3);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);

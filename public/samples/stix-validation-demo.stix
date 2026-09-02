@@ -401,6 +401,44 @@
         <ns1:Phone>519-824-7002</ns1:Phone>
       </ns1:Student>
 
+      <!-- Student 24: known gaps — configured Language, Country, StreetType, and StreetDirection lists are not enforced. -->
+      <ns1:Student>
+        <ns1:OEN>500000025</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Configuration</ns1:First><ns1:Last>Mirage</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-25</ns1:BirthDate>
+        <ns1:Language>KLINGON</ns1:Language>
+        <ns1:CountryOfOrigin>MARS</ns1:CountryOfOrigin>
+        <ns1:Address>
+          <ns1:StreetNumber>25</ns1:StreetNumber>
+          <ns1:StreetName>Configuration Crescent</ns1:StreetName>
+          <ns1:StreetType>WORMHOLE</ns1:StreetType>
+          <ns1:StreetDirection>UP</ns1:StreetDirection>
+          <ns1:City>Ottawa</ns1:City>
+          <ns1:Province>ON</ns1:Province>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 25: known gap — the required Address container is absent. -->
+      <ns1:Student>
+        <ns1:OEN>500000026</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Addressless</ns1:First><ns1:Last>Avocado</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-26</ns1:BirthDate>
+      </ns1:Student>
+
+      <!-- Student 26: known gap — familiar fields are accepted in an unexpected order. -->
+      <ns1:Student>
+        <ns1:Address/>
+        <ns1:BirthDate>2014-01-27</ns1:BirthDate>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:Name><ns1:First>Orderly</ns1:First><ns1:Last>Onion</ns1:Last></ns1:Name>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:OEN>500000027</ns1:OEN>
+      </ns1:Student>
+
       <!-- Known gap: content from an unexpected namespace is silently ignored. -->
       <rogue:Student>
         <rogue:Name>Namespace Nectarine</rogue:Name>
