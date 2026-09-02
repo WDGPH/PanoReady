@@ -7,7 +7,7 @@
 
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import { standardizeUnit } from "./cleaner";
-import { normalizeCanadianPostalCode, type PostalCodeResult } from "./postalCode";
+import { normalizeCanadianPostalCode } from "./postalCode";
 import {
   analyzePhoneNumber,
   isActiveCanadianGeographicNpa,
@@ -22,84 +22,14 @@ import type {
   RulesProfile,
 } from "./types";
 import defaultRules from "../config/rules.stix.default.json";
-
-function postalCodeIssueDetails(
-  raw: string,
-  rules: RulesProfile
-): {
-  severity: "warning" | "info";
-  message: string;
-  suggestedFix?: string;
-  autoFixable: boolean;
-  ruleId: string;
-} | null {
-  const result = normalizeCanadianPostalCode(raw);
-  const usesBuiltInRule = rules.postalCodePattern === defaultRules.postalCodePattern;
-
-  if (!usesBuiltInRule) {
-    // A custom pattern remains authoritative. Safe Canadian normalization is
-    // suggested only when the resulting value also passes that custom rule.
-    const customPattern = new RegExp(rules.postalCodePattern, "i");
-    const trimmed = raw.trim();
-    if (customPattern.test(trimmed)) {
-      if (raw === trimmed) return null;
-      return {
-        severity: "info",
-        message: `PostalCode "${raw}" has surrounding whitespace; normalize it to "${trimmed}".`,
-        suggestedFix: trimmed,
-        autoFixable: true,
-        ruleId: "POSTAL_CODE_NORMALIZE",
-      };
-    }
-    if (result.status === "invalid" || !customPattern.test(result.value)) {
-      return {
-        severity: "warning",
-        message: `PostalCode "${raw}" does not match the active postal-code pattern.`,
-        autoFixable: false,
-        ruleId: "POSTAL_CODE_FORMAT",
-      };
-    }
-  }
-
-  return postalCodeResultDetails(raw, result);
-}
-
-function postalCodeResultDetails(
-  raw: string,
-  result: PostalCodeResult
-): {
-  severity: "warning" | "info";
-  message: string;
-  suggestedFix?: string;
-  autoFixable: boolean;
-  ruleId: string;
-} | null {
-  if (result.status === "valid") return null;
-  if (result.status === "normalized") {
-    return {
-      severity: "info",
-      message: `PostalCode "${raw}" can be safely normalized to "${result.value}".`,
-      suggestedFix: result.value,
-      autoFixable: true,
-      ruleId: "POSTAL_CODE_NORMALIZE",
-    };
-  }
-  if (result.status === "repaired") {
-    return {
-      severity: "warning",
-      message: `PostalCode "${raw}" contains an O/I/L transcription in a numeric position; repair it to "${result.value}".`,
-      suggestedFix: result.value,
-      autoFixable: true,
-      ruleId: "POSTAL_CODE_REPAIR",
-    };
-  }
-  return {
-    severity: "warning",
-    message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`,
-    autoFixable: false,
-    ruleId: "POSTAL_CODE_FORMAT",
-  };
-}
+import {
+  flattenCanonicalStudent,
+  parseCanonicalXml,
+  serializeCanonicalXml,
+  type CanonicalStudent,
+  type CanonicalSchool,
+} from "./canonical";
+import { SCHOOL_FIELDS } from "./fields";
 
 // ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
 
@@ -140,97 +70,67 @@ function setTextValue(parent: XmlNode, key: string, value: string) {
   }
 }
 
-// ─── Phone-number issue presentation ─────────────────────────────────────────
+// ─── Phone number validation helper ──────────────────────────────────────────
 
-type PhoneIssueDetails = {
-  severity: "error" | "warning" | "info";
-  message: string;
-  autoFixable: boolean;
-  suggestedFix?: string;
-  ruleId: string;
-};
+const VALID_PHONE_RE = /^\d{3}-\d{3}-\d{4}$/;
 
-function phoneIssueDetails(
+function checkPhone(
   rawPhone: string,
   fieldLabel: string,
-  placeholderPhones: Set<string>,
-  canadianAreaCodeCheck: "off" | "info" | "warning"
-): PhoneIssueDetails[] {
-  const analysis = analyzePhoneNumber(rawPhone);
-  if (analysis.status === "invalid") {
-    const issues = [invalidPhoneIssue(rawPhone, fieldLabel, analysis)];
-    if (analysis.baseValue && placeholderPhones.has(analysis.baseValue)) {
-      issues.push({
-        severity: "error",
-        message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`,
-        autoFixable: false,
-        ruleId: "PHONE_PLACEHOLDER",
-      });
+  placeholderPhones: Set<string>
+): { message: string; autoFixable: boolean; suggestedFix?: string } | null {
+  const trimmed = rawPhone.trim();
+
+  // Already in correct format
+  if (VALID_PHONE_RE.test(trimmed)) {
+    const areaCode = trimmed.slice(0, 3);
+    // NANP: area codes cannot start with 0 or 1
+    if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
+      return { message: `${fieldLabel} "${rawPhone}" has an invalid area code (${areaCode}).`, autoFixable: false };
     }
-    return issues;
+    if (placeholderPhones.has(trimmed)) {
+      return { message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`, autoFixable: false };
+    }
+    return null; // valid
   }
 
-  const issues: PhoneIssueDetails[] = [];
-  if (analysis.status === "normalized") {
-    const hasExtension = analysis.extension !== undefined;
-    issues.push({
-      severity: "error",
-      message: hasExtension
-        ? `${fieldLabel} "${rawPhone}" can be safely normalized to "${analysis.value}" (lowercase x followed by 1-5 digits).`
-        : `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`,
-      suggestedFix: analysis.value,
-      autoFixable: true,
-      ruleId: hasExtension ? "PHONE_EXTENSION_NORMALIZE" : "PHONE_FORMAT",
-    });
+  // Multiple numbers
+  if (/[;\/]/.test(trimmed)) {
+    return { message: `${fieldLabel} "${rawPhone}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, autoFixable: false };
   }
-  if (placeholderPhones.has(analysis.baseValue)) {
-    issues.push({
-      severity: "error",
-      message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`,
-      autoFixable: false,
-      ruleId: "PHONE_PLACEHOLDER",
-    });
-  }
-  if (
-    canadianAreaCodeCheck !== "off" &&
-    !isActiveCanadianGeographicNpa(analysis.npa)
-  ) {
-    issues.push({
-      severity: canadianAreaCodeCheck,
-      message: `Area code ${analysis.npa} is not a currently active Canadian geographic area code. Confirm that this non-Canadian number is intended.`,
-      autoFixable: false,
-      ruleId: "PHONE_CANADIAN_AREA_CODE",
-    });
-  }
-  return issues;
-}
 
-function invalidPhoneIssue(
-  rawPhone: string,
-  fieldLabel: string,
-  analysis: Extract<PhoneNumberAnalysis, { status: "invalid" }>
-): PhoneIssueDetails {
-  const shared = { severity: "error" as const, autoFixable: false };
-  switch (analysis.reason) {
-    case "multiple-numbers":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, ruleId: "PHONE_FORMAT" };
-    case "appended-text":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" contains unrecognized text or notes. Enter one phone number, optionally followed by lowercase x and 1-5 extension digits.`, ruleId: "PHONE_FORMAT" };
-    case "too-few-digits":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has too few digits (${analysis.digitCount}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
-    case "too-many-digits":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
-    case "invalid-npa":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid NANP area code (${analysis.npa}). Its first digit must be 2-9.`, ruleId: "PHONE_NPA_STRUCTURE" };
-    case "invalid-nxx":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid NANP exchange code (${analysis.nxx}). Its first digit must be 2-9.`, ruleId: "PHONE_NXX_STRUCTURE" };
-    case "extension-missing":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an extension marker but no extension. Enter lowercase x followed by 1-5 digits, or remove the marker.`, ruleId: "PHONE_EXTENSION_FORMAT" };
-    case "extension-too-long":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an extension longer than the maximum of 5 digits. Confirm and enter 1-5 digits after lowercase x.`, ruleId: "PHONE_EXTENSION_FORMAT" };
-    case "extension-invalid":
-      return { ...shared, message: `${fieldLabel} "${rawPhone}" has an invalid extension. Use lowercase x followed by 1-5 digits.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+  // Letters indicate appended notes, extensions, or other text (e.g., "call 1st", "ex 233", "(cell)")
+  if (/[a-z]/i.test(trimmed)) {
+    return { message: `${fieldLabel} "${rawPhone}" contains non-numeric characters or notes. Enter only the 10-digit number in XXX-XXX-XXXX format.`, autoFixable: false };
   }
+
+  // Extract digits and attempt normalization
+  const digits = trimmed.replace(/\D/g, "");
+  let effective = digits;
+
+  // Strip leading country code 1 if exactly 11 digits
+  if (digits.length === 11 && digits.startsWith("1")) {
+    effective = digits.slice(1);
+  }
+
+  if (effective.length < 10) {
+    return { message: `${fieldLabel} "${rawPhone}" has too few digits (${effective.length}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, autoFixable: false };
+  }
+  if (effective.length > 10) {
+    return { message: `${fieldLabel} "${rawPhone}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, autoFixable: false };
+  }
+
+  const areaCode = effective.slice(0, 3);
+  const formatted = `${effective.slice(0, 3)}-${effective.slice(3, 6)}-${effective.slice(6, 10)}`;
+
+  if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
+    return { message: `${fieldLabel} "${rawPhone}" has an invalid area code (${areaCode}).`, autoFixable: false };
+  }
+  if (placeholderPhones.has(formatted)) {
+    return { message: `${fieldLabel} "${rawPhone}" appears to be a placeholder number.`, autoFixable: false };
+  }
+
+  return { message: `${fieldLabel} "${rawPhone}" is not in the required XXX-XXX-XXXX format.`, autoFixable: true, suggestedFix: formatted };
 }
 
 // ─── XML parser (standalone) ──────────────────────────────────────────────────
@@ -243,111 +143,18 @@ function invalidPhoneIssue(
  * the empty-school warning is handled by validateXml internally.
  */
 export function parseStixXml(xmlText: string): StudentRecord[] {
-  let doc: XmlNode;
-  try {
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: "@_",
-      parseAttributeValue: false,
-      parseTagValue: false,
-      textNodeName: "#text",
-      isArray: (name) => name === "ns1:School" || name === "ns1:Student",
-    });
-    doc = parser.parse(xmlText) as XmlNode;
-  } catch (e) {
-    throw new Error(`XML parse error: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  const root = doc["ns1:SchoolUpload"] as XmlNode | null;
-  if (!root) {
-    throw new Error(
-      "Root element <ns1:SchoolUpload> not found. This may not be a valid STIX file."
-    );
-  }
-
-  const schools = ensureArray(root["ns1:School"] as XmlNode | XmlNode[]);
-  if (schools.length === 0) {
-    throw new Error("No <ns1:School> elements found.");
-  }
-
-  const records: StudentRecord[] = [];
-  for (let si = 0; si < schools.length; si++) {
-    const school = schools[si];
-    const schoolName = str(school["ns1:Name"]);
-    const schoolNumber = str(school["ns1:SchoolNumber"]);
-    const schoolLabel = schoolNumber || schoolName || `School #${si + 1}`;
-
-    const studentsNode = (school["ns1:Students"] ?? {}) as XmlNode;
-    const studentNodes = ensureArray(
-      studentsNode["ns1:Student"] as XmlNode | XmlNode[]
-    );
-
-    for (let pi = 0; pi < studentNodes.length; pi++) {
-      const s = studentNodes[pi];
-      const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
-      const aliasNode = (s["ns1:AliasName"] ?? {}) as XmlNode;
-      const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
-      const phoneNode = (s["ns1:Phone"] ?? {}) as XmlNode;
-      const guardians = ensureArray(s["ns1:Guardian"] as XmlNode | XmlNode[]);
-      const guardian1 = (guardians[0] ?? {}) as XmlNode;
-      const guardian2 = (guardians[1] ?? {}) as XmlNode;
-      const guardian1Name = (guardian1["ns1:Name"] ?? {}) as XmlNode;
-      const guardian2Name = (guardian2["ns1:Name"] ?? {}) as XmlNode;
-      const guardian1Phone = (guardian1["ns1:Phone"] ?? {}) as XmlNode;
-      const guardian2Phone = (guardian2["ns1:Phone"] ?? {}) as XmlNode;
-
-      const fields: Record<string, string> = {
-        SchoolName:          str(school["ns1:Name"]),
-        SchoolNumber:        str(school["ns1:SchoolNumber"]),
-        FirstName:           str(nameNode["ns1:First"]),
-        MiddleName:          str(nameNode["ns1:Middle"]),
-        LastName:            str(nameNode["ns1:Last"]),
-        AliasFirstName:      str(aliasNode["ns1:First"]),
-        AliasMiddleName:     str(aliasNode["ns1:Middle"]),
-        AliasLastName:       str(aliasNode["ns1:Last"]),
-        BirthDate:           str(s["ns1:BirthDate"]),
-        Grade:               str(s["ns1:Grade"]),
-        Gender:              str(s["ns1:Gender"]),
-        OEN:                 str(s["ns1:OEN"]),
-        Language:            str(s["ns1:Language"]),
-        Phone:               str(phoneNode),
-        StreetType:          str(addrNode["ns1:StreetType"]),
-        StreetDirection:     str(s["ns1:StreetDirection"]),
-        RuralRoute:          str(s["ns1:RuralRoute"]),
-        PoBoxNumber:         str(s["ns1:PoBoxNumber"]),
-        PhoneType:           str(phoneNode["@_type"]),
-        GuardianFirstName:   str(guardian1Name["ns1:First"]),
-        GuardianLastName:    str(guardian1Name["ns1:Last"]),
-        GuardianRelationship: str(guardian1["ns1:Relationship"]),
-        GuardianPhoneNumber: str(guardian1Phone),
-        GuardianPhoneType:   str(guardian1Phone["@_type"]),
-        Guardian2FirstName:  str(guardian2Name["ns1:First"]),
-        Guardian2LastName:   str(guardian2Name["ns1:Last"]),
-        Guardian2Relationship: str(guardian2["ns1:Relationship"]),
-        Guardian2PhoneNumber: str(guardian2Phone),
-        Guardian2PhoneType:  str(guardian2Phone["@_type"]),
-        City:                str(addrNode["ns1:City"]),
-        Province:            str(addrNode["ns1:Province"]),
-        PostalCode:          str(addrNode["ns1:PostalCode"]),
-        StreetNumber:        str(addrNode["ns1:StreetNumber"]),
-        StreetName:          str(addrNode["ns1:StreetName"]),
-        StreetNumberSuffix:  str(addrNode["ns1:StreetNumberSuffix"]),
-        Unit:                str(addrNode["ns1:Unit"]),
-      };
-
-      records.push({
-        id: `school${si}:student${pi}`,
-        xmlPath: `ns1:SchoolUpload/ns1:School[${schoolLabel}]/ns1:Students/ns1:Student[${pi}]`,
-        fields,
-      });
-    }
-  }
-  return records;
+  const upload = parseCanonicalXml(xmlText);
+  if (upload.schools.length === 0) throw new Error("No <School> elements found.");
+  return upload.schools.flatMap((school, schoolIndex) => school.students.map((student, studentIndex) => ({
+    id: `school${schoolIndex}:student${studentIndex}`,
+    xmlPath: `SchoolUpload/School[${school.schoolNumber || school.name || schoolIndex + 1}]/Students/Student[${studentIndex}]`,
+    fields: flattenCanonicalStudent(student, school),
+  })));
 }
 
 // ─── Core validator ───────────────────────────────────────────────────────────
 
-export function validateXml(
+export function legacyValidateXml(
   xmlText: string,
   rules: RulesProfile = defaultRules as RulesProfile
 ): ValidationResult {
@@ -406,36 +213,6 @@ export function validateXml(
   // Alias lookups
   const gradeAliases = rules.gradeAliases as Record<string, string>;
   const genderAliases = rules.genderAliases as Record<string, string>;
-  const placeholderPhones = new Set(
-    (rules.phoneConfig?.placeholderNumbers ?? []) as string[]
-  );
-  const canadianAreaCodeCheck =
-    rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
-
-  // File-level, student, and guardian phones share the same number rules.
-  const metadataNode = (root["ns1:Metadata"] ?? {}) as XmlNode;
-  const metadataPhone = str(metadataNode["ns1:ContactPhone"]);
-  if (metadataPhone) {
-    for (const [index, phoneIssue] of phoneIssueDetails(
-      metadataPhone,
-      "Metadata ContactPhone",
-      placeholderPhones,
-      canadianAreaCodeCheck
-    ).entries()) {
-      issues.push({
-        id: `metadata-phone-${index}`,
-        recordId: "metadata",
-        studentName: "File metadata",
-        field: "MetadataContactPhone",
-        currentValue: metadataPhone,
-        severity: phoneIssue.severity,
-        message: phoneIssue.message,
-        suggestedFix: phoneIssue.suggestedFix,
-        autoFixable: phoneIssue.autoFixable,
-        ruleId: phoneIssue.ruleId,
-      });
-    }
-  }
 
   let totalStudents = 0;
   const seenOens = new Map<string, string>();
@@ -480,14 +257,6 @@ export function validateXml(
       const nameNode = (s["ns1:Name"] ?? {}) as XmlNode;
       const aliasNode = (s["ns1:AliasName"] ?? {}) as XmlNode;
       const addrNode = (s["ns1:Address"] ?? {}) as XmlNode;
-      const phoneNode = (s["ns1:Phone"] ?? {}) as XmlNode;
-      const guardians = ensureArray(s["ns1:Guardian"] as XmlNode | XmlNode[]);
-      const guardian1 = (guardians[0] ?? {}) as XmlNode;
-      const guardian2 = (guardians[1] ?? {}) as XmlNode;
-      const guardian1Name = (guardian1["ns1:Name"] ?? {}) as XmlNode;
-      const guardian2Name = (guardian2["ns1:Name"] ?? {}) as XmlNode;
-      const guardian1PhoneNode = (guardian1["ns1:Phone"] ?? {}) as XmlNode;
-      const guardian2PhoneNode = (guardian2["ns1:Phone"] ?? {}) as XmlNode;
 
       const firstName = str(nameNode["ns1:First"]);
       const middleName = str(nameNode["ns1:Middle"]);
@@ -500,9 +269,7 @@ export function validateXml(
       const gender = str(s["ns1:Gender"]);
       const oen = str(s["ns1:OEN"]);
       const language = str(s["ns1:Language"]);
-      const phone = str(phoneNode);
-      const guardianPhone = str(guardian1PhoneNode);
-      const guardian2Phone = str(guardian2PhoneNode);
+      const contactPhone = str(s["ns1:ContactPhone"]);
       const city = str(addrNode["ns1:City"]);
       const province = str(addrNode["ns1:Province"]);
       const postalCode = str(addrNode["ns1:PostalCode"]);
@@ -530,18 +297,7 @@ export function validateXml(
         Gender: gender,
         OEN: oen,
         Language: language,
-        Phone: phone,
-        PhoneType: str(phoneNode["@_type"]),
-        GuardianFirstName: str(guardian1Name["ns1:First"]),
-        GuardianLastName: str(guardian1Name["ns1:Last"]),
-        GuardianRelationship: str(guardian1["ns1:Relationship"]),
-        GuardianPhoneNumber: guardianPhone,
-        GuardianPhoneType: str(guardian1PhoneNode["@_type"]),
-        Guardian2FirstName: str(guardian2Name["ns1:First"]),
-        Guardian2LastName: str(guardian2Name["ns1:Last"]),
-        Guardian2Relationship: str(guardian2["ns1:Relationship"]),
-        Guardian2PhoneNumber: guardian2Phone,
-        Guardian2PhoneType: str(guardian2PhoneNode["@_type"]),
+        ContactPhone: contactPhone,
         City: city,
         Province: province,
         PostalCode: postalCode,
@@ -662,17 +418,16 @@ export function validateXml(
 
       // 8. Postal code format
       if (postalCode) {
-        const postalIssue = postalCodeIssueDetails(postalCode, rules);
-        if (postalIssue) {
+        const postalPattern = new RegExp(rules.postalCodePattern, "i");
+        if (!postalPattern.test(postalCode.trim())) {
           issues.push({
             ...base,
             id: `${recordId}-postal-format`,
-            severity: postalIssue.severity,
+            severity: "warning",
             field: "PostalCode",
-            message: postalIssue.message,
-            suggestedFix: postalIssue.suggestedFix,
-            autoFixable: postalIssue.autoFixable,
-            ruleId: postalIssue.ruleId,
+            message: `PostalCode "${postalCode}" does not match Canadian format (A1A 1A1).`,
+            autoFixable: false,
+            ruleId: "POSTAL_CODE_FORMAT",
           });
         }
       }
@@ -711,9 +466,6 @@ export function validateXml(
       for (const [field, maxLen] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
         const limit = maxLen as number;
-        // Postal-code length/format is owned by the dedicated rule above. In
-        // particular, never truncate an unresolved value into a guessed code.
-        if (field === "PostalCode") continue;
         if (val.length <= limit) continue;
 
         if (field === "Unit") {
@@ -764,7 +516,7 @@ export function validateXml(
       // 11. Whitespace (leading/trailing) on key text fields
       const textFields = [
         "FirstName", "MiddleName", "LastName", "Grade", "Gender",
-        "OEN", "City", "StreetName", "StreetNumber", "Unit",
+        "OEN", "City", "PostalCode", "StreetName", "StreetNumber", "Unit",
       ];
       for (const field of textFields) {
         const val = fields[field];
@@ -804,30 +556,22 @@ export function validateXml(
         }
       }
 
-      // 13. Phone-number format at every student-level phone location.
-      const phones = [
-        { value: phone, field: "Phone", label: "Student Phone" },
-        { value: guardianPhone, field: "GuardianPhoneNumber", label: "Guardian 1 Phone" },
-        { value: guardian2Phone, field: "Guardian2PhoneNumber", label: "Guardian 2 Phone" },
-      ];
-      for (const phoneField of phones) {
-        if (!phoneField.value) continue;
-        const phoneIssues = phoneIssueDetails(
-          phoneField.value,
-          phoneField.label,
-          placeholderPhones,
-          canadianAreaCodeCheck
+      // 13. Phone number format
+      if (contactPhone) {
+        const placeholderPhones = new Set(
+          (rules.phoneConfig?.placeholderNumbers ?? []) as string[]
         );
-        for (const [index, phoneIssue] of phoneIssues.entries()) {
+        const phoneIssue = checkPhone(contactPhone, "ContactPhone", placeholderPhones);
+        if (phoneIssue) {
           issues.push({
             ...base,
-            id: `${recordId}-${phoneField.field}-phone-${index}`,
-            severity: phoneIssue.severity,
-            field: phoneField.field,
+            id: `${recordId}-phone`,
+            severity: "error",
+            field: "ContactPhone",
             message: phoneIssue.message,
             suggestedFix: phoneIssue.suggestedFix,
             autoFixable: phoneIssue.autoFixable,
-            ruleId: phoneIssue.ruleId,
+            ruleId: "PHONE_FORMAT",
           });
         }
       }
@@ -847,13 +591,291 @@ export function validateXml(
   };
 }
 
+function issue(
+  issues: ValidationIssue[],
+  value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
+) {
+  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, autoFixable: value.autoFixable ?? false, ...value });
+}
+
+function validRealDate(value: string): boolean {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
+}
+
+const STREET_NUMBER_NON_NAME_WORDS = /^(unit|apt|apartment|suite|ste|basement|bsmt|floor|fl|upper|lower|box|po|rr|rear|front)\b/i;
+
+/**
+ * Real Panorama rejections show StreetNumber overflow is almost always the street name
+ * concatenated onto the number (e.g. "46 Curzon", "97 Lynch") rather than a genuinely long
+ * number. Detects that shape and proposes moving the trailing text into StreetName, but only
+ * when StreetName is empty (so nothing gets silently overwritten) and the trailing text looks
+ * like a name fragment, not another number or a unit/box keyword that landed in the wrong field.
+ */
+function splitStreetNumber(value: string, existingStreetName: string): { streetNumber: string; streetName: string } | undefined {
+  if (existingStreetName.trim()) return undefined;
+  const match = value.match(/^(\d+[A-Za-z]?)[\s-]+(.+)$/);
+  if (!match) return undefined;
+  const [, streetNumber, remainder] = match;
+  if (!/[A-Za-z]/.test(remainder) || STREET_NUMBER_NON_NAME_WORDS.test(remainder)) return undefined;
+  return { streetNumber, streetName: remainder.trim() };
+}
+
+type CanonicalPhoneFinding = {
+  severity: "error" | "warning" | "info";
+  message: string;
+  autoFixable: boolean;
+  suggestedFix?: string;
+  ruleId: string;
+};
+
+const SAFE_TRAILING_PHONE_NOTE = /[\s\-*/(),.!]*(?:(?:please\s+)?call\b[\s\-*/(),.!]*)?\b(?:1st|first|2nd|second|3rd|third)\b[\s\-*/(),.!]*(?:call\b[\s\-*/(),.!]*)?$|[\s\-*/(),.!]*\bcell\b[\s\-*/(),.!]*$/i;
+
+function legacyCanonicalPhoneFix(raw: string): string | undefined {
+  const withoutNote = raw.replace(SAFE_TRAILING_PHONE_NOTE, "");
+  const extension = withoutNote.match(/\bex\s*(\d{1,5})\s*$/i)?.[1] ?? "";
+  const base = extension ? withoutNote.replace(/\bex\s*\d{1,5}\s*$/i, "") : withoutNote;
+  if (base === raw && !extension) return undefined;
+  let digits = base.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  if (digits.length !== 10 || !/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return undefined;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
+}
+
+function invalidPhoneFinding(
+  raw: string,
+  label: string,
+  analysis: Extract<PhoneNumberAnalysis, { status: "invalid" }>,
+): CanonicalPhoneFinding {
+  const shared = { severity: "error" as const, autoFixable: false };
+  switch (analysis.reason) {
+    case "multiple-numbers": return { ...shared, message: `${label} "${raw}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, ruleId: "PHONE_FORMAT" };
+    case "appended-text": return { ...shared, message: `${label} "${raw}" contains unrecognized text or notes. Enter one phone number, optionally followed by lowercase x and 1-5 extension digits.`, ruleId: "PHONE_FORMAT" };
+    case "too-few-digits": return { ...shared, message: `${label} "${raw}" has too few digits (${analysis.digitCount}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "too-many-digits": return { ...shared, message: `${label} "${raw}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "invalid-npa": return { ...shared, message: `${label} "${raw}" has an invalid NANP area code (${analysis.npa}). Its first digit must be 2-9.`, ruleId: "PHONE_NPA_STRUCTURE" };
+    case "invalid-nxx": return { ...shared, message: `${label} "${raw}" has an invalid NANP exchange code (${analysis.nxx}). Its first digit must be 2-9.`, ruleId: "PHONE_NXX_STRUCTURE" };
+    case "extension-missing": return { ...shared, message: `${label} "${raw}" has an extension marker but no extension. Enter lowercase x followed by 1-5 digits, or remove the marker.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+    case "extension-too-long": return { ...shared, message: `${label} "${raw}" has an extension longer than the maximum of 5 digits. Confirm and enter 1-5 digits after lowercase x.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+    case "extension-invalid": return { ...shared, message: `${label} "${raw}" has an invalid extension. Use lowercase x followed by 1-5 digits.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+  }
+}
+
+function canonicalPhoneFindings(
+  raw: string,
+  label: string,
+  rules: RulesProfile,
+): CanonicalPhoneFinding[] {
+  const legacyFix = legacyCanonicalPhoneFix(raw);
+  if (legacyFix) {
+    return [{
+      severity: "error",
+      message: `${label} "${raw}" can be safely normalized to "${legacyFix}".`,
+      suggestedFix: legacyFix,
+      autoFixable: true,
+      ruleId: "PHONE_FORMAT",
+    }];
+  }
+  const analysis = analyzePhoneNumber(raw);
+  const placeholders = new Set(rules.phoneConfig?.placeholderNumbers ?? []);
+  if (analysis.status === "invalid") {
+    const findings = [invalidPhoneFinding(raw, label, analysis)];
+    if (analysis.baseValue && placeholders.has(analysis.baseValue)) {
+      findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
+    }
+    return findings;
+  }
+
+  const findings: CanonicalPhoneFinding[] = [];
+  if (analysis.status === "normalized") {
+    findings.push({
+      severity: "error",
+      message: analysis.extension !== undefined
+        ? `${label} "${raw}" can be safely normalized to "${analysis.value}" (lowercase x followed by 1-5 digits).`
+        : `${label} "${raw}" is not in the required XXX-XXX-XXXX format.`,
+      suggestedFix: analysis.value,
+      autoFixable: true,
+      ruleId: analysis.extension !== undefined ? "PHONE_EXTENSION_NORMALIZE" : "PHONE_FORMAT",
+    });
+  }
+  if (placeholders.has(analysis.baseValue)) {
+    findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
+  }
+  const canadianAreaCodeCheck = rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
+  if (canadianAreaCodeCheck !== "off" && !isActiveCanadianGeographicNpa(analysis.npa)) {
+    findings.push({
+      severity: canadianAreaCodeCheck,
+      message: `Area code ${analysis.npa} is not a currently active Canadian geographic area code. Confirm that this non-Canadian number is intended.`,
+      autoFixable: false,
+      ruleId: "PHONE_CANADIAN_AREA_CODE",
+    });
+  }
+  return findings;
+}
+
+function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFinding | null {
+  const normalized = normalizeCanadianPostalCode(raw);
+  const usesBuiltInRule = rules.postalCodePattern === defaultRules.postalCodePattern;
+  if (!usesBuiltInRule) {
+    const pattern = new RegExp(rules.postalCodePattern, "i");
+    const trimmed = raw.trim();
+    if (pattern.test(trimmed)) {
+      return raw === trimmed ? null : { severity: "info", message: `PostalCode "${raw}" has surrounding whitespace; normalize it to "${trimmed}".`, suggestedFix: trimmed, autoFixable: true, ruleId: "POSTAL_CODE_NORMALIZE" };
+    }
+    if (normalized.status === "invalid" || !pattern.test(normalized.value)) {
+      return { severity: "warning", message: `PostalCode "${raw}" does not match the active postal-code pattern.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
+    }
+  }
+  if (normalized.status === "valid") return null;
+  if (normalized.status === "normalized") return { severity: "info", message: `PostalCode "${raw}" can be safely normalized to "${normalized.value}".`, suggestedFix: normalized.value, autoFixable: true, ruleId: "POSTAL_CODE_NORMALIZE" };
+  if (normalized.status === "repaired") return { severity: "warning", message: `PostalCode "${raw}" contains an O/I/L transcription in a numeric position; repair it to "${normalized.value}".`, suggestedFix: normalized.value, autoFixable: true, ruleId: "POSTAL_CODE_REPAIR" };
+  return { severity: "warning", message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
+}
+
+/** Namespace-aware validation of the canonical STIX model. */
+export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  let upload;
+  try {
+    upload = parseCanonicalXml(xmlText);
+  } catch (error) {
+    issue(issues, { severity: "error", ruleId: "XML_PARSE_OR_NAMESPACE", layer: "XML", message: error instanceof Error ? error.message : String(error) });
+    return { issues, records: [], schoolCount: 0, studentCount: 0, gate: "BLOCKED", xsdValidated: false };
+  }
+  const records: StudentRecord[] = [];
+  issues.push(...upload.diagnostics);
+  const metadata = upload.metadata;
+  const metadataRequired: Array<[string, string]> = [
+    ["CreateDate", metadata.createDate], ["CreateTime", metadata.createTime], ["CreatedBy", metadata.createdBy],
+    ["ContactPhone", metadata.contactPhone?.number ?? ""], ["ContactEmail", metadata.contactEmail], ["FullUpload", metadata.fullUpload],
+  ];
+  for (const [field, value] of metadataRequired) if (!value.trim()) issue(issues, { severity: "error", field, ruleId: "METADATA_REQUIRED", layer: "CANONICAL", message: `${field} is required but missing.` });
+  if (metadata.createDate && (!validRealDate(metadata.createDate) || metadata.createDate > new Date().toISOString().slice(0, 10))) issue(issues, { severity: "error", field: "CreateDate", ruleId: "METADATA_DATE", layer: "CANONICAL", message: "CreateDate must be a real YYYY-MM-DD date no later than today." });
+  if (metadata.createTime && !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(metadata.createTime)) issue(issues, { severity: "error", field: "CreateTime", ruleId: "METADATA_TIME", layer: "CANONICAL", message: "CreateTime must use HH:mm:ss." });
+  if (metadata.createdBy && (metadata.createdBy.length < 1 || metadata.createdBy.length > 100)) issue(issues, { severity: "error", field: "CreatedBy", ruleId: "METADATA_CREATED_BY", layer: "CANONICAL", message: "CreatedBy must contain 1–100 characters." });
+  if (metadata.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(metadata.contactEmail)) issue(issues, { severity: "error", field: "ContactEmail", ruleId: "METADATA_EMAIL", layer: "CANONICAL", message: "ContactEmail is not a valid email address." });
+  if (metadata.fullUpload && !rules.allowedFullLoadTypeValues.includes(metadata.fullUpload)) issue(issues, { severity: "error", field: "FullUpload", ruleId: "FULL_UPLOAD_ALLOWED_VALUE", layer: "CANONICAL", message: `FullUpload "${metadata.fullUpload}" is not allowed.` });
+  if (metadata.boardNumber && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(metadata.boardNumber)) issue(issues, { severity: "error", field: "BoardNumber", ruleId: "BOARD_NUMBER_FORMAT", layer: "CANONICAL", message: "BoardNumber must be B plus 5 digits or D plus 2 letters and 3 digits." });
+  if (metadata.contactPhone) {
+    for (const finding of canonicalPhoneFindings(metadata.contactPhone.number, "Metadata ContactPhone", rules)) {
+      issue(issues, {
+        recordId: "metadata",
+        studentName: "File metadata",
+        field: "MetadataContactPhone",
+        currentValue: metadata.contactPhone.number,
+        layer: "CANONICAL",
+        ...finding,
+      });
+    }
+    if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
+  }
+
+  const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  const allowedByField: Record<string, string[]> = {
+    Grade: rules.allowedGradeValues, Gender: rules.allowedGenderValues, Province: rules.allowedProvinceValues,
+    Language: rules.allowedLanguageValues, CountryOfOrigin: rules.allowedCountryValues, StreetType: rules.allowedStreetTypeValues,
+    StreetDirection: rules.allowedStreetDirectionValues, GuardianRelationship: rules.allowedRelationshipValues,
+    Guardian2Relationship: rules.allowedRelationshipValues, PhoneType: rules.allowedPhoneTypeValues,
+    GuardianPhoneType: rules.allowedPhoneTypeValues, Guardian2PhoneType: rules.allowedPhoneTypeValues,
+  };
+  const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
+  const schoolFields = new Set<string>(SCHOOL_FIELDS);
+  for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
+    const school = upload.schools[schoolIndex];
+    if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
+    if (rules.requiredFields.includes("SchoolName") && !school.name) issue(issues, { severity: "error", field: "SchoolName", schoolNumber: school.schoolNumber, ruleId: "REQUIRED_FIELD", layer: "CANONICAL", message: "SchoolName is required but missing or empty." });
+    if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
+    if (school.students.length === 0) issue(issues, { severity: "error", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records.` });
+    for (let studentIndex = 0; studentIndex < school.students.length; studentIndex++) {
+      const student = school.students[studentIndex];
+      const fields = flattenCanonicalStudent(student, school);
+      const recordId = `school${schoolIndex}:student${studentIndex}`;
+      const studentName = [fields.FirstName, fields.LastName].filter(Boolean).join(" ") || `Student #${studentIndex + 1}`;
+      const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
+      records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
+      for (const field of rules.requiredFields.filter((required) => !schoolFields.has(required))) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
+      for (const [field, allowed] of Object.entries(allowedByField)) {
+        const value = fields[field];
+        if (value && !allowed.includes(value)) {
+          const aliasMap = aliasByField[field];
+          const alias = aliasMap?.[value] ?? aliasMap?.[value.trim().toUpperCase()];
+          issue(issues, { ...base, severity: "error", field, ruleId: `${field.toUpperCase()}_ALLOWED_VALUE`, message: `${field} value "${value}" is not allowed.`, suggestedFix: alias, autoFixable: !!alias });
+        }
+      }
+      if (fields.BirthDate) {
+        if (!validRealDate(fields.BirthDate)) {
+          const parsed = new Date(fields.BirthDate);
+          const canNormalize = !isNaN(parsed.getTime());
+          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.`, suggestedFix: canNormalize ? parsed.toISOString().slice(0, 10) : undefined, autoFixable: canNormalize });
+        } else if (fields.BirthDate > new Date().toISOString().slice(0, 10)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
+      }
+      if (fields.OEN) {
+        if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
+        else if (rules.duplicateDetection.checkOen && seenOens.has(fields.OEN)) {
+          const prior = seenOens.get(fields.OEN)!;
+          if (prior.schoolNumber === school.schoolNumber) {
+            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}).` });
+          } else {
+            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment.` });
+          }
+        } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+      }
+      if (fields.PostalCode) {
+        const finding = postalCodeFinding(fields.PostalCode, rules);
+        if (finding) issue(issues, { ...base, field: "PostalCode", currentValue: fields.PostalCode, ...finding });
+      }
+      for (const [field, limit] of Object.entries(rules.fieldLengths)) {
+        const val = fields[field] ?? "";
+        if (field === "PostalCode") continue;
+        if (val.length <= limit) continue;
+        if (field === "Unit") {
+          const [standardized, changed] = standardizeUnit(val);
+          const canFix = changed && standardized.length <= limit;
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: canFix ? standardized : undefined, autoFixable: canFix });
+        } else if (field === "StreetNumber") {
+          const split = splitStreetNumber(val, fields.StreetName ?? "");
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `StreetNumber "${val}" exceeds the ${limit}-character limit${split ? "; it looks like the street name is combined with the number" : ""}.`, suggestedFix: split?.streetNumber, autoFixable: !!split });
+          if (split) issue(issues, { ...base, severity: "warning", field: "StreetName", ruleId: "STREET_NUMBER_SPLIT", message: `StreetName appears to be missing "${split.streetName}", currently combined into StreetNumber "${val}".`, suggestedFix: split.streetName, autoFixable: true });
+        } else {
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
+        }
+      }
+      for (const field of ["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"]) {
+        const value = fields[field];
+        if (!value) continue;
+        for (const finding of canonicalPhoneFindings(value, field, rules)) {
+          issue(issues, { ...base, field, currentValue: value, ...finding });
+        }
+      }
+      const identity = `${fields.FirstName.toLowerCase()}|${fields.LastName.toLowerCase()}|${fields.BirthDate}`;
+      if (rules.duplicateDetection.checkNameDobSchool && fields.FirstName && fields.LastName && fields.BirthDate) {
+        const priorIdentity = seenIdentity.get(identity);
+        if (priorIdentity && priorIdentity.schoolNumber === school.schoolNumber) {
+          issue(issues, { ...base, severity: "error", ruleId: "NAME_DOB_DUPLICATE", layer: "IDENTITY", message: `Possible duplicate: ${studentName} (DOB ${fields.BirthDate}) also appears as ${priorIdentity.studentName} in the same school (${school.name || school.schoolNumber}).` });
+        } else if (priorIdentity) {
+          issue(issues, { ...base, severity: "warning", ruleId: "IDENTITY_REVIEW", layer: "IDENTITY", message: `Same name and birth date also appear at ${priorIdentity.schoolName || priorIdentity.schoolNumber} (${priorIdentity.schoolNumber}) as ${priorIdentity.studentName}; review for dual enrollment.` });
+        } else {
+          seenIdentity.set(identity, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+        }
+      }
+    }
+  }
+  const hasErrors = issues.some((finding) => finding.severity === "error");
+  const hasWarnings = issues.some((finding) => finding.severity === "warning" && finding.ruleId !== "PHONE_CANADIAN_AREA_CODE");
+  const gate: GateState = hasErrors ? "BLOCKED" : hasWarnings ? "REVIEW_REQUIRED" : "READY";
+  return { issues, records, schoolCount: upload.schools.length, studentCount: records.length, gate, xsdValidated: false };
+}
+
 // ─── Fix application ──────────────────────────────────────────────────────────
 
 /**
  * Field-name → XML path within a student node.
  * Name sub-fields live under ns1:Name, address sub-fields under ns1:Address.
  */
-const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct" | "school" | "guardian1" | "guardian2"; tag: string }> = {
+const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct" | "school"; tag: string }> = {
   SchoolName:         { parent: "school", tag: "ns1:Name" },
   SchoolNumber:       { parent: "school", tag: "ns1:SchoolNumber" },
   FirstName:          { parent: "name",   tag: "ns1:First" },
@@ -868,7 +890,7 @@ const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct
   OEN:                { parent: "direct", tag: "ns1:OEN" },
   Language:           { parent: "direct", tag: "ns1:Language" },
   Class:              { parent: "direct", tag: "ns1:Class" },
-  Phone:              { parent: "direct", tag: "ns1:Phone" },
+  ContactPhone:       { parent: "direct", tag: "ns1:ContactPhone" },
   City:               { parent: "addr",   tag: "ns1:City" },
   Province:           { parent: "addr",   tag: "ns1:Province" },
   PostalCode:         { parent: "addr",   tag: "ns1:PostalCode" },
@@ -883,12 +905,12 @@ const FIELD_TO_XML: Record<string, { parent: "name" | "alias" | "addr" | "direct
   GuardianFirstName:  { parent: "direct", tag: "ns1:GuardianFirstName" },
   GuardianLastName:   { parent: "direct", tag: "ns1:GuardianLastName" },
   GuardianRelationship: { parent: "direct", tag: "ns1:GuardianRelationship" },
-  GuardianPhoneNumber: { parent: "guardian1", tag: "ns1:Phone" },
+  GuardianPhoneNumber: { parent: "direct", tag: "ns1:GuardianPhoneNumber" },
   GuardianPhoneType:  { parent: "direct", tag: "ns1:GuardianPhoneType" },
   Guardian2FirstName: { parent: "direct", tag: "ns1:Guardian2FirstName" },
   Guardian2LastName:  { parent: "direct", tag: "ns1:Guardian2LastName" },
   Guardian2Relationship: { parent: "direct", tag: "ns1:Guardian2Relationship" },
-  Guardian2PhoneNumber: { parent: "guardian2", tag: "ns1:Phone" },
+  Guardian2PhoneNumber: { parent: "direct", tag: "ns1:Guardian2PhoneNumber" },
   Guardian2PhoneType:  { parent: "direct", tag: "ns1:Guardian2PhoneType" },
   Unit:               { parent: "addr",   tag: "ns1:Unit" },
 };
@@ -911,10 +933,6 @@ function applyFieldFix(studentNode: XmlNode, schoolNode: XmlNode, field: string,
     const addrNode = (studentNode["ns1:Address"] ?? {}) as XmlNode;
     studentNode["ns1:Address"] = addrNode;
     setTextValue(addrNode, mapping.tag, value);
-  } else if (mapping.parent === "guardian1" || mapping.parent === "guardian2") {
-    const guardians = ensureArray(studentNode["ns1:Guardian"] as XmlNode | XmlNode[]);
-    const guardian = guardians[mapping.parent === "guardian1" ? 0 : 1];
-    if (guardian) setTextValue(guardian, mapping.tag, value);
   } else {
     setTextValue(studentNode, mapping.tag, value);
   }
@@ -928,7 +946,7 @@ function decodeRecordId(recordId: string): { si: number; pi: number } | null {
 }
 
 /** Apply a list of AppliedFix objects to original XML and return cleaned XML string */
-export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
+export function legacyApplyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
   if (fixes.length === 0) return xmlText;
 
   // Group fixes by recordId
@@ -953,16 +971,6 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   const schools = ensureArray(root["ns1:School"] as XmlNode | XmlNode[]);
 
   for (const [recordId, recordFixes] of byRecord) {
-    if (recordId === "metadata") {
-      const metadata = (root["ns1:Metadata"] ?? {}) as XmlNode;
-      root["ns1:Metadata"] = metadata;
-      for (const fix of recordFixes) {
-        if (fix.field === "MetadataContactPhone") {
-          setTextValue(metadata, "ns1:ContactPhone", fix.newValue);
-        }
-      }
-      continue;
-    }
     const coords = decodeRecordId(recordId);
     if (!coords) continue;
     const school = schools[coords.si];
@@ -987,6 +995,63 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   });
 
   return `<?xml version="1.0" encoding="utf-8"?>\n` + builder.build(doc);
+}
+
+function setCanonicalStudentField(student: CanonicalStudent, school: CanonicalSchool, field: string, value: string) {
+  const direct: Record<string, keyof Pick<CanonicalStudent, "oen" | "grade" | "className" | "gender" | "birthDate" | "language" | "countryOfOrigin">> = {
+    OEN: "oen", Grade: "grade", Class: "className", Gender: "gender", BirthDate: "birthDate", Language: "language", CountryOfOrigin: "countryOfOrigin",
+  };
+  if (direct[field]) { student[direct[field]] = value; return; }
+  if (field === "SchoolName") { school.name = value; return; }
+  if (field === "SchoolNumber") { school.schoolNumber = value; return; }
+  const names: Record<string, ["name" | "aliasName", "first" | "middle" | "last"]> = {
+    FirstName: ["name", "first"], MiddleName: ["name", "middle"], LastName: ["name", "last"],
+    AliasFirstName: ["aliasName", "first"], AliasMiddleName: ["aliasName", "middle"], AliasLastName: ["aliasName", "last"],
+  };
+  if (names[field]) {
+    const [container, part] = names[field];
+    if (container === "aliasName" && !student.aliasName) student.aliasName = { first: "", middle: "", last: "" };
+    (student[container] as { first: string; middle: string; last: string })[part] = value;
+    return;
+  }
+  const address: Record<string, keyof CanonicalStudent["address"]> = {
+    Unit: "unit", StreetNumber: "streetNumber", StreetNumberSuffix: "streetNumberSuffix", StreetName: "streetName",
+    StreetType: "streetType", StreetDirection: "streetDirection", RuralRoute: "ruralRoute", PoBoxNumber: "poBoxNumber",
+    City: "city", Province: "province", PostalCode: "postalCode",
+  };
+  if (address[field]) { student.address[address[field]] = value; return; }
+  if (field === "Phone" || field === "ContactPhone") { student.phone = { number: value, type: student.phone?.type ?? "" }; return; }
+  if (field === "PhoneType") { student.phone = { number: student.phone?.number ?? "", type: value }; return; }
+  const guardianMatch = field.match(/^Guardian(2)?(FirstName|LastName|Relationship|PhoneNumber|PhoneType)$/);
+  if (guardianMatch) {
+    const index = guardianMatch[1] ? 1 : 0;
+    while (student.guardians.length <= index) student.guardians.push({ name: { first: "", middle: "", last: "" }, relationship: "", phone: null });
+    const guardian = student.guardians[index];
+    const part = guardianMatch[2];
+    if (part === "FirstName") guardian.name.first = value;
+    else if (part === "LastName") guardian.name.last = value;
+    else if (part === "Relationship") guardian.relationship = value;
+    else if (part === "PhoneNumber") guardian.phone = { number: value, type: guardian.phone?.type ?? "" };
+    else guardian.phone = { number: guardian.phone?.number ?? "", type: value };
+  }
+}
+
+/** Apply fixes through the canonical model so every namespace-prefix form behaves identically. */
+export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
+  if (fixes.length === 0) return xmlText;
+  const upload = parseCanonicalXml(xmlText);
+  for (const fix of fixes) {
+    if (fix.recordId === "metadata" && fix.field === "MetadataContactPhone") {
+      upload.metadata.contactPhone = { number: fix.newValue, type: upload.metadata.contactPhone?.type ?? "" };
+      continue;
+    }
+    const coordinates = decodeRecordId(fix.recordId);
+    if (!coordinates) continue;
+    const school = upload.schools[coordinates.si];
+    const student = school?.students[coordinates.pi];
+    if (school && student) setCanonicalStudentField(student, school, fix.field, fix.newValue);
+  }
+  return serializeCanonicalXml(upload);
 }
 
 // ─── Apply fixes to in-memory records (for UI refresh without re-parsing XML) ─

@@ -12,7 +12,7 @@ function stixWithPhones(phones: string[]): string {
       <ns1:OEN>${String(700000000 + index)}</ns1:OEN>
       <ns1:Grade>GR5</ns1:Grade>
       <ns1:Name><ns1:First>Phone${index}</ns1:First><ns1:Last>Tester</ns1:Last></ns1:Name>
-      <ns1:Gender>X</ns1:Gender>
+      <ns1:Gender>Other</ns1:Gender>
       <ns1:BirthDate>2015-02-${String(index + 1).padStart(2, "0")}</ns1:BirthDate>
       <ns1:Address></ns1:Address>
       <ns1:Phone>${phone}</ns1:Phone>
@@ -20,6 +20,7 @@ function stixWithPhones(phones: string[]): string {
 
   return `<?xml version="1.0" encoding="utf-8"?>
     <ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
+      <ns1:Metadata><ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime><ns1:CreatedBy>Phone Tests</ns1:CreatedBy><ns1:ContactPhone type="WORK">519-824-9999</ns1:ContactPhone><ns1:ContactEmail>phone@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload></ns1:Metadata>
       <ns1:School>
         <ns1:SchoolNumber>123456</ns1:SchoolNumber>
         <ns1:Name>Synthetic Phone School</ns1:Name>
@@ -135,7 +136,7 @@ describe("phone-number validator integration", () => {
           <ns1:Students><ns1:Student>
             <ns1:OEN>700000000</ns1:OEN><ns1:Grade>GR5</ns1:Grade>
             <ns1:Name><ns1:First>Apple</ns1:First><ns1:Last>Tester</ns1:Last></ns1:Name>
-            <ns1:Gender>X</ns1:Gender><ns1:BirthDate>2015-02-01</ns1:BirthDate>
+            <ns1:Gender>Other</ns1:Gender><ns1:BirthDate>2015-02-01</ns1:BirthDate>
             <ns1:Guardian><ns1:Name><ns1:First>Pear</ns1:First></ns1:Name><ns1:Relationship>LEGALGRD</ns1:Relationship><ns1:Phone type="HOME">519-824-2000 #20</ns1:Phone></ns1:Guardian>
             <ns1:Guardian><ns1:Name><ns1:First>Plum</ns1:First></ns1:Name><ns1:Relationship>OTHER</ns1:Relationship><ns1:Phone type="MOBILE">519-824-3000X30</ns1:Phone></ns1:Guardian>
             <ns1:Address></ns1:Address><ns1:Phone type="MOBILE">519-824-4000 x 40</ns1:Phone>

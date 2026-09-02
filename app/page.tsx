@@ -32,14 +32,15 @@ import type {
   ValidateSession, ValidationIssue, AppliedFix,
   ValidationSeverity, RulesProfile, StixComparison,
   StudentRecord, CleaningProfile, CleaningSummaryEntry,
+  ImportPreview,
 } from "@/lib/types";
 import { defaultRules, getActiveRules, getActiveCleaning, getActiveRulesetId, listCustomRulesets, saveCustomRuleset, BUILTIN_ID } from "@/lib/rulesets";
 import RulesetSelector from "@/components/RulesetSelector";
 import CleaningView from "@/components/CleaningView";
 import CleaningSummaryView from "@/components/CleaningSummaryView";
 import * as XLSX from "xlsx";
-import { xlsmMetadata, xlsmToStixXml } from "@/lib/excel";
-import type { XlsmMetadata } from "@/lib/excel";
+import { importWorkbook, xlsmMetadata, CANONICAL_FIELDS } from "@/lib/excel";
+import type { XlsmMetadata, ColumnOverrides, CanonicalField } from "@/lib/excel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ function SeverityBadge({ severity }: { severity: ValidationSeverity }) {
 
 function GateBadge({ gate }: { gate: string }) {
   const isReady = gate === "READY";
-  const isPending = gate === "PENDING";
+  const isPending = gate === "PENDING" || gate === "REVIEW_REQUIRED";
   const color  = isReady ? "var(--verde)" : isPending ? "var(--color-text-muted)" : "var(--color-error-text)";
   const icon   = isReady ? <CheckCircle2 size={14} /> : isPending ? <Loader2 size={14} />   : <ShieldX size={14} />;
   return (
@@ -142,12 +143,16 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
+  const [xlsmPreview, setXlsmPreview] = useState<ImportPreview | null>(null);
+  const [columnOverrides, setColumnOverrides] = useState<ColumnOverrides>({});
   const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
     setFile(f);
     setXlsmMeta(null);
+    setXlsmPreview(null);
+    setColumnOverrides({});
   }, []);
 
   useEffect(() => {
@@ -170,6 +175,20 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
     });
     return () => { cancelled = true; };
   }, [file]);
+
+  // Recomputes on every column-override change so resolving an unmapped/duplicate
+  // column immediately clears its blocking diagnostic in the preview.
+  useEffect(() => {
+    if (!file || !xlsmMeta || !/\.xlsm?$/i.test(file.name)) return;
+    let cancelled = false;
+    file.arrayBuffer().then((data) => {
+      if (cancelled) return;
+      setXlsmPreview(importWorkbook(data, file.name, xlsmMeta, columnOverrides).preview);
+    }).catch((err) => {
+      if (!cancelled) setError(`Could not read workbook: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return () => { cancelled = true; };
+  }, [file, xlsmMeta, columnOverrides]);
 
   useEffect(() => {
     if (!file || !xlsmMeta || !/\.xlsm?$/i.test(file.name)) return;
@@ -289,7 +308,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
     if (!selectedFile) { setError("Please select a file first."); return; }
     setProcessing(true); setError(null);
     try {
-      const xmlText = await readInputAsStixXml(selectedFile, xlsmMeta ?? undefined);
+      const xmlText = await readInputAsStixXml(selectedFile, xlsmMeta ?? undefined, columnOverrides);
 
       if (workflow === "compare") {
         const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
@@ -302,7 +321,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
       if (workflow === "validate") {
         // Parse records first; errors throw and are caught below.
         const parsed = parseStixXml(xmlText);
-        onParsed(xmlText, parsed, selectedFile.name, xlsmMeta?.requiredFields);
+        onParsed(xmlText, parsed, selectedFile.name);
         return;
       }
 
@@ -435,6 +454,61 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
                 </label>
               ))}
             </div>
+          </section>
+        )}
+
+        {xlsmPreview && (
+          <section className="beat">
+            <h2 className="beat-title">Import preview</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 12 }}>
+              <StatCard label="Worksheet" value={xlsmPreview.worksheet} />
+              <StatCard label="Student rows" value={xlsmPreview.canonicalStudentCount} />
+              <StatCard label="Import findings" value={xlsmPreview.diagnostics.length} accent={xlsmPreview.diagnostics.some((finding) => finding.severity === "error") ? "red" : "default"} />
+            </div>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: "0 0 10px" }}>
+              Header row {xlsmPreview.headerRow}; data starts at row {xlsmPreview.firstDataRow}. Populated unmapped or duplicate columns block processing — resolve them below.
+            </p>
+            <div style={{ maxHeight: 320, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: 4 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead><tr><th style={{ textAlign: "left", padding: 7 }}>Source column</th><th style={{ textAlign: "left", padding: 7 }}>Canonical field</th><th style={{ textAlign: "left", padding: 7 }}>Status</th><th style={{ textAlign: "right", padding: 7 }}>Values</th><th style={{ textAlign: "left", padding: 7 }}>Fix</th></tr></thead>
+                <tbody>{xlsmPreview.columns.map((column) => {
+                  const needsFix = column.status === "UNMAPPED" || column.status === "DUPLICATE" || column.status === "IGNORED";
+                  return (
+                    <tr key={column.column} style={{ borderTop: "1px solid var(--color-border)" }}>
+                      <td style={{ padding: 7 }}>{column.sourceHeader || `(column ${column.column})`}</td>
+                      <td style={{ padding: 7, fontFamily: "var(--font-mono)" }}>{column.canonicalField || "—"}</td>
+                      <td style={{ padding: 7, color: column.status === "MAPPED" ? "var(--color-text-secondary)" : column.status === "IGNORED" ? "var(--color-text-muted)" : column.populatedCount ? "var(--color-error-text)" : "var(--color-text-muted)" }}>{column.status}</td>
+                      <td style={{ padding: 7, textAlign: "right" }}>{column.populatedCount}</td>
+                      <td style={{ padding: 7 }}>
+                        {needsFix ? (
+                          <select
+                            className="input"
+                            style={{ fontSize: 11, padding: "3px 6px" }}
+                            value={columnOverrides[column.column] ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setColumnOverrides((prev) => {
+                                const next = { ...prev };
+                                if (!value) delete next[column.column];
+                                else next[column.column] = value as CanonicalField | "IGNORE";
+                                return next;
+                              });
+                            }}
+                          >
+                            <option value="">{column.status === "IGNORED" ? "Undo ignore" : "Leave as-is (blocks import)"}</option>
+                            <option value="IGNORE">Ignore this column</option>
+                            {CANONICAL_FIELDS.map((f) => <option key={f} value={f}>Map to {f}</option>)}
+                          </select>
+                        ) : (
+                          <span style={{ color: "var(--color-text-muted)" }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+            {xlsmPreview.diagnostics.map((finding) => <p key={finding.id} style={{ fontSize: 11, color: finding.severity === "error" ? "var(--color-error-text)" : "var(--color-warning-text)", margin: "8px 0 0" }}>{finding.message}</p>)}
           </section>
         )}
 
@@ -1445,10 +1519,11 @@ function ValidateFixView({
   });
 
   const [onlyFixable, setOnlyFixable] = useState(true);
+  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
 
-  const visibleIssues = onlyFixable
-    ? issues.filter(i => i.autoFixable || i.field)
-    : issues;
+  const visibleIssues = issues
+    .filter(i => !onlyFixable || i.autoFixable || i.field)
+    .filter(i => severityFilter === "all" || i.severity === severityFilter);
 
   const autoFillAll = () => {
     const next: Record<string, string> = { ...pending };
@@ -1515,8 +1590,19 @@ function ValidateFixView({
         Manual fields require you to type a correction — leave blank to skip.
       </div>
 
-      {/* Filter toggle */}
-      <div style={{ marginBottom: 14 }}>
+      {/* Filters */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", marginBottom: 14 }}>
+        <select
+          className="input"
+          value={severityFilter}
+          onChange={e => setSeverityFilter(e.target.value as typeof severityFilter)}
+          style={{ flex: "0 0 140px" }}
+        >
+          <option value="all">All severities</option>
+          <option value="error">Errors only</option>
+          <option value="warning">Warnings only</option>
+          <option value="info">Info only</option>
+        </select>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer" }}>
           <input type="checkbox" checked={onlyFixable} onChange={e => setOnlyFixable(e.target.checked)} />
           Show only editable issues (fields with suggested fixes or manual edits)
@@ -1876,6 +1962,7 @@ function ValidateDownloadView({
   const baseName = session.fileName.replace(/\.xml$/i, "");
   const result = session.revalidatedResult ?? session.initialResult;
   const gate = result.gate;
+  const needsReview = gate === "REVIEW_REQUIRED";
   const xml = session.finalXml ?? session.originalXml;
 
   const dlXml = () => downloadText(xml, `${baseName}_validated.xml`, "application/xml");
@@ -1984,17 +2071,18 @@ function ValidateDownloadView({
         gap: 16,
         marginBottom: 34,
       }}>
-        {gate === "READY" ? <CheckCircle2 size={28} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} /> : <ShieldX size={28} style={{ color: "var(--color-error-text)", flexShrink: 0 }} />}
+        {gate === "READY" ? <CheckCircle2 size={28} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} /> : needsReview ? <AlertTriangle size={28} style={{ color: "var(--color-warning-text)", flexShrink: 0 }} /> : <ShieldX size={28} style={{ color: "var(--color-error-text)", flexShrink: 0 }} />}
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <span style={{ fontWeight: 700, fontSize: 16, color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }}>
-              {gate === "READY" ? "File is READY" : "File is BLOCKED"}
+              {gate === "READY" ? "File is READY" : needsReview ? "File requires review" : "File is BLOCKED"}
             </span>
             <GateBadge gate={gate} />
           </div>
           <div style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
             {gate === "READY"
               ? `No blocking errors · ${warningCount > 0 ? `${warningCount} warning${warningCount !== 1 ? "s" : ""} for review` : "All clear"}`
+              : needsReview ? "Canonical checks passed; official XSD validation is still required before submission."
               : `${errorCount} blocking error${errorCount !== 1 ? "s" : ""} must be resolved before submission`}
           </div>
           <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 4 }}>
@@ -2151,10 +2239,14 @@ function ValidateDownloadView({
 
 // ─── File read helper ─────────────────────────────────────────────────────────
 
-async function readInputAsStixXml(f: File, metadata?: Partial<XlsmMetadata>): Promise<string> {
+async function readInputAsStixXml(f: File, metadata?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): Promise<string> {
   if (/\.xlsm?$/i.test(f.name)) {
     const data = await f.arrayBuffer();
-    return xlsmToStixXml(data, f.name, metadata);
+    const result = importWorkbook(data, f.name, metadata, columnOverrides);
+    const structuralBlockers = new Set(["IMPORT_UNMAPPED_COLUMN", "IMPORT_DUPLICATE_COLUMN", "IMPORT_DATE_AMBIGUOUS", "IMPORT_PHONE_AMBIGUOUS", "IMPORT_FORMULA", "RECONCILIATION_COUNT"]);
+    const blockers = result.preview.diagnostics.filter((finding) => finding.severity === "error" && structuralBlockers.has(finding.ruleId));
+    if (blockers.length) throw new Error(`Workbook import is blocked: ${blockers[0].message}${blockers.length > 1 ? ` (+${blockers.length - 1} more)` : ""}`);
+    return result.xml;
   }
   const xmlText = await readFileText(f);
   if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is neither XML nor a supported Excel workbook.");
@@ -2232,8 +2324,8 @@ export default function App() {
           onCompare={(result) => { setComparison(result); setView("compare"); }}
           activeRules={activeRules}
           onRulesChange={setActiveRules}
-          onParsed={(xmlText, records, fileName, requiredFields) => {
-            const validationRules = requiredFields?.length ? { ...activeRules, requiredFields } : activeRules;
+          onParsed={(xmlText, records, fileName) => {
+            const validationRules = activeRules;
             setPendingFile({ xml: xmlText, fileName, validationRules });
             setParsedRecords(records);
             setView("clean-step");
