@@ -76,6 +76,57 @@ export function analyzeStreetNumberRepair(
 }
 
 /**
+ * Detect a street number and name that landed in Unit instead, e.g. "437 Pine".
+ * Moving data out of Unit into two other fields is a bigger structural change
+ * than a same-field split, so this is never proposed as "safe" — always review.
+ */
+export function analyzeUnitOverflow(
+  fields: Record<string, string>,
+  maxStreetNumberLength: number,
+  proposalId = "address-unit-overflow",
+): AddressRepairProposal | undefined {
+  const raw = (fields.Unit ?? "").trim();
+  const match = raw.match(/^(\d+)[\s,–—-]+(.+)$/);
+  if (!match) return undefined;
+
+  const [, number, remainderRaw] = match;
+  const remainder = remainderRaw.trim();
+  if (
+    number.length > maxStreetNumberLength ||
+    !/[A-Za-z]/.test(remainder) ||
+    NON_STREET_NAME_WORDS.test(remainder)
+  ) return undefined;
+
+  const currentNumber = (fields.StreetNumber ?? "").trim();
+  const currentName = (fields.StreetName ?? "").trim();
+  const sameNumber = currentNumber !== "" && currentNumber === number;
+  const sameName = currentName !== "" && comparable(currentName) === comparable(remainder);
+  const conflicts = [
+    currentNumber && !sameNumber ? `StreetNumber is already “${currentNumber}”` : "",
+    currentName && !sameName ? `StreetName is already “${currentName}”` : "",
+  ].filter(Boolean).join("; ");
+
+  // A conflict means we can't tell whether "437" was a genuine unit number or just
+  // duplicated street data — propose nothing rather than guess and silently drop it.
+  const changes: AddressRepairProposal["changes"] = conflicts ? [] : [
+    { field: "Unit", currentValue: fields.Unit ?? "", proposedValue: "" },
+    ...(currentNumber === "" ? [{ field: "StreetNumber", currentValue: fields.StreetNumber ?? "", proposedValue: number }] : []),
+    ...(currentName === "" ? [{ field: "StreetName", currentValue: fields.StreetName ?? "", proposedValue: remainder }] : []),
+  ];
+
+  return {
+    kind: "address",
+    id: proposalId,
+    confidence: "review",
+    title: conflicts ? "Review a street number and name found in Unit" : "Move a street number and name out of Unit",
+    explanation: conflicts
+      ? `“${raw}” in Unit looks like street number “${number}” plus street name “${remainder}”, but ${conflicts}. Review the complete address before applying changes.`
+      : `“${raw}” in Unit looks like street number “${number}” plus street name “${remainder}”, which likely belongs in StreetNumber/StreetName instead. Review the complete address before applying changes.`,
+    changes,
+  };
+}
+
+/**
  * Detect a small unit number fused to a street number with a bare dash, e.g. "4-51".
  * Deliberately narrow (unit 1-2 digits, street number 2-6 digits, no surrounding
  * spaces) so it never overlaps with genuinely ambiguous ranges like "302-380" or

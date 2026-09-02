@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, Fragment } from "react";
 import {
   Wand2, FileText,
   CheckCircle2, AlertCircle, Loader2, ArrowLeft,
@@ -8,7 +8,7 @@ import {
   Download, Users, BarChart3,
   ShieldX, Search, Filter, Wrench, RefreshCw,
   ClipboardCheck, SlidersHorizontal, GitCompareArrows,
-  Lock, X, FileCode,
+  Lock, X, FileCode, ChevronDown,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
@@ -1414,7 +1414,7 @@ function ValidateIssuesView({
   const canSkip = stagedFixes.length === 0 && (initialResult.gate === "READY" || initialResult.gate === "REVIEW_REQUIRED");
 
   return (
-    <main style={{ flex: 1, maxWidth: 1180, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
+    <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Open another file
       </button>
@@ -1438,8 +1438,7 @@ function ValidateIssuesView({
         <StatCard label="Auto-fixable" value={fixableCount}     accent="teal" />
       </div>
 
-      <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ flex: "2 1 540px", minWidth: 0 }}>
+      <div>
           {/* Filters */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "center" }}>
             <div style={{ position: "relative", flex: "1 1 220px" }}>
@@ -1490,28 +1489,40 @@ function ValidateIssuesView({
                 {allIssues.length === 0 ? "No issues found — file looks clean!" : "No issues match the current filters."}
               </div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 80 }}>Severity</th>
-                      <th>Student</th>
-                      <th>School</th>
-                      <th>Field</th>
-                      <th>Current Value</th>
-                      <th>Issue</th>
-                      <th>Suggested Fix</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(issue => {
-                      const record = records.find(r => r.id === issue.recordId);
-                      const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
-                      const staged = !!stagedAddressFixes[issue.id];
-                      return (
-                        <tr key={issue.id} style={{ background: openAddressIssueId === issue.id ? "var(--color-info-bg)" : undefined }}>
+              <table className="data-table" style={{ width: "100%", tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: 76 }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: 84 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: "13%" }} />
+                  <col />
+                  <col style={{ width: "22%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Severity</th>
+                    <th>Student</th>
+                    <th>School</th>
+                    <th>Field</th>
+                    <th>Current Value</th>
+                    <th>Issue</th>
+                    <th>Suggested Fix</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(issue => {
+                    const record = records.find(r => r.id === issue.recordId);
+                    const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
+                    const staged = !!stagedAddressFixes[issue.id];
+                    const isOpen = openAddressIssueId === issue.id;
+                    const proposal = issue.repairProposal;
+                    const draft = isOpen ? (addressDrafts[proposal?.id ?? ""] ?? (issue ? suggestedAddressDraft(issue, records) : undefined)) : undefined;
+                    return (
+                      <Fragment key={issue.id}>
+                        <tr style={{ background: isOpen ? "var(--color-info-bg)" : undefined }}>
                           <td><SeverityBadge severity={issue.severity} /></td>
-                          <td style={{ fontWeight: 500, color: "var(--color-text-primary)", maxWidth: 160 }}>{issue.studentName || "—"}</td>
+                          <td style={{ fontWeight: 500, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{issue.studentName || "—"}</td>
                           <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{issue.schoolNumber || "—"}</td>
                           <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || "—"}</td>
                           <td>
@@ -1519,26 +1530,27 @@ function ValidateIssuesView({
                               <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
                             ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
                           </td>
-                          <td style={{ maxWidth: 280, fontSize: 12, lineHeight: 1.5 }}>{issue.message}</td>
+                          <td style={{ fontSize: 12, lineHeight: 1.5 }}>{issue.message}</td>
                           <td>
-                            {issue.repairProposal ? (
+                            {proposal ? (
                               <button
                                 type="button"
-                                onClick={() => setOpenAddressIssueId(issue.id)}
+                                onClick={() => setOpenAddressIssueId(isOpen ? null : issue.id)}
                                 style={{
                                   display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
                                   padding: "3px 8px", borderRadius: 99, cursor: "pointer",
                                   border: `1px solid ${staged ? "var(--color-success-border)" : "var(--color-border)"}`,
                                   background: staged ? "var(--color-success-bg)" : "var(--color-surface-1)",
-                                  color: staged ? "var(--color-success-text)" : issue.repairProposal.confidence === "safe" ? "var(--color-success-text)" : issue.repairProposal.confidence === "manual" ? "var(--color-info-text)" : "var(--color-warning-text)",
+                                  color: staged ? "var(--color-success-text)" : proposal.confidence === "safe" ? "var(--color-success-text)" : proposal.confidence === "manual" ? "var(--color-info-text)" : "var(--color-warning-text)",
                                 }}
                               >
                                 {staged ? <CheckCircle2 size={12} /> : <MapPin size={12} />}
                                 {staged
                                   ? "Fix staged — edit"
-                                  : issue.repairProposal.confidence === "safe" ? "Address repair ready"
-                                  : issue.repairProposal.confidence === "manual" ? "Review manually"
+                                  : proposal.confidence === "safe" ? "Address repair ready"
+                                  : proposal.confidence === "manual" ? "Review manually"
                                   : "Review complete address"}
+                                <ChevronDown size={12} style={{ transform: isOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
                               </button>
                             ) : issue.suggestedFix ? (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -1550,11 +1562,48 @@ function ValidateIssuesView({
                             ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Manual</span>}
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        {isOpen && proposal && record && draft && (
+                          <tr style={{ background: "var(--color-info-bg)" }}>
+                            <td colSpan={7} style={{ padding: "0 16px 16px" }}>
+                              <AddressRepairCard
+                                proposal={proposal}
+                                record={record}
+                                studentName={issue.studentName}
+                                schoolNumber={issue.schoolNumber}
+                                rules={rules}
+                                draft={draft}
+                                selected={addressSelected[proposal.id] ?? (proposal.confidence === "safe")}
+                                onDraftChange={(field, value) => setAddressDrafts((current) => ({
+                                  ...current,
+                                  [proposal.id]: { ...(current[proposal.id] ?? suggestedAddressDraft(issue, records)), [field]: value },
+                                }))}
+                                onSelectedChange={(selected) => setAddressSelected((current) => ({ ...current, [proposal.id]: selected }))}
+                                onReset={() => setAddressDrafts((current) => ({ ...current, [proposal.id]: suggestedAddressDraft(issue, records) }))}
+                              />
+                              <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end" }}>
+                                {stagedAddressFixes[issue.id] && (
+                                  <button
+                                    type="button"
+                                    onClick={() => { removeStagedAddressFix(issue.id); setOpenAddressIssueId(null); }}
+                                    className="btn btn-ghost"
+                                    style={{ fontSize: 12, color: "var(--color-error-text)", marginRight: "auto" }}
+                                  >
+                                    Remove staged fix
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => setOpenAddressIssueId(null)} className="btn btn-ghost" style={{ fontSize: 12 }}>Close</button>
+                                <button type="button" onClick={applyAddressFix} className="btn btn-primary" style={{ fontSize: 12, gap: 5 }}>
+                                  <CheckCircle2 size={13} /> Apply this fix
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
 
@@ -1563,51 +1612,6 @@ function ValidateIssuesView({
               Showing {filtered.length} of {allIssues.length} issues
             </p>
           )}
-        </div>
-
-        {/* Address repair side panel */}
-        <div style={{ flex: "1 1 360px", minWidth: 300, position: "sticky", top: 20 }}>
-          {openIssue && openProposal && openRecord && openDraft ? (
-            <div>
-              <AddressRepairCard
-                proposal={openProposal}
-                record={openRecord}
-                studentName={openIssue.studentName}
-                schoolNumber={openIssue.schoolNumber}
-                rules={rules}
-                draft={openDraft}
-                selected={addressSelected[openProposal.id] ?? (openProposal.confidence === "safe")}
-                onDraftChange={(field, value) => setAddressDrafts((current) => ({
-                  ...current,
-                  [openProposal.id]: { ...(current[openProposal.id] ?? suggestedAddressDraft(openIssue, records)), [field]: value },
-                }))}
-                onSelectedChange={(selected) => setAddressSelected((current) => ({ ...current, [openProposal.id]: selected }))}
-                onReset={() => setAddressDrafts((current) => ({ ...current, [openProposal.id]: suggestedAddressDraft(openIssue, records) }))}
-              />
-              <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end" }}>
-                {stagedAddressFixes[openIssue.id] && (
-                  <button
-                    type="button"
-                    onClick={() => { removeStagedAddressFix(openIssue.id); setOpenAddressIssueId(null); }}
-                    className="btn btn-ghost"
-                    style={{ fontSize: 12, color: "var(--color-error-text)", marginRight: "auto" }}
-                  >
-                    Remove staged fix
-                  </button>
-                )}
-                <button type="button" onClick={() => setOpenAddressIssueId(null)} className="btn btn-ghost" style={{ fontSize: 12 }}>Close</button>
-                <button type="button" onClick={applyAddressFix} className="btn btn-primary" style={{ fontSize: 12, gap: 5 }}>
-                  <CheckCircle2 size={13} /> Apply this fix
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ border: "1px dashed var(--color-border)", borderRadius: 6, padding: "32px 20px", textAlign: "center", color: "var(--color-text-muted)", fontSize: 12 }}>
-              <MapPin size={18} style={{ marginBottom: 8, opacity: 0.6 }} />
-              <div>Select a “Review” action on an address issue to see the complete address and apply a fix right here — no need to open Fix Data.</div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Actions */}

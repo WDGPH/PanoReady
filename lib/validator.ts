@@ -34,6 +34,7 @@ import {
   analyzeAlternateDeliveryInStreetFields,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
+  analyzeUnitOverflow,
 } from "./addressRepair";
 
 // ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
@@ -782,7 +783,11 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
       records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
 
-      const unitPrefixProposal = analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-unit-prefix`);
+      // Only a standalone finding when StreetNumber is within its length limit — an over-length
+      // value gets this same proposal attached to the blocking FIELD_LENGTH error instead.
+      const unitPrefixProposal = (fields.StreetNumber ?? "").length <= (rules.fieldLengths.StreetNumber ?? Infinity)
+        ? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-unit-prefix`)
+        : undefined;
       if (unitPrefixProposal) {
         issue(issues, {
           ...base, severity: "warning", field: "StreetNumber", ruleId: "STREET_NUMBER_UNIT_PREFIX",
@@ -828,6 +833,14 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         const finding = postalCodeFinding(fields.PostalCode, rules);
         if (finding) issue(issues, { ...base, field: "PostalCode", currentValue: fields.PostalCode, ...finding });
       }
+      const manualAddressProposal = (field: string, val: string, limit: number) => ({
+        kind: "address" as const,
+        id: `${recordId}-address-manual-${field}`,
+        confidence: "manual" as const,
+        title: `Review ${field} manually`,
+        explanation: `${field} "${val}" exceeds its ${limit}-character limit and can't be safely auto-split. Review the complete address and edit the fields directly.`,
+        changes: [],
+      });
       for (const [field, limit] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
         if (field === "PostalCode") continue;
@@ -835,29 +848,34 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         if (field === "Unit") {
           const [standardized, changed] = standardizeUnit(val);
           const canFix = changed && standardized.length <= limit;
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: canFix ? standardized : undefined, autoFixable: canFix });
-        } else if (field === "StreetNumber") {
-          const repairProposal = analyzeStreetNumberRepair(fields, limit, `${recordId}-address-street-number`);
-          const safe = repairProposal?.confidence === "safe";
+          const repairProposal = canFix ? undefined : (analyzeUnitOverflow(fields, rules.fieldLengths.StreetNumber ?? limit, `${recordId}-address-unit-overflow`) ?? manualAddressProposal(field, val, limit));
           issue(issues, {
             ...base,
             severity: "error",
             field,
             ruleId: "FIELD_LENGTH",
-            message: repairProposal?.explanation ?? `StreetNumber "${val}" exceeds its ${limit}-character limit.`,
+            message: repairProposal?.explanation ?? `${field} exceeds its ${limit}-character limit.`,
+            suggestedFix: canFix ? standardized : undefined,
+            autoFixable: canFix,
+            repairProposal,
+          });
+        } else if (field === "StreetNumber") {
+          const repairProposal = analyzeStreetNumberRepair(fields, limit, `${recordId}-address-street-number`)
+            ?? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-street-number-unit-prefix`)
+            ?? manualAddressProposal(field, val, limit);
+          const safe = repairProposal.confidence === "safe";
+          issue(issues, {
+            ...base,
+            severity: "error",
+            field,
+            ruleId: "FIELD_LENGTH",
+            message: repairProposal.explanation,
             suggestedFix: safe ? repairProposal.changes.find((change) => change.field === field)?.proposedValue : undefined,
             autoFixable: safe,
             repairProposal,
           });
         } else if ((ADDRESS_REPAIR_FIELDS as readonly string[]).includes(field)) {
-          const manualProposal = {
-            kind: "address" as const,
-            id: `${recordId}-address-manual-${field}`,
-            confidence: "manual" as const,
-            title: `Review ${field} manually`,
-            explanation: `${field} "${val}" exceeds its ${limit}-character limit and can't be safely auto-split. Review the complete address and edit the fields directly.`,
-            changes: [],
-          };
+          const manualProposal = manualAddressProposal(field, val, limit);
           issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: manualProposal.explanation, autoFixable: false, repairProposal: manualProposal });
         } else {
           issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });

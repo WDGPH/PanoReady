@@ -273,7 +273,10 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
     const numberIssue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
     assert.equal(numberIssue?.suggestedFix, undefined, `expected no auto-split for "${ambiguous}"`);
     assert.equal(numberIssue?.autoFixable, false);
-    assert.equal(numberIssue?.repairProposal, undefined);
+    // No confident split, but still surfaced as a manual repair card (not a dead-end "Manual" label)
+    // so the address can be reviewed and fixed inline instead of in the source file.
+    assert.equal(numberIssue?.repairProposal?.confidence, "manual");
+    assert.deepEqual(numberIssue?.repairProposal?.changes, []);
   }
 });
 
