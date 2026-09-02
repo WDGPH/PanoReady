@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, Fragment } from "react";
+import Link from "next/link";
 import {
   Wand2, FileText,
   CheckCircle2, AlertCircle, Loader2, ArrowLeft,
@@ -8,7 +9,7 @@ import {
   Download, Users, BarChart3,
   ShieldX, Search, Filter, Wrench, RefreshCw,
   ClipboardCheck, SlidersHorizontal, GitCompareArrows,
-  Lock, X, FileCode,
+  Lock, X, FileCode, ChevronDown,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
@@ -38,9 +39,11 @@ import { defaultRules, getActiveRules, getActiveCleaning, getActiveRulesetId, li
 import RulesetSelector from "@/components/RulesetSelector";
 import CleaningView from "@/components/CleaningView";
 import CleaningSummaryView from "@/components/CleaningSummaryView";
+import AddressRepairCard from "@/components/AddressRepairCard";
 import * as XLSX from "xlsx";
 import { importWorkbook, xlsmMetadata, CANONICAL_FIELDS } from "@/lib/excel";
 import type { XlsmMetadata, ColumnOverrides, CanonicalField } from "@/lib/excel";
+import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,8 +65,11 @@ function NavBar() {
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <span className="brand">PanoReady</span>
-        <span className="privacy">Data never leaves your browser</span>
+        <Link href="./" className="brand no-underline">PanoReady</Link>
+        <nav aria-label="Primary navigation" style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <Link href="./about" className="no-underline" style={{ color: "var(--color-text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>About</Link>
+        </nav>
+        <span className="privacy">Files stay in this browser</span>
       </div>
     </header>
   );
@@ -117,11 +123,11 @@ function GateBadge({ gate }: { gate: string }) {
 // ─── Workflows config ────────────────────────────────────────────────────────
 
 const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
-  { id: "validate", label: "Validate & Fix",  description: "Full validation: required fields, code values, formats, duplicates. Apply safe fixes, revalidate, download." },
-  { id: "clean",    label: "Clean XML",       description: "Fix phones, standardize units, flag bad street numbers for manual review." },
-  { id: "export",   label: "Export Reports",  description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries." },
-  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation." },
-  { id: "compare",  label: "Compare Files",   description: "Compare two snapshots to measure record, field, and school-level changes." },
+  { id: "validate", label: "Validate & Fix",  description: "Check required fields, code values, formats, and duplicates. Apply safe fixes, then download the result." },
+  { id: "clean",    label: "Clean XML",       description: "Standardize phone and unit values. Send uncertain street numbers to review." },
+  { id: "export",   label: "Export Reports",  description: "Turn student records into CSV and Excel reports, with school and grade summaries." },
+  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation for easier review." },
+  { id: "compare",  label: "Compare Files",   description: "Compare two files and inspect record, field, and school-level changes." },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
@@ -356,9 +362,9 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
 
         {/* Statement — the one decision on this page that isn't a workflow choice */}
         <section className="beat">
-          <p className="eyebrow" style={{ marginBottom: 22 }}>In your browser, always</p>
+          <p className="eyebrow" style={{ marginBottom: 22 }}>Local file checks</p>
           <h1 style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 500, fontSize: "clamp(34px,5.5vw,58px)", lineHeight: 1.08, letterSpacing: "-0.01em", margin: 0, maxWidth: 480, color: "var(--ink)" }}>
-            Validate, in confidence.
+            Check the file before submission.
           </h1>
         </section>
 
@@ -431,7 +437,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
 
         {xlsmMeta && (
           <section className="beat">
-            <h2 className="beat-title">File Info metadata</h2>
+          <h2 className="beat-title">File details</h2>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
               Review or update these values before the workbook is converted to STIX XML.
             </p>
@@ -556,7 +562,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
 
           {currentXlsmMeta && (
             <section className="beat">
-              <h2 className="beat-title">Current file metadata</h2>
+              <h2 className="beat-title">Current file details</h2>
               <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
                 Review or update these values before the current workbook is converted for comparison.
               </p>
@@ -1053,7 +1059,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
       <div className="compare-dashboard-header" style={{ marginBottom: 12 }}>
         <div className="compare-dashboard-kicker">OPERATIONS / CHANGE INTELLIGENCE <span>LOCAL ANALYSIS</span></div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <GitCompareArrows size={22} style={{ color: "#f59e0b" }} />
+          <GitCompareArrows size={22} style={{ color: "var(--color-accent-amber)" }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>STIX file comparison</h1>
         </div>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>
@@ -1240,7 +1246,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
 
       <Dialog.Root open={encryptDialogOpen} onOpenChange={(open) => { if (!open) closeEncryptDialog(); }}>
         <Dialog.Portal>
-          <Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+          <Dialog.Overlay style={{ position: "fixed", inset: 0, background: "var(--color-overlay)", zIndex: 50 }} />
           <Dialog.Content
             aria-describedby={undefined}
             style={{
@@ -1307,6 +1313,13 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
   );
 }
 
+function suggestedAddressDraft(issue: ValidationIssue, records: StudentRecord[]): Record<string, string> {
+  const record = records.find((candidate) => candidate.id === issue.recordId);
+  const draft = Object.fromEntries(ADDRESS_REPAIR_FIELDS.map((field) => [field, record?.fields[field] ?? ""]));
+  for (const change of issue.repairProposal?.changes ?? []) draft[change.field] = change.proposedValue;
+  return draft;
+}
+
 // ─── ValidateIssuesView ───────────────────────────────────────────────────────
 // Screen 2: Review Issues
 
@@ -1314,17 +1327,34 @@ function ValidateIssuesView({
   session,
   onBack,
   onFix,
+  onApply,
   onSkipToDownload,
 }: {
   session: ValidateSession;
   onBack: () => void;
-  onFix: () => void;
+  onFix: (stagedFixes: AppliedFix[]) => void;
+  onApply: (fixes: AppliedFix[]) => void;
   onSkipToDownload: () => void;
 }) {
   const { initialResult } = session;
   const allIssues = initialResult.issues;
+  const records = initialResult.records;
+  const rules = session.validationRules ?? defaultRules;
 
-  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
+  const [openAddressIssueId, setOpenAddressIssueId] = useState<string | null>(null);
+  const [addressDrafts, setAddressDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [addressSelected, setAddressSelected] = useState<Record<string, boolean>>({});
+  // Seed from session.fixes so fixes staged here survive a round trip through Fix Data and back.
+  const [stagedAddressFixes, setStagedAddressFixes] = useState<Record<string, AppliedFix[]>>(() => {
+    const byIssue: Record<string, AppliedFix[]> = {};
+    for (const fix of session.fixes) {
+      if (!fix.repairId) continue;
+      (byIssue[fix.issueId] ??= []).push(fix);
+    }
+    return byIssue;
+  });
+
+  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("error");
   const [fixableOnly, setFixableOnly] = useState(false);
   const [schoolFilter, setSchoolFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -1352,8 +1382,43 @@ function ValidateIssuesView({
   const infoCount    = allIssues.filter(i => i.severity === "info").length;
   const fixableCount = allIssues.filter(i => i.autoFixable).length;
 
+  const openIssue = openAddressIssueId ? allIssues.find(i => i.id === openAddressIssueId) : undefined;
+  const openProposal = openIssue?.repairProposal;
+  const openRecord = openIssue ? records.find(r => r.id === openIssue.recordId) : undefined;
+  const openDraft = openIssue ? (addressDrafts[openIssue.repairProposal!.id] ?? suggestedAddressDraft(openIssue, records)) : undefined;
+
+  const applyAddressFix = () => {
+    if (!openIssue || !openProposal || !openRecord || !openDraft) return;
+    const now = Date.now();
+    const fixes: AppliedFix[] = ADDRESS_REPAIR_FIELDS
+      .filter((field) => (openDraft[field] ?? "") !== (openRecord.fields[field] ?? ""))
+      .map((field) => ({
+        issueId: openIssue.id,
+        recordId: openIssue.recordId!,
+        field,
+        oldValue: openRecord.fields[field] ?? "",
+        newValue: openDraft[field] ?? "",
+        ruleId: openIssue.ruleId,
+        repairId: openProposal.id,
+        appliedAt: now,
+      }));
+    setStagedAddressFixes((current) => ({ ...current, [openIssue.id]: fixes }));
+    setOpenAddressIssueId(null);
+  };
+
+  const removeStagedAddressFix = (issueId: string) => {
+    setStagedAddressFixes((current) => {
+      const next = { ...current };
+      delete next[issueId];
+      return next;
+    });
+  };
+
+  const stagedFixes = Object.values(stagedAddressFixes).flat();
+  const canSkip = stagedFixes.length === 0 && (initialResult.gate === "READY" || initialResult.gate === "REVIEW_REQUIRED");
+
   return (
-    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
+    <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
       <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Open another file
       </button>
@@ -1370,119 +1435,203 @@ function ValidateIssuesView({
       </div>
 
       {/* Summary stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 28, marginBottom: 22 }}>
+      <div className="summary-stats summary-stats--four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 28, marginBottom: 22 }}>
         <StatCard label="Total Issues" value={allIssues.length} />
         <StatCard label="Errors"       value={errorCount}       accent="red" />
         <StatCard label="Warnings"     value={warningCount}     accent="yellow" />
         <StatCard label="Auto-fixable" value={fixableCount}     accent="teal" />
       </div>
 
-      {/* Filters */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "center" }}>
-        <div style={{ position: "relative", flex: "1 1 220px" }}>
-          <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)", pointerEvents: "none" }} />
-          <input className="input" placeholder="Search issues…" value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 30 }} />
-        </div>
+      <div>
+          {/* Filters */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "center" }}>
+            <div style={{ position: "relative", flex: "1 1 220px" }}>
+              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)", pointerEvents: "none" }} />
+              <input className="input" placeholder="Search issues…" value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 30 }} />
+            </div>
 
-        <select
-          className="input"
-          value={severityFilter}
-          onChange={e => setSeverityFilter(e.target.value as typeof severityFilter)}
-          style={{ flex: "0 0 140px" }}
-        >
-          <option value="all">All severities</option>
-          <option value="error">Errors only</option>
-          <option value="warning">Warnings only</option>
-          <option value="info">Info only</option>
-        </select>
+            <select
+              className="input"
+              value={severityFilter}
+              onChange={e => setSeverityFilter(e.target.value as typeof severityFilter)}
+              style={{ flex: "0 0 140px" }}
+            >
+              <option value="all">All severities</option>
+              <option value="error">Errors only</option>
+              <option value="warning">Warnings only</option>
+              <option value="info">Info only</option>
+            </select>
 
-        {schools.length > 0 && (
-          <select
-            className="input"
-            value={schoolFilter}
-            onChange={e => setSchoolFilter(e.target.value)}
-            style={{ flex: "0 0 160px" }}
-          >
-            <option value="all">All schools</option>
-            {schools.map(s => <option key={s} value={s}>School {s}</option>)}
-          </select>
-        )}
+            {schools.length > 0 && (
+              <select
+                className="input"
+                value={schoolFilter}
+                onChange={e => setSchoolFilter(e.target.value)}
+                style={{ flex: "0 0 160px" }}
+              >
+                <option value="all">All schools</option>
+                {schools.map(s => <option key={s} value={s}>School {s}</option>)}
+              </select>
+            )}
 
-        <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>
-          <input type="checkbox" checked={fixableOnly} onChange={e => setFixableOnly(e.target.checked)} />
-          <Filter size={12} /> Auto-fixable only
-        </label>
-      </div>
-
-      {/* Issue table */}
-      <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
-        {filtered.length === 0 ? (
-          <div style={{ padding: "40px 24px", textAlign: "center", color: "var(--color-text-muted)" }}>
-            {allIssues.length === 0 ? "No issues found — file looks clean!" : "No issues match the current filters."}
+            <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>
+              <input type="checkbox" checked={fixableOnly} onChange={e => setFixableOnly(e.target.checked)} />
+              <Filter size={12} /> Auto-fixable only
+            </label>
           </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 80 }}>Severity</th>
-                  <th>Student</th>
-                  <th>School</th>
-                  <th>Field</th>
-                  <th>Current Value</th>
-                  <th>Issue</th>
-                  <th>Suggested Fix</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(issue => {
-                  const record = initialResult.records.find(r => r.id === issue.recordId);
-                  const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
-                  return (
-                    <tr key={issue.id}>
-                      <td><SeverityBadge severity={issue.severity} /></td>
-                      <td style={{ fontWeight: 500, color: "var(--color-text-primary)", maxWidth: 160 }}>{issue.studentName || "—"}</td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{issue.schoolNumber || "—"}</td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || "—"}</td>
-                      <td>
-                        {currentValue ? (
-                          <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
-                        ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
-                      </td>
-                      <td style={{ maxWidth: 280, fontSize: 12, lineHeight: 1.5 }}>{issue.message}</td>
-                      <td>
-                        {issue.suggestedFix ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "var(--color-text-primary)" }}>{issue.suggestedFix}</code>
-                            {issue.autoFixable && (
-                              <span style={{ fontSize: 9, border: "1px solid var(--color-border)", color: "var(--color-text-muted)", borderRadius: 3, padding: "1px 5px", fontWeight: 600, letterSpacing: "0.03em" }}>AUTO</span>
-                            )}
-                          </span>
-                        ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Manual</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
-      {filtered.length < allIssues.length && (
-        <p style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 16, textAlign: "right" }}>
-          Showing {filtered.length} of {allIssues.length} issues
-        </p>
-      )}
+          {severityFilter === "error" && warningCount > 0 && (
+            <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: "-8px 0 14px" }}>
+              Hiding {warningCount} warning{warningCount !== 1 ? "s" : ""} — warnings don&apos;t block submission. Switch the severity filter to see them.
+            </p>
+          )}
+
+          {/* Issue table */}
+          <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "40px 24px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                {allIssues.length === 0 ? "No issues found — file looks clean!" : "No issues match the current filters."}
+              </div>
+            ) : (
+              <table className="data-table" style={{ width: "100%", tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: 76 }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: 84 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: "13%" }} />
+                  <col />
+                  <col style={{ width: "22%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Severity</th>
+                    <th>Student</th>
+                    <th>School</th>
+                    <th>Field</th>
+                    <th>Current Value</th>
+                    <th>Issue</th>
+                    <th>Suggested Fix</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(issue => {
+                    const record = records.find(r => r.id === issue.recordId);
+                    const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
+                    const staged = !!stagedAddressFixes[issue.id];
+                    const isOpen = openAddressIssueId === issue.id;
+                    const proposal = issue.repairProposal;
+                    const draft = isOpen ? (addressDrafts[proposal?.id ?? ""] ?? (issue ? suggestedAddressDraft(issue, records) : undefined)) : undefined;
+                    return (
+                      <Fragment key={issue.id}>
+                        <tr style={{ background: isOpen ? "var(--color-info-bg)" : undefined }}>
+                          <td><SeverityBadge severity={issue.severity} /></td>
+                          <td style={{ fontWeight: 500, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{issue.studentName || "—"}</td>
+                          <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{issue.schoolNumber || "—"}</td>
+                          <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || "—"}</td>
+                          <td>
+                            {currentValue ? (
+                              <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
+                            ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
+                          </td>
+                          <td style={{ fontSize: 12, lineHeight: 1.5 }}>{issue.message}</td>
+                          <td>
+                            {proposal ? (
+                              <button
+                                type="button"
+                                onClick={() => setOpenAddressIssueId(isOpen ? null : issue.id)}
+                                style={{
+                                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
+                                  padding: "3px 8px", borderRadius: 99, cursor: "pointer",
+                                  border: `1px solid ${staged ? "var(--color-success-border)" : "var(--color-border)"}`,
+                                  background: staged ? "var(--color-success-bg)" : "var(--color-surface-1)",
+                                  color: staged ? "var(--color-success-text)" : proposal.confidence === "safe" ? "var(--color-success-text)" : proposal.confidence === "manual" ? "var(--color-info-text)" : "var(--color-warning-text)",
+                                }}
+                              >
+                                {staged ? <CheckCircle2 size={12} /> : <MapPin size={12} />}
+                                {staged
+                                  ? "Fix staged — edit"
+                                  : proposal.confidence === "safe" ? "Address repair ready"
+                                  : proposal.confidence === "manual" ? "Review manually"
+                                  : "Review complete address"}
+                                <ChevronDown size={12} style={{ transform: isOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
+                              </button>
+                            ) : issue.suggestedFix ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "var(--color-text-primary)" }}>{issue.suggestedFix}</code>
+                                {issue.autoFixable && (
+                                  <span style={{ fontSize: 9, border: "1px solid var(--color-border)", color: "var(--color-text-muted)", borderRadius: 3, padding: "1px 5px", fontWeight: 600, letterSpacing: "0.03em" }}>AUTO</span>
+                                )}
+                              </span>
+                            ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Manual</span>}
+                          </td>
+                        </tr>
+                        {isOpen && proposal && record && draft && (
+                          <tr style={{ background: "var(--color-info-bg)" }}>
+                            <td colSpan={7} style={{ padding: "0 16px 16px" }}>
+                              <AddressRepairCard
+                                proposal={proposal}
+                                record={record}
+                                studentName={issue.studentName}
+                                schoolNumber={issue.schoolNumber}
+                                rules={rules}
+                                draft={draft}
+                                selected={addressSelected[proposal.id] ?? (proposal.confidence === "safe")}
+                                onDraftChange={(field, value) => setAddressDrafts((current) => ({
+                                  ...current,
+                                  [proposal.id]: { ...(current[proposal.id] ?? suggestedAddressDraft(issue, records)), [field]: value },
+                                }))}
+                                onSelectedChange={(selected) => setAddressSelected((current) => ({ ...current, [proposal.id]: selected }))}
+                                onReset={() => setAddressDrafts((current) => ({ ...current, [proposal.id]: suggestedAddressDraft(issue, records) }))}
+                              />
+                              <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end" }}>
+                                {stagedAddressFixes[issue.id] && (
+                                  <button
+                                    type="button"
+                                    onClick={() => { removeStagedAddressFix(issue.id); setOpenAddressIssueId(null); }}
+                                    className="btn btn-ghost"
+                                    style={{ fontSize: 12, color: "var(--color-error-text)", marginRight: "auto" }}
+                                  >
+                                    Remove staged fix
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => setOpenAddressIssueId(null)} className="btn btn-ghost" style={{ fontSize: 12 }}>Close</button>
+                                <button type="button" onClick={applyAddressFix} className="btn btn-primary" style={{ fontSize: 12, gap: 5 }}>
+                                  <CheckCircle2 size={13} /> Apply this fix
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {filtered.length < allIssues.length && (
+            <p style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 16, textAlign: "right" }}>
+              Showing {filtered.length} of {allIssues.length} issues
+            </p>
+          )}
+      </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        {initialResult.gate === "READY" && (
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
+        {canSkip && (
           <button onClick={onSkipToDownload} className="btn btn-secondary" style={{ gap: 6 }}>
             <Download size={14} /> Skip to Download
           </button>
         )}
-        <button onClick={onFix} className="btn btn-primary" style={{ gap: 6 }}>
+        {stagedFixes.length > 0 && (
+          <button onClick={() => onApply(stagedFixes)} className="btn btn-primary" style={{ gap: 6 }}>
+            <RefreshCw size={14} /> Apply {stagedFixes.length} Fix{stagedFixes.length !== 1 ? "es" : ""} & Revalidate
+            <ArrowRight size={14} />
+          </button>
+        )}
+        <button onClick={() => onFix(stagedFixes)} className={stagedFixes.length > 0 ? "btn btn-secondary" : "btn btn-primary"} style={{ gap: 6 }}>
           <Wrench size={14} />
           {fixableCount > 0 ? `Fix Issues (${fixableCount} auto-fixable)` : "Review & Edit"}
           <ArrowRight size={14} />
@@ -1504,43 +1653,60 @@ function ValidateFixView({
   onBack: () => void;
   onApply: (fixes: AppliedFix[]) => void;
 }) {
-  const issues = session.initialResult.issues;
   const records = session.initialResult.records;
+  // Address fixes already staged and applied from the Issue Review page arrive via session.fixes;
+  // don't re-offer those issues here, and fold the fixes back in unchanged when this page applies its own.
+  const resolvedIssueIds = new Set(session.fixes.map((f) => f.issueId));
+  const issues = session.initialResult.issues.filter((issue) => !resolvedIssueIds.has(issue.id));
+  const addressIssues = issues.filter((issue) => issue.repairProposal?.kind === "address" && issue.recordId);
 
   // pending: issueId → new value (empty = skip)
   const [pending, setPending] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const issue of issues) {
-      if (issue.autoFixable && issue.suggestedFix !== undefined) {
+      if (!issue.repairProposal && issue.autoFixable && issue.suggestedFix !== undefined) {
         init[issue.id] = issue.suggestedFix;
       }
     }
     return init;
   });
+  const [addressDrafts, setAddressDrafts] = useState<Record<string, Record<string, string>>>(() =>
+    Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, suggestedAddressDraft(issue, records)])),
+  );
+  const [selectedAddressRepairs, setSelectedAddressRepairs] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, issue.repairProposal!.confidence === "safe"])),
+  );
 
   const [onlyFixable, setOnlyFixable] = useState(true);
-  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
+  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("error");
 
   const visibleIssues = issues
+    .filter(i => !i.repairProposal)
     .filter(i => !onlyFixable || i.autoFixable || i.field)
     .filter(i => severityFilter === "all" || i.severity === severityFilter);
+  const visibleAddressIssues = addressIssues.filter(i => severityFilter === "all" || i.severity === severityFilter);
 
   const autoFillAll = () => {
     const next: Record<string, string> = { ...pending };
     for (const issue of issues) {
-      if (issue.autoFixable && issue.suggestedFix !== undefined) {
+      if (!issue.repairProposal && issue.autoFixable && issue.suggestedFix !== undefined) {
         next[issue.id] = issue.suggestedFix;
       }
     }
     setPending(next);
+    setSelectedAddressRepairs(Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, issue.repairProposal!.confidence === "safe"])));
   };
 
-  const clearAll = () => setPending({});
+  const clearAll = () => {
+    setPending({});
+    setSelectedAddressRepairs({});
+  };
 
   const applyFixes = () => {
     const fixes: AppliedFix[] = [];
     const now = Date.now();
     for (const issue of issues) {
+      if (issue.repairProposal) continue;
       const newValue = pending[issue.id];
       if (newValue === undefined || newValue === "") continue;
       if (!issue.recordId || !issue.field) continue;
@@ -1557,10 +1723,40 @@ function ValidateFixView({
         appliedAt: now,
       });
     }
-    onApply(fixes);
+    for (const issue of addressIssues) {
+      const proposal = issue.repairProposal!;
+      if (!selectedAddressRepairs[proposal.id]) continue;
+      const record = records.find((candidate) => candidate.id === issue.recordId);
+      if (!record || !issue.recordId) continue;
+      const draft = addressDrafts[proposal.id] ?? suggestedAddressDraft(issue, records);
+      for (const field of ADDRESS_REPAIR_FIELDS) {
+        const oldValue = record.fields[field] ?? "";
+        const newValue = draft[field] ?? "";
+        if (newValue === oldValue) continue;
+        fixes.push({
+          issueId: issue.id,
+          recordId: issue.recordId,
+          field,
+          oldValue,
+          newValue,
+          ruleId: issue.ruleId,
+          appliedAt: now,
+          repairId: proposal.id,
+        });
+      }
+    }
+    onApply([...session.fixes, ...fixes]);
   };
 
-  const pendingCount = Object.values(pending).filter(v => v !== "").length;
+  const addressChangeCount = addressIssues.reduce((count, issue) => {
+    const proposal = issue.repairProposal!;
+    if (!selectedAddressRepairs[proposal.id]) return count;
+    const record = records.find((candidate) => candidate.id === issue.recordId);
+    const draft = addressDrafts[proposal.id];
+    if (!record || !draft) return count;
+    return count + ADDRESS_REPAIR_FIELDS.filter((field) => (draft[field] ?? "") !== (record.fields[field] ?? "")).length;
+  }, 0);
+  const pendingCount = Object.values(pending).filter(v => v !== "").length + addressChangeCount;
   const fixableCount = issues.filter(i => i.autoFixable).length;
 
   return (
@@ -1609,8 +1805,48 @@ function ValidateFixView({
         </label>
       </div>
 
+      {visibleAddressIssues.length > 0 && (
+        <section style={{ marginBottom: 22 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
+            <div>
+              <h2 style={{ margin: "0 0 3px", fontSize: 16 }}>Address repairs</h2>
+              <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: 11 }}>Review the complete address and apply coordinated field changes without returning to the source workbook.</p>
+            </div>
+            <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{visibleAddressIssues.length} address{visibleAddressIssues.length === 1 ? "" : "es"}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {visibleAddressIssues.map((issue) => {
+              const proposal = issue.repairProposal!;
+              const record = records.find((candidate) => candidate.id === issue.recordId);
+              if (!record) return null;
+              return (
+                <AddressRepairCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  record={record}
+                  studentName={issue.studentName}
+                  schoolNumber={issue.schoolNumber}
+                  rules={session.validationRules ?? defaultRules}
+                  draft={addressDrafts[proposal.id] ?? suggestedAddressDraft(issue, records)}
+                  selected={selectedAddressRepairs[proposal.id] ?? false}
+                  onDraftChange={(field, value) => setAddressDrafts((current) => ({
+                    ...current,
+                    [proposal.id]: { ...(current[proposal.id] ?? suggestedAddressDraft(issue, records)), [field]: value },
+                  }))}
+                  onSelectedChange={(selected) => setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: selected }))}
+                  onReset={() => {
+                    setAddressDrafts((current) => ({ ...current, [proposal.id]: suggestedAddressDraft(issue, records) }));
+                    setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: proposal.confidence === "safe" }));
+                  }}
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Fix table */}
-      <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
+      {visibleIssues.length > 0 && <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
         <div style={{ overflowX: "auto" }}>
           <table className="data-table">
             <thead>
@@ -1671,7 +1907,7 @@ function ValidateFixView({
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* Apply */}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -2098,17 +2334,17 @@ function ValidateDownloadView({
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 28, marginBottom: 28 }}>
+      <div className="summary-stats summary-stats--three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 28, marginBottom: 28 }}>
         <StatCard label="Fixes Applied"    value={session.fixes.length}  accent="teal" />
         <StatCard label="Remaining Issues" value={result.issues.length}  />
         <StatCard label="Students"         value={result.studentCount}   accent="green" />
       </div>
 
       {/* Downloads */}
-      <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 12 }}>Downloads</div>
+      <div className="section-label" style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, marginBottom: 12 }}>Downloads</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Cleaned XML */}
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: gate === "READY" ? "var(--color-success-bg)" : "var(--color-error-bg)", borderRadius: 4, padding: 9 }}>
               <FileText size={18} style={{ color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }} />
@@ -2124,7 +2360,7 @@ function ValidateDownloadView({
         </div>
 
         {/* Encrypted XML */}
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Lock size={18} style={{ color: "var(--color-text-muted)" }} /></div>
             <div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.zip</div><div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>AES-256 encrypted ZIP containing the validated XML</div></div>
@@ -2133,7 +2369,7 @@ function ValidateDownloadView({
         </div>
 
         {/* Issue report CSV */}
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}>
               <BarChart3 size={18} style={{ color: "var(--color-text-muted)" }} />
@@ -2150,7 +2386,7 @@ function ValidateDownloadView({
       </div>
 
       <Dialog.Root open={encryptOpen} onOpenChange={(open) => { if (!open) closeEncrypt(); }}>
-        <Dialog.Portal><Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+        <Dialog.Portal><Dialog.Overlay style={{ position: "fixed", inset: 0, background: "var(--color-overlay)", zIndex: 50 }} />
           <Dialog.Content aria-describedby={undefined} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 8, width: "min(92vw, 420px)", zIndex: 51, padding: "20px 22px" }}>
             <Dialog.Title style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Encrypted ZIP download</Dialog.Title>
             <p style={{ color: "var(--color-text-muted)", fontSize: 11.5, lineHeight: 1.5, margin: "0 0 14px" }}>The password is not saved. Use 7-Zip, WinRAR, or PeaZip to open the AES-256 ZIP.</p>
@@ -2429,7 +2665,8 @@ export default function App() {
         <ValidateIssuesView
           session={validateSess}
           onBack={goHome}
-          onFix={() => setView("validate-fix")}
+          onFix={(stagedFixes) => { setValidateSess({ ...validateSess, fixes: [...validateSess.fixes.filter(f => !f.repairId), ...stagedFixes] }); setView("validate-fix"); }}
+          onApply={(fixes) => { setValidateSess({ ...validateSess, fixes: [...validateSess.fixes.filter(f => !f.repairId), ...fixes] }); setView("validate-revalidate"); }}
           onSkipToDownload={() => setView("validate-download")}
         />
       )}
