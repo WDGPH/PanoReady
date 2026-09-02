@@ -261,15 +261,19 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
   for (const [raw, expectedNumber, expectedName] of confident) {
     const result = validateXml(addressXml(raw));
     const numberIssue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
-    const nameIssue = result.issues.find((i) => i.ruleId === "STREET_NUMBER_SPLIT");
     assert.equal(numberIssue?.suggestedFix, expectedNumber, `expected StreetNumber fix for "${raw}"`);
-    assert.equal(nameIssue?.suggestedFix, expectedName, `expected StreetName fix for "${raw}"`);
+    assert.equal(numberIssue?.repairProposal?.confidence, "safe");
+    assert.deepEqual(numberIssue?.repairProposal?.changes.map((change) => [change.field, change.proposedValue]), [
+      ["StreetNumber", expectedNumber],
+      ["StreetName", expectedName],
+    ]);
   }
   for (const ambiguous of ["406 unit", "13 - 142", "302-380", "B-2C-360"]) {
     const result = validateXml(addressXml(ambiguous));
     const numberIssue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
     assert.equal(numberIssue?.suggestedFix, undefined, `expected no auto-split for "${ambiguous}"`);
     assert.equal(numberIssue?.autoFixable, false);
+    assert.equal(numberIssue?.repairProposal, undefined);
   }
 });
 
