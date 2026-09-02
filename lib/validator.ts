@@ -7,6 +7,12 @@
 
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import { standardizeUnit } from "./cleaner";
+import { normalizeCanadianPostalCode } from "./postalCode";
+import {
+  analyzePhoneNumber,
+  isActiveCanadianGeographicNpa,
+  type PhoneNumberAnalysis,
+} from "./phoneNumber";
 import type {
   ValidationIssue,
   ValidationResult,
@@ -149,7 +155,7 @@ export function parseStixXml(xmlText: string): StudentRecord[] {
 
 export function legacyValidateXml(
   xmlText: string,
-  rules: RulesProfile = defaultRules
+  rules: RulesProfile = defaultRules as RulesProfile
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const records: StudentRecord[] = [];
@@ -616,34 +622,119 @@ function splitStreetNumber(value: string, existingStreetName: string): { streetN
   return { streetNumber, streetName: remainder.trim() };
 }
 
-function canonicalPhoneIssue(value: string): string | null {
-  if (!/^\d{3}-\d{3}-\d{4}(?:x\d{1,5})?$/.test(value)) return "must use 999-999-9999 with an optional x1–5 digit extension";
-  const digits = value.replace(/\D/g, "");
-  if (/[01]/.test(digits[0]) || /[01]/.test(digits[3])) return "has an invalid area-code or exchange first digit";
-  return null;
+type CanonicalPhoneFinding = {
+  severity: "error" | "warning" | "info";
+  message: string;
+  autoFixable: boolean;
+  suggestedFix?: string;
+  ruleId: string;
+};
+
+const SAFE_TRAILING_PHONE_NOTE = /[\s\-*/(),.!]*(?:(?:please\s+)?call\b[\s\-*/(),.!]*)?\b(?:1st|first|2nd|second|3rd|third)\b[\s\-*/(),.!]*(?:call\b[\s\-*/(),.!]*)?$|[\s\-*/(),.!]*\bcell\b[\s\-*/(),.!]*$/i;
+
+function legacyCanonicalPhoneFix(raw: string): string | undefined {
+  const withoutNote = raw.replace(SAFE_TRAILING_PHONE_NOTE, "");
+  const extension = withoutNote.match(/\bex\s*(\d{1,5})\s*$/i)?.[1] ?? "";
+  const base = extension ? withoutNote.replace(/\bex\s*\d{1,5}\s*$/i, "") : withoutNote;
+  if (base === raw && !extension) return undefined;
+  let digits = base.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  if (digits.length !== 10 || !/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return undefined;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
 }
 
-/**
- * Trailing "call note" text (e.g. "call 1st", "(Call 1st)", "**1st", "call first", "(cell)")
- * that registrars append to a phone number. Stripped before digit extraction because an
- * ordinal like "1st"/"2nd" contains a digit that would otherwise corrupt the phone number.
- */
-const CALL_NOTE_PATTERN = /[\s\-*/(),.!]*(?:(?:please\s+)?call\b[\s\-*/(),.!]*)?\b(?:1st|first|2nd|second|3rd|third)\b[\s\-*/(),.!]*(?:call\b[\s\-*/(),.!]*)?$|[\s\-*/(),.!]*\bcell\b[\s\-*/(),.!]*$/i;
+function invalidPhoneFinding(
+  raw: string,
+  label: string,
+  analysis: Extract<PhoneNumberAnalysis, { status: "invalid" }>,
+): CanonicalPhoneFinding {
+  const shared = { severity: "error" as const, autoFixable: false };
+  switch (analysis.reason) {
+    case "multiple-numbers": return { ...shared, message: `${label} "${raw}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, ruleId: "PHONE_FORMAT" };
+    case "appended-text": return { ...shared, message: `${label} "${raw}" contains unrecognized text or notes. Enter one phone number, optionally followed by lowercase x and 1-5 extension digits.`, ruleId: "PHONE_FORMAT" };
+    case "too-few-digits": return { ...shared, message: `${label} "${raw}" has too few digits (${analysis.digitCount}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "too-many-digits": return { ...shared, message: `${label} "${raw}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
+    case "invalid-npa": return { ...shared, message: `${label} "${raw}" has an invalid NANP area code (${analysis.npa}). Its first digit must be 2-9.`, ruleId: "PHONE_NPA_STRUCTURE" };
+    case "invalid-nxx": return { ...shared, message: `${label} "${raw}" has an invalid NANP exchange code (${analysis.nxx}). Its first digit must be 2-9.`, ruleId: "PHONE_NXX_STRUCTURE" };
+    case "extension-missing": return { ...shared, message: `${label} "${raw}" has an extension marker but no extension. Enter lowercase x followed by 1-5 digits, or remove the marker.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+    case "extension-too-long": return { ...shared, message: `${label} "${raw}" has an extension longer than the maximum of 5 digits. Confirm and enter 1-5 digits after lowercase x.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+    case "extension-invalid": return { ...shared, message: `${label} "${raw}" has an invalid extension. Use lowercase x followed by 1-5 digits.`, ruleId: "PHONE_EXTENSION_FORMAT" };
+  }
+}
 
-/** Reformats a raw 10-digit phone number into 999-999-9999; returns undefined if it can't be deterministically fixed. */
-function canonicalPhoneFix(value: string): string | undefined {
-  const withoutNote = value.replace(CALL_NOTE_PATTERN, "");
-  const extension = withoutNote.match(/(?:x|ext\.?|extension|ex)\s*(\d{1,5})\s*$/i)?.[1] ?? "";
-  const withoutExtension = extension ? withoutNote.replace(/(?:x|ext\.?|extension|ex)\s*\d{1,5}\s*$/i, "") : withoutNote;
-  let digits = withoutExtension.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
-  if (digits.length !== 10) return undefined;
-  const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
-  return canonicalPhoneIssue(formatted) === null ? formatted : undefined;
+function canonicalPhoneFindings(
+  raw: string,
+  label: string,
+  rules: RulesProfile,
+): CanonicalPhoneFinding[] {
+  const legacyFix = legacyCanonicalPhoneFix(raw);
+  if (legacyFix) {
+    return [{
+      severity: "error",
+      message: `${label} "${raw}" can be safely normalized to "${legacyFix}".`,
+      suggestedFix: legacyFix,
+      autoFixable: true,
+      ruleId: "PHONE_FORMAT",
+    }];
+  }
+  const analysis = analyzePhoneNumber(raw);
+  const placeholders = new Set(rules.phoneConfig?.placeholderNumbers ?? []);
+  if (analysis.status === "invalid") {
+    const findings = [invalidPhoneFinding(raw, label, analysis)];
+    if (analysis.baseValue && placeholders.has(analysis.baseValue)) {
+      findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
+    }
+    return findings;
+  }
+
+  const findings: CanonicalPhoneFinding[] = [];
+  if (analysis.status === "normalized") {
+    findings.push({
+      severity: "error",
+      message: analysis.extension !== undefined
+        ? `${label} "${raw}" can be safely normalized to "${analysis.value}" (lowercase x followed by 1-5 digits).`
+        : `${label} "${raw}" is not in the required XXX-XXX-XXXX format.`,
+      suggestedFix: analysis.value,
+      autoFixable: true,
+      ruleId: analysis.extension !== undefined ? "PHONE_EXTENSION_NORMALIZE" : "PHONE_FORMAT",
+    });
+  }
+  if (placeholders.has(analysis.baseValue)) {
+    findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
+  }
+  const canadianAreaCodeCheck = rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
+  if (canadianAreaCodeCheck !== "off" && !isActiveCanadianGeographicNpa(analysis.npa)) {
+    findings.push({
+      severity: canadianAreaCodeCheck,
+      message: `Area code ${analysis.npa} is not a currently active Canadian geographic area code. Confirm that this non-Canadian number is intended.`,
+      autoFixable: false,
+      ruleId: "PHONE_CANADIAN_AREA_CODE",
+    });
+  }
+  return findings;
+}
+
+function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFinding | null {
+  const normalized = normalizeCanadianPostalCode(raw);
+  const usesBuiltInRule = rules.postalCodePattern === defaultRules.postalCodePattern;
+  if (!usesBuiltInRule) {
+    const pattern = new RegExp(rules.postalCodePattern, "i");
+    const trimmed = raw.trim();
+    if (pattern.test(trimmed)) {
+      return raw === trimmed ? null : { severity: "info", message: `PostalCode "${raw}" has surrounding whitespace; normalize it to "${trimmed}".`, suggestedFix: trimmed, autoFixable: true, ruleId: "POSTAL_CODE_NORMALIZE" };
+    }
+    if (normalized.status === "invalid" || !pattern.test(normalized.value)) {
+      return { severity: "warning", message: `PostalCode "${raw}" does not match the active postal-code pattern.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
+    }
+  }
+  if (normalized.status === "valid") return null;
+  if (normalized.status === "normalized") return { severity: "info", message: `PostalCode "${raw}" can be safely normalized to "${normalized.value}".`, suggestedFix: normalized.value, autoFixable: true, ruleId: "POSTAL_CODE_NORMALIZE" };
+  if (normalized.status === "repaired") return { severity: "warning", message: `PostalCode "${raw}" contains an O/I/L transcription in a numeric position; repair it to "${normalized.value}".`, suggestedFix: normalized.value, autoFixable: true, ruleId: "POSTAL_CODE_REPAIR" };
+  return { severity: "warning", message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
 }
 
 /** Namespace-aware validation of the canonical STIX model. */
-export function validateXml(xmlText: string, rules: RulesProfile = defaultRules): ValidationResult {
+export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
   const issues: ValidationIssue[] = [];
   let upload;
   try {
@@ -667,8 +758,16 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
   if (metadata.fullUpload && !rules.allowedFullLoadTypeValues.includes(metadata.fullUpload)) issue(issues, { severity: "error", field: "FullUpload", ruleId: "FULL_UPLOAD_ALLOWED_VALUE", layer: "CANONICAL", message: `FullUpload "${metadata.fullUpload}" is not allowed.` });
   if (metadata.boardNumber && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(metadata.boardNumber)) issue(issues, { severity: "error", field: "BoardNumber", ruleId: "BOARD_NUMBER_FORMAT", layer: "CANONICAL", message: "BoardNumber must be B plus 5 digits or D plus 2 letters and 3 digits." });
   if (metadata.contactPhone) {
-    const message = canonicalPhoneIssue(metadata.contactPhone.number);
-    if (message) issue(issues, { severity: "error", field: "ContactPhone", ruleId: "METADATA_PHONE", layer: "CANONICAL", message: `ContactPhone ${message}.` });
+    for (const finding of canonicalPhoneFindings(metadata.contactPhone.number, "Metadata ContactPhone", rules)) {
+      issue(issues, {
+        recordId: "metadata",
+        studentName: "File metadata",
+        field: "MetadataContactPhone",
+        currentValue: metadata.contactPhone.number,
+        layer: "CANONICAL",
+        ...finding,
+      });
+    }
     if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
   }
 
@@ -721,9 +820,13 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
           }
         } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
       }
-      if (fields.PostalCode && !new RegExp(rules.postalCodePattern, "i").test(fields.PostalCode)) issue(issues, { ...base, severity: "error", field: "PostalCode", ruleId: "POSTAL_CODE_FORMAT", message: `PostalCode "${fields.PostalCode}" is invalid.` });
+      if (fields.PostalCode) {
+        const finding = postalCodeFinding(fields.PostalCode, rules);
+        if (finding) issue(issues, { ...base, field: "PostalCode", currentValue: fields.PostalCode, ...finding });
+      }
       for (const [field, limit] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
+        if (field === "PostalCode") continue;
         if (val.length <= limit) continue;
         if (field === "Unit") {
           const [standardized, changed] = standardizeUnit(val);
@@ -740,10 +843,8 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
       for (const field of ["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"]) {
         const value = fields[field];
         if (!value) continue;
-        const message = canonicalPhoneIssue(value);
-        if (message) {
-          const fixed = canonicalPhoneFix(value);
-          issue(issues, { ...base, severity: "error", field, ruleId: "PHONE_FORMAT", message: `${field} ${message}.`, suggestedFix: fixed, autoFixable: !!fixed });
+        for (const finding of canonicalPhoneFindings(value, field, rules)) {
+          issue(issues, { ...base, field, currentValue: value, ...finding });
         }
       }
       const identity = `${fields.FirstName.toLowerCase()}|${fields.LastName.toLowerCase()}|${fields.BirthDate}`;
@@ -760,7 +861,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules)
     }
   }
   const hasErrors = issues.some((finding) => finding.severity === "error");
-  const hasWarnings = issues.some((finding) => finding.severity === "warning");
+  const hasWarnings = issues.some((finding) => finding.severity === "warning" && finding.ruleId !== "PHONE_CANADIAN_AREA_CODE");
   const gate: GateState = hasErrors ? "BLOCKED" : hasWarnings ? "REVIEW_REQUIRED" : "READY";
   return { issues, records, schoolCount: upload.schools.length, studentCount: records.length, gate, xsdValidated: false };
 }
@@ -937,6 +1038,10 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   if (fixes.length === 0) return xmlText;
   const upload = parseCanonicalXml(xmlText);
   for (const fix of fixes) {
+    if (fix.recordId === "metadata" && fix.field === "MetadataContactPhone") {
+      upload.metadata.contactPhone = { number: fix.newValue, type: upload.metadata.contactPhone?.type ?? "" };
+      continue;
+    }
     const coordinates = decodeRecordId(fix.recordId);
     if (!coordinates) continue;
     const school = upload.schools[coordinates.si];

@@ -334,7 +334,10 @@ export default function ReportsPage() {
   const [maxAge, setMaxAge] = useState(99);
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
 
-  useEffect(() => { setActiveRules(getActiveRules()); }, []);
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is browser-only and must be read after hydration. */
+    setActiveRules(getActiveRules());
+  }, []);
 
   const [options, setOptions] = useState({
     schools: [] as string[],
@@ -406,6 +409,7 @@ export default function ReportsPage() {
     const resolvedMin = isFinite(ageMin) ? ageMin : 0;
     const resolvedMax = isFinite(ageMax) ? ageMax : 99;
 
+    /* eslint-disable react-hooks/set-state-in-effect -- Reset all filter controls atomically when validation records change. */
     setOptions({ schools, grades, genders });
     setSelectedSchools(schools);
     setSelectedGrades(grades);
@@ -413,6 +417,7 @@ export default function ReportsPage() {
     setAgeBounds([resolvedMin, resolvedMax]);
     setMinAge(resolvedMin);
     setMaxAge(resolvedMax);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [rawRecords]);
 
   // Recompute filtered CSVs on any filter change
@@ -441,11 +446,13 @@ export default function ReportsPage() {
       return selectedSchools.includes(sn || "(unknown)");
     });
 
+    /* eslint-disable react-hooks/set-state-in-effect -- Keep downloadable CSV snapshots synchronized with the active filters. */
     setFilteredSummary({
       schoolCsv: generateSchoolSummaryCsv(recs),
       ageCsv: generateAgeGroupReportCsv(recs),
       issueCsv: generateIssueReportCsv(issues, []),
     });
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [rawRecords, rawIssues, selectedSchools, selectedGrades, selectedGenders, minAge, maxAge]);
 
   function download(filename: string, content?: string) {

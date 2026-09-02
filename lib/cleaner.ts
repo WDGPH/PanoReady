@@ -6,39 +6,15 @@
 
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import type { CleanStats, Issue } from "./types";
-
-const INVALID_AREA_CODES = new Set(["163", "081"]);
+import { analyzePhoneNumber } from "./phoneNumber";
 
 // ─── Phone Cleaning ──────────────────────────────────────────────────────────
 
 export function cleanPhone(text: string): string {
-  let digits = text.replace(/\D/g, "");
-
-  if (digits.startsWith("1") && digits.length > 10) {
-    digits = digits.slice(1);
-  }
-
-  if (digits.length < 10) return "";
-
-  // Extension present?
-  const extMatch = text.match(/x(\d{1,4})$/i);
-  if (digits.length > 10 && extMatch) {
-    const ext = extMatch[1];
-    digits = digits.slice(0, 3) + "-" + digits.slice(3, 6) + "-" + digits.slice(6, 10) + "x" + ext;
-    return digits;
-  }
-
-  if (digits.length > 10) {
-    digits = digits.slice(0, 10);
-  }
-
-  const formatted = digits.slice(0, 3) + "-" + digits.slice(3, 6) + "-" + digits.slice(6, 10);
-  const areaCode = digits.slice(0, 3);
-
-  if (INVALID_AREA_CODES.has(areaCode)) return "";
-  if (formatted === "519-000-0000") return "";
-
-  return formatted;
+  const analysis = analyzePhoneNumber(text);
+  if (analysis.status === "invalid") return "";
+  if (analysis.baseValue === "519-000-0000") return "";
+  return analysis.value;
 }
 
 // ─── Unit Standardization ────────────────────────────────────────────────────

@@ -143,7 +143,17 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
   if (typeof r.phoneConfig !== "object" || r.phoneConfig === null || Array.isArray(r.phoneConfig)) {
     throw new Error("'rules.phoneConfig' must be an object.");
   }
-  requireStringArray(r.phoneConfig as Record<string, unknown>, "placeholderNumbers");
+  const phoneConfig = r.phoneConfig as Record<string, unknown>;
+  requireStringArray(phoneConfig, "placeholderNumbers");
+  if (
+    "canadianAreaCodeCheck" in phoneConfig &&
+    phoneConfig.canadianAreaCodeCheck !== undefined &&
+    !["off", "info", "warning"].includes(String(phoneConfig.canadianAreaCodeCheck))
+  ) {
+    throw new Error(
+      "'rules.phoneConfig.canadianAreaCodeCheck' must be 'off', 'info', or 'warning'."
+    );
+  }
 
   if (
     typeof r.duplicateDetection !== "object" ||

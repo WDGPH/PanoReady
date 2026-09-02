@@ -5,7 +5,8 @@ The Clean XML workflow automatically corrects phone numbers and address unit fie
 ## When to Use
 
 Use this workflow when you need to:
-- Normalize phone numbers into a consistent `XXX-XXX-XXXX` format.
+- Normalize phone numbers into `XXX-XXX-XXXX`, with an optional
+  extension such as `519-555-1234x12`.
 - Standardize address unit values (e.g. convert `BASEMENT` to `BSMT`, `main floor` to `MAIN`).
 - Quickly clean a file without running the full structural validation.
 
@@ -75,16 +76,22 @@ The result screen shows final stats and a download button.
 Performed on all phone-related fields found in the XML.
 
 **Steps applied:**
-1. Strip all non-digit characters.
-2. If the result has 11 digits and starts with `1`, remove the leading `1` (strips country code).
-3. Check the result is exactly 10 digits.
-4. Validate the area code is not in the known-invalid list (`163`, `081`).
+1. Separate a recognized optional extension marker (`x`, `ext`, `ext.`,
+   `extension`, or `#`) from its digits.
+2. Reject the value when the extension is missing, non-numeric, or longer than
+   the maximum of five digits.
+3. Normalize an optional leading NANP country code `1`, then require exactly 10
+   base-number digits.
+4. Require both NPA and NXX to begin with a digit from 2 through 9.
 5. Reject `519-000-0000` (a known placeholder value).
-6. Format as `XXX-XXX-XXXX`.
+6. Format as `XXX-XXX-XXXX`, appending the extension as lowercase `x` plus its
+   1–5 digits.
 
 **Outcome if cleaning fails:** The field is blanked (empty string written to XML) and counted under "Phones blanked."
 
-**Extensions:** If an extension was present in the original value, it is preserved after the formatted number (e.g. `519-555-1234 ext. 5`).
+**Extensions:** Common unambiguous variants are emitted in canonical form (for
+example, `519-555-1234 ext. 5` becomes `519-555-1234x5`). Ambiguous variants are
+blanked by this legacy cleaning workflow and counted for manual follow-up.
 
 ---
 
