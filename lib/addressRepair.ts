@@ -1,0 +1,190 @@
+import type { AddressRepairProposal } from "./types";
+
+export const ADDRESS_REPAIR_FIELDS = [
+  "Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "StreetType",
+  "StreetDirection", "RuralRoute", "PoBoxNumber", "City", "Province", "PostalCode",
+] as const;
+
+const NON_STREET_NAME_WORDS = /^(?:unit|apt|apartment|suite|ste|basement|bsmt|floor|fl|upper|lower|box|po|p\.o\.|rr|rural\s+route|rear|front)\b/i;
+
+function comparable(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Detect a street number with a street-name fragment accidentally pasted into it.
+ * Suggestions are automatic only when they preserve or fill the companion fields.
+ */
+export function analyzeStreetNumberRepair(
+  fields: Record<string, string>,
+  maxStreetNumberLength: number,
+  proposalId = "address-street-number",
+): AddressRepairProposal | undefined {
+  const raw = (fields.StreetNumber ?? "").trim();
+  const match = raw.match(/^(\d+)([A-Za-z])?[\s,–—-]+(.+)$/);
+  if (!match) return undefined;
+
+  const [, number, suffix = "", remainderRaw] = match;
+  const remainder = remainderRaw.trim();
+  if (
+    number.length > maxStreetNumberLength ||
+    !/[A-Za-z]/.test(remainder) ||
+    NON_STREET_NAME_WORDS.test(remainder)
+  ) return undefined;
+
+  const currentName = (fields.StreetName ?? "").trim();
+  const currentSuffix = (fields.StreetNumberSuffix ?? "").trim();
+  const sameName = currentName !== "" && comparable(currentName) === comparable(remainder);
+  const sameSuffix = suffix === "" || currentSuffix === "" || comparable(currentSuffix) === comparable(suffix);
+  const hasConflict = (currentName !== "" && !sameName) || !sameSuffix;
+
+  const changes: AddressRepairProposal["changes"] = [
+    { field: "StreetNumber", currentValue: fields.StreetNumber ?? "", proposedValue: number },
+  ];
+  if (suffix && !currentSuffix) {
+    changes.push({ field: "StreetNumberSuffix", currentValue: fields.StreetNumberSuffix ?? "", proposedValue: suffix.toUpperCase() });
+  }
+  if (!currentName) {
+    changes.push({ field: "StreetName", currentValue: fields.StreetName ?? "", proposedValue: remainder });
+  }
+
+  if (hasConflict) {
+    const conflicts = [
+      currentName && !sameName ? `StreetName is already “${currentName}”` : "",
+      suffix && currentSuffix && !sameSuffix ? `StreetNumberSuffix is already “${currentSuffix}”` : "",
+    ].filter(Boolean).join("; ");
+    return {
+      kind: "address",
+      id: proposalId,
+      confidence: "review",
+      title: "Review a combined street number and name",
+      explanation: `“${raw}” looks like street number “${number}” plus street name “${remainder}”, but ${conflicts}. Review the complete address before applying changes.`,
+      changes,
+    };
+  }
+
+  return {
+    kind: "address",
+    id: proposalId,
+    confidence: "safe",
+    title: sameName ? "Remove the duplicated street name" : "Split street number and street name",
+    explanation: sameName
+      ? `StreetName already contains “${currentName}”, so StreetNumber can safely change from “${raw}” to “${number}”.`
+      : `“${raw}” can be separated into street number “${number}”${suffix ? `, suffix “${suffix.toUpperCase()}”` : ""}, and street name “${remainder}”.`,
+    changes,
+  };
+}
+
+/**
+ * Detect a small unit number fused to a street number with a bare dash, e.g. "4-51".
+ * Deliberately narrow (unit 1-2 digits, street number 2-6 digits, no surrounding
+ * spaces) so it never overlaps with genuinely ambiguous ranges like "302-380" or
+ * "13 - 142" — those are left alone rather than guessed.
+ */
+export function analyzeStreetNumberUnitPrefix(
+  fields: Record<string, string>,
+  proposalId = "address-street-number-unit-prefix",
+): AddressRepairProposal | undefined {
+  const raw = (fields.StreetNumber ?? "").trim();
+  const match = raw.match(/^(\d{1,2})-(\d{2,6})$/);
+  if (!match) return undefined;
+
+  const [, unit, streetNumber] = match;
+  const currentUnit = (fields.Unit ?? "").trim();
+  const conflict = currentUnit !== "" && currentUnit !== unit;
+
+  const changes: AddressRepairProposal["changes"] = [
+    { field: "StreetNumber", currentValue: fields.StreetNumber ?? "", proposedValue: streetNumber },
+  ];
+  if (!conflict) changes.push({ field: "Unit", currentValue: fields.Unit ?? "", proposedValue: unit });
+
+  return {
+    kind: "address",
+    id: proposalId,
+    confidence: "review",
+    title: "Review a possible unit prefix on the street number",
+    explanation: conflict
+      ? `“${raw}” looks like unit “${unit}” plus street number “${streetNumber}”, but Unit is already “${currentUnit}”. Review the complete address before applying changes.`
+      : `“${raw}” looks like unit “${unit}” plus street number “${streetNumber}”. Confirm before applying — this shape can also be a legitimate combined street number.`,
+    changes,
+  };
+}
+
+const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|BOX)\s*#?\s*(\w+)$/i;
+const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
+const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
+const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
+
+/**
+ * Detect PO Box / rural-route delivery text typed into a street field instead
+ * of PoBoxNumber/RuralRoute. A clean match proposes moving it (confirmation
+ * required — clearing a street field is a bigger structural change than a
+ * same-field split); a recognizable-but-unparsable prefix is surfaced as a
+ * "manual" finding with no guessed value, per the three-tier confidence model.
+ */
+export function analyzeAlternateDeliveryInStreetFields(
+  fields: Record<string, string>,
+  proposalId = "address-alternate-delivery",
+): AddressRepairProposal | undefined {
+  for (const field of ["StreetName", "StreetNumber"] as const) {
+    const raw = (fields[field] ?? "").trim();
+    if (!raw) continue;
+
+    const poMatch = raw.match(PO_BOX_PATTERN);
+    if (poMatch) {
+      const boxId = poMatch[1];
+      const currentBox = (fields.PoBoxNumber ?? "").trim();
+      const conflict = currentBox !== "" && currentBox !== boxId;
+      return {
+        kind: "address",
+        id: proposalId,
+        confidence: "review",
+        title: conflict ? "Review PO Box text found in the street address" : "Move PO Box text out of the street address",
+        explanation: conflict
+          ? `“${raw}” in ${field} looks like a PO Box, but PoBoxNumber is already “${currentBox}”. Review the complete address before applying changes.`
+          : `“${raw}” in ${field} looks like a PO Box and can be moved to PoBoxNumber (proposed “${boxId}”).`,
+        changes: conflict ? [] : [
+          { field, currentValue: fields[field] ?? "", proposedValue: "" },
+          { field: "PoBoxNumber", currentValue: fields.PoBoxNumber ?? "", proposedValue: boxId },
+        ],
+      };
+    }
+    if (PO_BOX_PREFIX.test(raw)) {
+      return {
+        kind: "address", id: proposalId, confidence: "manual",
+        title: "Review possible PO Box text in the street address",
+        explanation: `“${raw}” in ${field} looks like it starts with a PO Box reference, but the box number couldn't be parsed. Review the complete address and edit the fields directly.`,
+        changes: [],
+      };
+    }
+
+    const rrMatch = raw.match(RURAL_ROUTE_PATTERN);
+    if (rrMatch) {
+      const proposedRoute = `RR ${rrMatch[1]}`;
+      const currentRoute = (fields.RuralRoute ?? "").trim();
+      const conflict = currentRoute !== "" && currentRoute.toUpperCase() !== proposedRoute.toUpperCase();
+      return {
+        kind: "address",
+        id: proposalId,
+        confidence: "review",
+        title: conflict ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
+        explanation: conflict
+          ? `“${raw}” in ${field} looks like a rural route, but RuralRoute is already “${currentRoute}”. Review the complete address before applying changes.`
+          : `“${raw}” in ${field} looks like a rural route and can be moved to RuralRoute (proposed “${proposedRoute}”).`,
+        changes: conflict ? [] : [
+          { field, currentValue: fields[field] ?? "", proposedValue: "" },
+          { field: "RuralRoute", currentValue: fields.RuralRoute ?? "", proposedValue: proposedRoute },
+        ],
+      };
+    }
+    if (RURAL_ROUTE_PREFIX.test(raw)) {
+      return {
+        kind: "address", id: proposalId, confidence: "manual",
+        title: "Review possible rural route text in the street address",
+        explanation: `“${raw}” in ${field} looks like it starts with a rural route reference, but the route number couldn't be parsed. Review the complete address and edit the fields directly.`,
+        changes: [],
+      };
+    }
+  }
+  return undefined;
+}
