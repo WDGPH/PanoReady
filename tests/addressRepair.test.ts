@@ -3,6 +3,7 @@ import {
   analyzeAlternateDeliveryInStreetFields,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
+  analyzeUnitOverflow,
 } from "../lib/addressRepair";
 import { applyValidationFixes, parseStixXml, validateXml } from "../lib/validator";
 import type { AppliedFix } from "../lib/types";
@@ -123,6 +124,41 @@ describe("unit number fused to the street number", () => {
     for (const value of ["302-380", "13 - 142"]) {
       expect(analyzeStreetNumberUnitPrefix({ StreetNumber: value, Unit: "" }), value).toBeUndefined();
     }
+  });
+});
+
+describe("a street number and name found in Unit", () => {
+  it("proposes clearing Unit and filling empty StreetNumber/StreetName", () => {
+    const proposal = analyzeUnitOverflow({ Unit: "437 Pine", StreetNumber: "", StreetName: "" }, 6);
+    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal?.changes).toEqual([
+      { field: "Unit", currentValue: "437 Pine", proposedValue: "" },
+      { field: "StreetNumber", currentValue: "", proposedValue: "437" },
+      { field: "StreetName", currentValue: "", proposedValue: "Pine" },
+    ]);
+  });
+
+  it("only clears Unit when StreetNumber/StreetName already agree", () => {
+    const proposal = analyzeUnitOverflow({ Unit: "437 Pine", StreetNumber: "437", StreetName: "Pine" }, 6);
+    expect(proposal?.changes).toEqual([{ field: "Unit", currentValue: "437 Pine", proposedValue: "" }]);
+  });
+
+  it("proposes no changes on conflicting StreetNumber/StreetName data, rather than guessing and dropping Unit", () => {
+    const proposal = analyzeUnitOverflow({ Unit: "437 Pine", StreetNumber: "12", StreetName: "Oak" }, 6);
+    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal?.explanation).toContain("StreetNumber is already “12”");
+    expect(proposal?.explanation).toContain("StreetName is already “Oak”");
+    expect(proposal?.changes).toEqual([]);
+  });
+
+  it("does not guess unit descriptions that aren't a street number and name", () => {
+    for (const value of ["Basement Suite 4", "12 Rear", "2 Suite"]) {
+      expect(analyzeUnitOverflow({ Unit: value, StreetNumber: "", StreetName: "" }, 6), value).toBeUndefined();
+    }
+  });
+
+  it("leaves a StreetNumber-length overflow alone", () => {
+    expect(analyzeUnitOverflow({ Unit: "4375678 Pine", StreetNumber: "", StreetName: "" }, 6)).toBeUndefined();
   });
 });
 
