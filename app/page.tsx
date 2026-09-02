@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, Fragment } from "react";
+import Link from "next/link";
 import {
   Wand2, FileText,
   CheckCircle2, AlertCircle, Loader2, ArrowLeft,
@@ -64,8 +65,11 @@ function NavBar() {
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <span className="brand">PanoReady</span>
-        <span className="privacy">Data never leaves your browser</span>
+        <Link href="./" className="brand no-underline">PanoReady</Link>
+        <nav aria-label="Primary navigation" style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <Link href="./about" className="no-underline" style={{ color: "var(--color-text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>About</Link>
+        </nav>
+        <span className="privacy">Files stay in this browser</span>
       </div>
     </header>
   );
@@ -119,11 +123,11 @@ function GateBadge({ gate }: { gate: string }) {
 // ─── Workflows config ────────────────────────────────────────────────────────
 
 const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
-  { id: "validate", label: "Validate & Fix",  description: "Full validation: required fields, code values, formats, duplicates. Apply safe fixes, revalidate, download." },
-  { id: "clean",    label: "Clean XML",       description: "Fix phones, standardize units, flag bad street numbers for manual review." },
-  { id: "export",   label: "Export Reports",  description: "Parse students into spreadsheet. Filter Gr7–8 born 2012–2013 with school summaries." },
-  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation." },
-  { id: "compare",  label: "Compare Files",   description: "Compare two snapshots to measure record, field, and school-level changes." },
+  { id: "validate", label: "Validate & Fix",  description: "Check required fields, code values, formats, and duplicates. Apply safe fixes, then download the result." },
+  { id: "clean",    label: "Clean XML",       description: "Standardize phone and unit values. Send uncertain street numbers to review." },
+  { id: "export",   label: "Export Reports",  description: "Turn student records into CSV and Excel reports, with school and grade summaries." },
+  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation for easier review." },
+  { id: "compare",  label: "Compare Files",   description: "Compare two files and inspect record, field, and school-level changes." },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
@@ -358,9 +362,9 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
 
         {/* Statement — the one decision on this page that isn't a workflow choice */}
         <section className="beat">
-          <p className="eyebrow" style={{ marginBottom: 22 }}>In your browser, always</p>
+          <p className="eyebrow" style={{ marginBottom: 22 }}>Local file checks</p>
           <h1 style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 500, fontSize: "clamp(34px,5.5vw,58px)", lineHeight: 1.08, letterSpacing: "-0.01em", margin: 0, maxWidth: 480, color: "var(--ink)" }}>
-            Validate, in confidence.
+            Check the file before submission.
           </h1>
         </section>
 
@@ -433,7 +437,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
 
         {xlsmMeta && (
           <section className="beat">
-            <h2 className="beat-title">File Info metadata</h2>
+          <h2 className="beat-title">File details</h2>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
               Review or update these values before the workbook is converted to STIX XML.
             </p>
@@ -558,7 +562,7 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
 
           {currentXlsmMeta && (
             <section className="beat">
-              <h2 className="beat-title">Current file metadata</h2>
+              <h2 className="beat-title">Current file details</h2>
               <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
                 Review or update these values before the current workbook is converted for comparison.
               </p>

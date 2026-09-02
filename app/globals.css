@@ -1064,3 +1064,48 @@ h1, h2, h3 {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* About page: a document-led reading path, separate from the home workbench. */
+.about-page { min-height: 100dvh; display: flex; flex-direction: column; }
+.about-shell { width: 100%; max-width: 960px; margin: 0 auto; padding: 48px 28px 96px; flex: 1; }
+.about-back { display: inline-flex; align-items: center; gap: 7px; color: var(--color-text-muted); font-family: var(--font-mono), var(--font-mono-fallback); font-size: 11px; text-decoration: none; white-space: nowrap; }
+.about-back:hover { color: var(--color-text-primary); }
+.about-document { max-width: 860px; margin: 56px auto 0; }
+.about-intro { max-width: 680px; padding-bottom: 72px; border-bottom: 1px solid var(--color-border); }
+.about-kicker, .about-label { color: var(--color-teal-400); font-family: var(--font-mono), var(--font-mono-fallback); font-size: 11px; letter-spacing: 0.08em; margin: 0 0 18px; }
+.about-intro h1 { max-width: 660px; margin: 0 0 22px; font-size: clamp(2.75rem, 7vw, 5.25rem); line-height: 0.98; font-weight: 500; overflow-wrap: anywhere; }
+.about-lede { max-width: 600px; margin: 0; color: var(--color-text-secondary); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.65; }
+.about-section { padding: 72px 0; border-bottom: 1px solid var(--color-border); }
+.about-section--split { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(32px, 8vw, 110px); }
+.about-section h2, .about-principle h2, .about-note h2 { margin: 0; font-size: clamp(1.35rem, 2.6vw, 2rem); line-height: 1.1; font-weight: 600; }
+.about-copy { max-width: 480px; color: var(--color-text-secondary); font-size: 1rem; line-height: 1.75; }
+.about-copy p { margin: 0 0 18px; }
+.about-copy p:last-child { margin-bottom: 0; }
+.about-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 28px; border-top: 1px solid var(--color-border); }
+.about-step { position: relative; min-width: 0; padding: 22px 22px 8px 0; }
+.about-step + .about-step { padding-left: 22px; border-left: 1px solid var(--color-border); }
+.about-step-number { display: block; margin-bottom: 36px; color: var(--color-text-muted); font-family: var(--font-mono), var(--font-mono-fallback); font-size: 11px; }
+.about-step h2 { font-size: 1.3rem; margin-bottom: 10px; }
+.about-step p { margin: 0; color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.6; }
+.about-step-arrow { display: none; }
+.about-principles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 72px; background: var(--color-border); border: 1px solid var(--color-border); }
+.about-principle { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; padding: 26px; background: var(--color-surface-1); }
+.about-principle > svg { color: var(--verde); margin-top: 3px; }
+.about-principle h2 { font-size: 1.15rem; margin-bottom: 8px; }
+.about-principle p, .about-note p { margin: 0; color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.7; }
+.about-note { margin-top: 72px; padding: 26px; background: var(--color-surface-2); border: 1px solid var(--color-border); }
+.about-note-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.about-note-heading svg { color: var(--verde); flex-shrink: 0; }
+.about-note code { color: var(--color-text-primary); font-family: var(--font-mono), var(--font-mono-fallback); font-size: 0.85em; }
+
+@media (max-width: 700px) {
+  .about-shell { padding-inline: 20px; }
+  .about-document { margin-top: 42px; }
+  .about-intro { padding-bottom: 52px; }
+  .about-section { padding: 52px 0; }
+  .about-section--split, .about-principles { grid-template-columns: minmax(0, 1fr); }
+  .about-steps { grid-template-columns: minmax(0, 1fr); }
+  .about-step, .about-step + .about-step { padding: 20px 0; border-left: 0; border-bottom: 1px solid var(--color-border); }
+  .about-step:last-child { border-bottom: 0; }
+  .about-step-number { margin-bottom: 18px; }
+}
