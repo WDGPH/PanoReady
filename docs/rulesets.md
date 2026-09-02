@@ -58,10 +58,12 @@ Every ruleset file must include these fields:
 **Type:** array of strings
 
 ```json
-"requiredFields": ["FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber"]
+"requiredFields": ["FirstName", "LastName", "Gender", "BirthDate", "SchoolNumber"]
 ```
 
-Field names that must be non-empty on every student record. Any element name from the STIX XML schema is valid here. The built-in default requires the five fields above.
+Canonical student fields in this list must be non-empty on every student record. `SchoolNumber` and `SchoolName` are checked once per school. The editor offers every field supported by the canonical validation model, grouped as Student, Student phone, Guardian 1, Guardian 2, Address, and School. The built-in default requires the five fields above.
+
+Use the canonical field names shown in the editor when importing a ruleset JSON. Unknown names are not useful because they do not map to a value in the validation model.
 
 ---
 
@@ -318,7 +320,7 @@ Same pattern as `gradeAliases`. Aliases are case-sensitive (both the key and the
 
 ### `duplicateDetection`
 
-**Controls:** `duplicate-oen` and `duplicate-name-dob-school` rules  
+**Controls:** `OEN_DUPLICATE`/`OEN_DUAL_ENROLLMENT` and `NAME_DOB_DUPLICATE`/`IDENTITY_REVIEW` rules  
 **Type:** object
 
 ```json
@@ -328,7 +330,12 @@ Same pattern as `gradeAliases`. Aliases are case-sensitive (both the key and the
 }
 ```
 
-Set either value to `false` to disable that duplicate check entirely. This is useful if your export process intentionally includes the same OEN across records (for example, a student enrolled in multiple schools).
+Each check compares matching records (same OEN, or same first name + last name + birth date) and reacts differently depending on where the match was found:
+
+- **Same school** — treated as a real duplicate record. Raised as an `error` (`OEN_DUPLICATE` / `NAME_DOB_DUPLICATE`) and blocks the gate.
+- **Different schools** — treated as a possible dual enrollment (e.g. a student taking a co-op or off-site course at another school). Raised as a `warning` (`OEN_DUAL_ENROLLMENT` / `IDENTITY_REVIEW`), naming both schools so it's easy to review, and does **not** block the gate.
+
+Set either value to `false` to disable that duplicate check entirely, in both its same-school and cross-school forms.
 
 ---
 

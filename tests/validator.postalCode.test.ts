@@ -14,7 +14,7 @@ function stixWithPostalCodes(postalCodes: string[]): string {
         <ns1:OEN>${String(100000000 + index)}</ns1:OEN>
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Name><ns1:First>Postal${index}</ns1:First><ns1:Last>Tester</ns1:Last></ns1:Name>
-        <ns1:Gender>X</ns1:Gender>
+        <ns1:Gender>Other</ns1:Gender>
         <ns1:BirthDate>2015-01-${String(index + 1).padStart(2, "0")}</ns1:BirthDate>
         <ns1:Address>
           <ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province>
@@ -26,6 +26,7 @@ function stixWithPostalCodes(postalCodes: string[]): string {
 
   return `<?xml version="1.0" encoding="utf-8"?>
   <ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
+    <ns1:Metadata><ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime><ns1:CreatedBy>Postal Tests</ns1:CreatedBy><ns1:ContactPhone type="WORK">519-824-9999</ns1:ContactPhone><ns1:ContactEmail>postal@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload></ns1:Metadata>
     <ns1:School>
       <ns1:SchoolNumber>123456</ns1:SchoolNumber><ns1:Name>Synthetic School</ns1:Name>
       <ns1:Students>${students}</ns1:Students>

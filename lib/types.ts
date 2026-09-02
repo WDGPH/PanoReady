@@ -228,6 +228,15 @@ export interface CustomRuleset {
 
 export type ValidationSeverity = "error" | "warning" | "info";
 
+export type DiagnosticLayer =
+  | "IMPORT"
+  | "CANONICAL"
+  | "PROFILE"
+  | "IDENTITY"
+  | "XML"
+  | "XSD"
+  | "RECONCILIATION";
+
 export type ValidationIssue = {
   id: string;
   severity: ValidationSeverity;
@@ -242,6 +251,8 @@ export type ValidationIssue = {
   autoFixable: boolean;
   ruleId: string;
   xmlPath?: string;
+  layer?: DiagnosticLayer;
+  sourceLocation?: string;
 };
 
 export type AppliedFix = {
@@ -260,7 +271,7 @@ export type StudentRecord = {
   fields: Record<string, string>;
 };
 
-export type GateState = "READY" | "BLOCKED" | "PENDING";
+export type GateState = "READY" | "READY_WITH_WARNINGS" | "REVIEW_REQUIRED" | "BLOCKED" | "PENDING";
 
 export type ValidationResult = {
   issues: ValidationIssue[];
@@ -268,6 +279,29 @@ export type ValidationResult = {
   schoolCount: number;
   studentCount: number;
   gate: GateState;
+  xsdValidated?: boolean;
+};
+
+export type ImportMappingStatus = "MAPPED" | "AMBIGUOUS" | "DUPLICATE" | "UNMAPPED" | "IGNORED";
+
+export type ImportColumnMapping = {
+  column: number;
+  sourceHeader: string;
+  canonicalField?: string;
+  status: ImportMappingStatus;
+  populatedCount: number;
+};
+
+export type ImportPreview = {
+  worksheet: string;
+  headerRow: number;
+  firstDataRow: number;
+  sourceRowCount: number;
+  canonicalStudentCount: number;
+  columns: ImportColumnMapping[];
+  diagnostics: ValidationIssue[];
+  transformationCount: number;
+  reconciled: boolean;
 };
 
 export type ValidateSession = {
