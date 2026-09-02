@@ -36,6 +36,7 @@ import {
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
 } from "./addressRepair";
+import { SCHOOL_FIELDS } from "./fields";
 
 // ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
 
@@ -770,10 +771,12 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
     GuardianPhoneType: rules.allowedPhoneTypeValues, Guardian2PhoneType: rules.allowedPhoneTypeValues,
   };
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
+  const schoolFields = new Set<string>(SCHOOL_FIELDS);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
     const school = upload.schools[schoolIndex];
-    if (!school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
-    else if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
+    if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
+    if (rules.requiredFields.includes("SchoolName") && !school.name) issue(issues, { severity: "error", field: "SchoolName", schoolNumber: school.schoolNumber, ruleId: "REQUIRED_FIELD", layer: "CANONICAL", message: "SchoolName is required but missing or empty." });
+    if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
     if (school.students.length === 0) issue(issues, { severity: "error", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records.` });
     for (let studentIndex = 0; studentIndex < school.students.length; studentIndex++) {
       const student = school.students[studentIndex];
@@ -802,7 +805,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         });
       }
 
-      for (const field of rules.requiredFields.filter((required) => required !== "SchoolNumber")) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
+      for (const field of rules.requiredFields.filter((required) => !schoolFields.has(required))) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
       for (const [field, allowed] of Object.entries(allowedByField)) {
         const value = fields[field];
         if (value && !allowed.includes(value)) {
