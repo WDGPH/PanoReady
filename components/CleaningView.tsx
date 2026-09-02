@@ -30,7 +30,7 @@ const btnPrimary: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 6,
   padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
   cursor: "pointer", border: "none",
-  background: "var(--color-brand-400)", color: "#000",
+  background: "var(--color-brand-400)", color: "var(--color-black)",
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -395,7 +395,7 @@ function FieldPicker({ fields, onPick, onClose }: { fields: string[]; onPick: (f
         style={{
           position: "absolute", top: 4, left: 0, zIndex: 20,
           background: "var(--color-surface-1)", border: "1px solid var(--color-border)",
-          borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px var(--color-shadow)",
         }}
       >
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", marginBottom: 6, padding: "0 6px" }}>Add field</div>
