@@ -61,7 +61,9 @@ Every ruleset file must include these fields:
 "requiredFields": ["FirstName", "LastName", "Gender", "BirthDate", "SchoolNumber"]
 ```
 
-Field names that must be non-empty on every student record. Any element name from the STIX XML schema is valid here. The built-in default requires the five fields above.
+Canonical student fields in this list must be non-empty on every student record. `SchoolNumber` and `SchoolName` are checked once per school. The editor offers every field supported by the canonical validation model, grouped as Student, Student phone, Guardian 1, Guardian 2, Address, and School. The built-in default requires the five fields above.
+
+Use the canonical field names shown in the editor when importing a ruleset JSON. Unknown names are not useful because they do not map to a value in the validation model.
 
 ---
 
