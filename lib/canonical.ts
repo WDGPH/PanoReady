@@ -263,7 +263,6 @@ export function flattenCanonicalStudent(student: CanonicalStudent, school: Canon
     RuralRoute: student.address.ruralRoute, PoBoxNumber: student.address.poBoxNumber, City: student.address.city,
     Province: student.address.province, PostalCode: student.address.postalCode,
     Phone: student.phone?.number ?? "", PhoneType: student.phone?.type ?? "",
-    ContactPhone: student.phone?.number ?? "",
     GuardianFirstName: g1?.name.first ?? "", GuardianLastName: g1?.name.last ?? "",
     GuardianRelationship: g1?.relationship ?? "", GuardianPhoneNumber: g1?.phone?.number ?? "", GuardianPhoneType: g1?.phone?.type ?? "",
     Guardian2FirstName: g2?.name.first ?? "", Guardian2LastName: g2?.name.last ?? "",

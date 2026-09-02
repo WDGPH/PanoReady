@@ -5,18 +5,8 @@ import {
   type CanonicalStudent, type CanonicalUpload,
 } from "./canonical";
 import type { ImportColumnMapping, ImportPreview, ValidationIssue } from "./types";
-
-const CANONICAL_FIELDS = [
-  "OEN", "Grade", "Class", "FirstName", "MiddleName", "LastName",
-  "AliasFirstName", "AliasMiddleName", "AliasLastName", "Gender", "BirthDate",
-  "Language", "CountryOfOrigin", "Unit", "StreetNumber", "StreetNumberSuffix",
-  "StreetName", "StreetType", "StreetDirection", "RuralRoute", "PoBoxNumber",
-  "City", "Province", "PostalCode", "Phone", "PhoneType",
-  "GuardianFirstName", "GuardianLastName", "GuardianRelationship", "GuardianPhoneNumber", "GuardianPhoneType",
-  "Guardian2FirstName", "Guardian2LastName", "Guardian2Relationship", "Guardian2PhoneNumber", "Guardian2PhoneType",
-] as const;
-export type CanonicalField = typeof CANONICAL_FIELDS[number];
-export { CANONICAL_FIELDS };
+import { CANONICAL_FIELDS, type CanonicalField } from "./fields";
+export { CANONICAL_FIELDS, type CanonicalField } from "./fields";
 /** Column overrides, keyed by 1-based column number (matches ImportColumnMapping.column). "IGNORE" drops the column instead of mapping it. */
 export type ColumnOverrides = Record<number, CanonicalField | "IGNORE">;
 
