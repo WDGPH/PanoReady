@@ -1055,7 +1055,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
       <div className="compare-dashboard-header" style={{ marginBottom: 12 }}>
         <div className="compare-dashboard-kicker">OPERATIONS / CHANGE INTELLIGENCE <span>LOCAL ANALYSIS</span></div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <GitCompareArrows size={22} style={{ color: "#f59e0b" }} />
+          <GitCompareArrows size={22} style={{ color: "var(--color-accent-amber)" }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>STIX file comparison</h1>
         </div>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>
@@ -1242,7 +1242,7 @@ function CompareView({ comparison, onStartOver }: { comparison: StixComparison; 
 
       <Dialog.Root open={encryptDialogOpen} onOpenChange={(open) => { if (!open) closeEncryptDialog(); }}>
         <Dialog.Portal>
-          <Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+          <Dialog.Overlay style={{ position: "fixed", inset: 0, background: "var(--color-overlay)", zIndex: 50 }} />
           <Dialog.Content
             aria-describedby={undefined}
             style={{
@@ -1431,7 +1431,7 @@ function ValidateIssuesView({
       </div>
 
       {/* Summary stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 28, marginBottom: 22 }}>
+      <div className="summary-stats summary-stats--four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 28, marginBottom: 22 }}>
         <StatCard label="Total Issues" value={allIssues.length} />
         <StatCard label="Errors"       value={errorCount}       accent="red" />
         <StatCard label="Warnings"     value={warningCount}     accent="yellow" />
@@ -2330,17 +2330,17 @@ function ValidateDownloadView({
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 28, marginBottom: 28 }}>
+      <div className="summary-stats summary-stats--three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 28, marginBottom: 28 }}>
         <StatCard label="Fixes Applied"    value={session.fixes.length}  accent="teal" />
         <StatCard label="Remaining Issues" value={result.issues.length}  />
         <StatCard label="Students"         value={result.studentCount}   accent="green" />
       </div>
 
       {/* Downloads */}
-      <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 12 }}>Downloads</div>
+      <div className="section-label" style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, marginBottom: 12 }}>Downloads</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Cleaned XML */}
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: gate === "READY" ? "var(--color-success-bg)" : "var(--color-error-bg)", borderRadius: 4, padding: 9 }}>
               <FileText size={18} style={{ color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }} />
@@ -2356,7 +2356,7 @@ function ValidateDownloadView({
         </div>
 
         {/* Encrypted XML */}
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Lock size={18} style={{ color: "var(--color-text-muted)" }} /></div>
             <div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.zip</div><div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>AES-256 encrypted ZIP containing the validated XML</div></div>
@@ -2365,7 +2365,7 @@ function ValidateDownloadView({
         </div>
 
         {/* Issue report CSV */}
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}>
               <BarChart3 size={18} style={{ color: "var(--color-text-muted)" }} />
@@ -2382,7 +2382,7 @@ function ValidateDownloadView({
       </div>
 
       <Dialog.Root open={encryptOpen} onOpenChange={(open) => { if (!open) closeEncrypt(); }}>
-        <Dialog.Portal><Dialog.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50 }} />
+        <Dialog.Portal><Dialog.Overlay style={{ position: "fixed", inset: 0, background: "var(--color-overlay)", zIndex: 50 }} />
           <Dialog.Content aria-describedby={undefined} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 8, width: "min(92vw, 420px)", zIndex: 51, padding: "20px 22px" }}>
             <Dialog.Title style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Encrypted ZIP download</Dialog.Title>
             <p style={{ color: "var(--color-text-muted)", fontSize: 11.5, lineHeight: 1.5, margin: "0 0 14px" }}>The password is not saved. Use 7-Zip, WinRAR, or PeaZip to open the AES-256 ZIP.</p>
