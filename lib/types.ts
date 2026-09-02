@@ -237,6 +237,23 @@ export type DiagnosticLayer =
   | "XSD"
   | "RECONCILIATION";
 
+export type RepairConfidence = "safe" | "review" | "manual";
+
+export type RepairChange = {
+  field: string;
+  currentValue: string;
+  proposedValue: string;
+};
+
+export type AddressRepairProposal = {
+  kind: "address";
+  id: string;
+  confidence: RepairConfidence;
+  title: string;
+  explanation: string;
+  changes: RepairChange[];
+};
+
 export type ValidationIssue = {
   id: string;
   severity: ValidationSeverity;
@@ -253,6 +270,8 @@ export type ValidationIssue = {
   xmlPath?: string;
   layer?: DiagnosticLayer;
   sourceLocation?: string;
+  /** A coordinated, multi-field correction that can be reviewed as one unit. */
+  repairProposal?: AddressRepairProposal;
 };
 
 export type AppliedFix = {
@@ -263,6 +282,8 @@ export type AppliedFix = {
   newValue: string;
   ruleId: string;
   appliedAt: number;
+  /** Links multiple field changes applied from one repair card. */
+  repairId?: string;
 };
 
 export type StudentRecord = {

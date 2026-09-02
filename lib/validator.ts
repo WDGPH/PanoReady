@@ -29,6 +29,14 @@ import {
   type CanonicalStudent,
   type CanonicalSchool,
 } from "./canonical";
+import {
+  ADDRESS_REPAIR_FIELDS,
+  analyzeAlternateDeliveryInStreetFields,
+  analyzeStreetNumberRepair,
+  analyzeStreetNumberUnitPrefix,
+  analyzeUnitOverflow,
+} from "./addressRepair";
+import { SCHOOL_FIELDS } from "./fields";
 
 // ─── XML helpers (mirrored from cleaner.ts) ───────────────────────────────────
 
@@ -604,24 +612,6 @@ function validRealDate(value: string): boolean {
   return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
 
-const STREET_NUMBER_NON_NAME_WORDS = /^(unit|apt|apartment|suite|ste|basement|bsmt|floor|fl|upper|lower|box|po|rr|rear|front)\b/i;
-
-/**
- * Real Panorama rejections show StreetNumber overflow is almost always the street name
- * concatenated onto the number (e.g. "46 Curzon", "97 Lynch") rather than a genuinely long
- * number. Detects that shape and proposes moving the trailing text into StreetName, but only
- * when StreetName is empty (so nothing gets silently overwritten) and the trailing text looks
- * like a name fragment, not another number or a unit/box keyword that landed in the wrong field.
- */
-function splitStreetNumber(value: string, existingStreetName: string): { streetNumber: string; streetName: string } | undefined {
-  if (existingStreetName.trim()) return undefined;
-  const match = value.match(/^(\d+[A-Za-z]?)[\s-]+(.+)$/);
-  if (!match) return undefined;
-  const [, streetNumber, remainder] = match;
-  if (!/[A-Za-z]/.test(remainder) || STREET_NUMBER_NON_NAME_WORDS.test(remainder)) return undefined;
-  return { streetNumber, streetName: remainder.trim() };
-}
-
 type CanonicalPhoneFinding = {
   severity: "error" | "warning" | "info";
   message: string;
@@ -781,10 +771,12 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
     GuardianPhoneType: rules.allowedPhoneTypeValues, Guardian2PhoneType: rules.allowedPhoneTypeValues,
   };
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
+  const schoolFields = new Set<string>(SCHOOL_FIELDS);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
     const school = upload.schools[schoolIndex];
-    if (!school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
-    else if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
+    if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
+    if (rules.requiredFields.includes("SchoolName") && !school.name) issue(issues, { severity: "error", field: "SchoolName", schoolNumber: school.schoolNumber, ruleId: "REQUIRED_FIELD", layer: "CANONICAL", message: "SchoolName is required but missing or empty." });
+    if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
     if (school.students.length === 0) issue(issues, { severity: "error", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records.` });
     for (let studentIndex = 0; studentIndex < school.students.length; studentIndex++) {
       const student = school.students[studentIndex];
@@ -793,7 +785,27 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       const studentName = [fields.FirstName, fields.LastName].filter(Boolean).join(" ") || `Student #${studentIndex + 1}`;
       const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
       records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
-      for (const field of rules.requiredFields.filter((required) => required !== "SchoolNumber")) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
+
+      // Only a standalone finding when StreetNumber is within its length limit — an over-length
+      // value gets this same proposal attached to the blocking FIELD_LENGTH error instead.
+      const unitPrefixProposal = (fields.StreetNumber ?? "").length <= (rules.fieldLengths.StreetNumber ?? Infinity)
+        ? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-unit-prefix`)
+        : undefined;
+      if (unitPrefixProposal) {
+        issue(issues, {
+          ...base, severity: "warning", field: "StreetNumber", ruleId: "STREET_NUMBER_UNIT_PREFIX",
+          message: unitPrefixProposal.explanation, autoFixable: false, repairProposal: unitPrefixProposal,
+        });
+      }
+      const alternateDeliveryProposal = analyzeAlternateDeliveryInStreetFields(fields, `${recordId}-address-alternate-delivery`);
+      if (alternateDeliveryProposal) {
+        issue(issues, {
+          ...base, severity: "warning", field: "StreetName", ruleId: "ALTERNATE_DELIVERY_IN_STREET_FIELD",
+          message: alternateDeliveryProposal.explanation, autoFixable: false, repairProposal: alternateDeliveryProposal,
+        });
+      }
+
+      for (const field of rules.requiredFields.filter((required) => !schoolFields.has(required))) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
       for (const [field, allowed] of Object.entries(allowedByField)) {
         const value = fields[field];
         if (value && !allowed.includes(value)) {
@@ -824,6 +836,14 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         const finding = postalCodeFinding(fields.PostalCode, rules);
         if (finding) issue(issues, { ...base, field: "PostalCode", currentValue: fields.PostalCode, ...finding });
       }
+      const manualAddressProposal = (field: string, val: string, limit: number) => ({
+        kind: "address" as const,
+        id: `${recordId}-address-manual-${field}`,
+        confidence: "manual" as const,
+        title: `Review ${field} manually`,
+        explanation: `${field} "${val}" exceeds its ${limit}-character limit and can't be safely auto-split. Review the complete address and edit the fields directly.`,
+        changes: [],
+      });
       for (const [field, limit] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
         if (field === "PostalCode") continue;
@@ -831,11 +851,35 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         if (field === "Unit") {
           const [standardized, changed] = standardizeUnit(val);
           const canFix = changed && standardized.length <= limit;
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: canFix ? standardized : undefined, autoFixable: canFix });
+          const repairProposal = canFix ? undefined : (analyzeUnitOverflow(fields, rules.fieldLengths.StreetNumber ?? limit, `${recordId}-address-unit-overflow`) ?? manualAddressProposal(field, val, limit));
+          issue(issues, {
+            ...base,
+            severity: "error",
+            field,
+            ruleId: "FIELD_LENGTH",
+            message: repairProposal?.explanation ?? `${field} exceeds its ${limit}-character limit.`,
+            suggestedFix: canFix ? standardized : undefined,
+            autoFixable: canFix,
+            repairProposal,
+          });
         } else if (field === "StreetNumber") {
-          const split = splitStreetNumber(val, fields.StreetName ?? "");
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `StreetNumber "${val}" exceeds the ${limit}-character limit${split ? "; it looks like the street name is combined with the number" : ""}.`, suggestedFix: split?.streetNumber, autoFixable: !!split });
-          if (split) issue(issues, { ...base, severity: "warning", field: "StreetName", ruleId: "STREET_NUMBER_SPLIT", message: `StreetName appears to be missing "${split.streetName}", currently combined into StreetNumber "${val}".`, suggestedFix: split.streetName, autoFixable: true });
+          const repairProposal = analyzeStreetNumberRepair(fields, limit, `${recordId}-address-street-number`)
+            ?? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-street-number-unit-prefix`)
+            ?? manualAddressProposal(field, val, limit);
+          const safe = repairProposal.confidence === "safe";
+          issue(issues, {
+            ...base,
+            severity: "error",
+            field,
+            ruleId: "FIELD_LENGTH",
+            message: repairProposal.explanation,
+            suggestedFix: safe ? repairProposal.changes.find((change) => change.field === field)?.proposedValue : undefined,
+            autoFixable: safe,
+            repairProposal,
+          });
+        } else if ((ADDRESS_REPAIR_FIELDS as readonly string[]).includes(field)) {
+          const manualProposal = manualAddressProposal(field, val, limit);
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: manualProposal.explanation, autoFixable: false, repairProposal: manualProposal });
         } else {
           issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
         }
