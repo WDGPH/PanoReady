@@ -114,7 +114,7 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
             cursor: "pointer", border: "none",
-            background: "var(--color-brand-400)", color: "#000",
+            background: "var(--color-brand-400)", color: "var(--color-black)",
           }}
         >
           Continue to validation <ArrowRight size={15} />
