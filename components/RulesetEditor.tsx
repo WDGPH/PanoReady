@@ -354,7 +354,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
         <Dialog.Overlay
           style={{
             position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.55)",
+            background: "var(--color-overlay)",
             zIndex: 50,
           }}
         />
@@ -902,7 +902,7 @@ function EditorFieldPicker({ fields, onPick, onClose }: { fields: string[]; onPi
     <div style={{
       position: "absolute", top: "100%", left: 0, zIndex: 20, marginTop: 4,
       background: "var(--color-surface-1)", border: "1px solid var(--color-border)",
-      borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+      borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px var(--color-shadow)",
     }}>
       {fields.map((f) => (
         <button
