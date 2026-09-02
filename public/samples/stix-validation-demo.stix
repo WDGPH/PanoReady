@@ -1,14 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
+<ns1:SchoolUpload
+  xmlns:ns1="http://ontario.ca"
+  xmlns:rogue="urn:panoready:unexpected-demo"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <!-- File-level, student, and guardian phones share the same rules. -->
   <ns1:Metadata>
-    <ns1:CreateDate>2026-09-01</ns1:CreateDate>
-    <ns1:CreateTime>12:00:00</ns1:CreateTime>
+    <!-- Known gaps: impossible calendar/time values are currently not reported. -->
+    <ns1:CreateDate>2026-02-30</ns1:CreateDate>
+    <ns1:CreateTime>25:61:61</ns1:CreateTime>
     <ns1:CreatedBy>Pear Orchard</ns1:CreatedBy>
     <!-- Auto-fix: common "ext." variant becomes lowercase x plus 1-5 digits. -->
     <ns1:ContactPhone type="WORK">519-824-1000 ext. 10</ns1:ContactPhone>
     <ns1:ContactEmail>pear.orchard@example.invalid</ns1:ContactEmail>
-    <ns1:FullUpload>YES</ns1:FullUpload>
+    <!-- Known gap: unexpected upload-mode values are currently not reported. -->
+    <ns1:FullUpload>MAYBE</ns1:FullUpload>
   </ns1:Metadata>
   <ns1:School>
     <ns1:SchoolNumber>12345</ns1:SchoolNumber>
@@ -294,6 +299,113 @@
         <ns1:Phone>851-555-1234</ns1:Phone>
       </ns1:Student>
 
+      <!-- Student 16: French accents, ligatures, hyphens, and apostrophes are intentional valid data. -->
+      <ns1:Student>
+        <ns1:OEN>500000016</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name>
+          <ns1:First>Élodie-Anne</ns1:First>
+          <ns1:Middle>François</ns1:Middle>
+          <ns1:Last>D’Artichaut</ns1:Last>
+        </ns1:Name>
+        <ns1:AliasName>
+          <ns1:First>Maëlle</ns1:First>
+          <ns1:Last>L’Œillet</ns1:Last>
+        </ns1:AliasName>
+        <ns1:Gender>F</ns1:Gender>
+        <ns1:BirthDate>2014-12-16</ns1:BirthDate>
+        <ns1:Address>
+          <ns1:StreetNumber>16</ns1:StreetNumber>
+          <ns1:StreetName>chemin de l’Érable</ns1:StreetName>
+          <ns1:City>Trois-Rivières</ns1:City>
+          <ns1:Province>QC</ns1:Province>
+        </ns1:Address>
+      </ns1:Student>
+
+      <!-- Student 17: known gap — correct-looking shape, impossible calendar date. -->
+      <ns1:Student>
+        <ns1:OEN>500000017</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Pumpkin</ns1:First><ns1:Last>Clock</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-02-30</ns1:BirthDate>
+        <ns1:Address/>
+      </ns1:Student>
+
+      <!-- Student 18: known gap — an unexpected child is silently ignored. -->
+      <ns1:Student>
+        <ns1:OEN>500000018</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Mango</ns1:First><ns1:Last>Mystery</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-18</ns1:BirthDate>
+        <ns1:FavouriteVegetable>Rutabaga</ns1:FavouriteVegetable>
+        <ns1:Address/>
+      </ns1:Student>
+
+      <!-- Student 19: known gap — a third Guardian is accepted and ignored. -->
+      <ns1:Student>
+        <ns1:OEN>500000019</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Kale</ns1:First><ns1:Last>Trio</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-19</ns1:BirthDate>
+        <ns1:Guardian><ns1:Relationship>LEGALGRD</ns1:Relationship></ns1:Guardian>
+        <ns1:Guardian><ns1:Relationship>PARENT</ns1:Relationship></ns1:Guardian>
+        <ns1:Guardian><ns1:Relationship>OTHER</ns1:Relationship></ns1:Guardian>
+        <ns1:Address/>
+      </ns1:Student>
+
+      <!-- Student 20: known gaps — phone type and Guardian relationship are not checked. -->
+      <ns1:Student>
+        <ns1:OEN>500000020</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Radish</ns1:First><ns1:Last>Rocket</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-20</ns1:BirthDate>
+        <ns1:Guardian><ns1:Relationship>NEIGHBOUR</ns1:Relationship></ns1:Guardian>
+        <ns1:Address/>
+        <ns1:Phone type="CARRIER-PIGEON">519-824-7777</ns1:Phone>
+      </ns1:Student>
+
+      <!-- Student 21: known gap — duplicate singleton fields collapse into a misleading missing-field issue. -->
+      <ns1:Student>
+        <ns1:OEN>500000021</ns1:OEN>
+        <ns1:Grade>GR4</ns1:Grade>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Double</ns1:First><ns1:Last>Grade</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-21</ns1:BirthDate>
+        <ns1:Address/>
+      </ns1:Student>
+
+      <!-- Student 22: known gap — a nil marker is silently treated as an empty Address. -->
+      <ns1:Student>
+        <ns1:OEN>500000022</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Invisible</ns1:First><ns1:Last>Asparagus</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-22</ns1:BirthDate>
+        <ns1:Address xsi:nil="true"/>
+      </ns1:Student>
+
+      <!-- Student 23: known gap — duplicate Phone elements are collapsed and not reported as cardinality. -->
+      <ns1:Student>
+        <ns1:OEN>500000023</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Double</ns1:First><ns1:Last>Dial</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-23</ns1:BirthDate>
+        <ns1:Address/>
+        <ns1:Phone>519-824-7001</ns1:Phone>
+        <ns1:Phone>519-824-7002</ns1:Phone>
+      </ns1:Student>
+
+      <!-- Known gap: content from an unexpected namespace is silently ignored. -->
+      <rogue:Student>
+        <rogue:Name>Namespace Nectarine</rogue:Name>
+      </rogue:Student>
+
     </ns1:Students>
   </ns1:School>
 
@@ -317,6 +429,21 @@
         <ns1:Gender>unknown</ns1:Gender>
         <ns1:OEN>333444555</ns1:OEN>
         <ns1:Phone>600-555-1234</ns1:Phone>
+      </ns1:Student>
+    </ns1:Students>
+  </ns1:School>
+
+  <!-- Fourth school: known gap — School Name is absent but currently unreported. -->
+  <ns1:School>
+    <ns1:SchoolNumber>67890</ns1:SchoolNumber>
+    <ns1:Students>
+      <ns1:Student>
+        <ns1:OEN>500000024</ns1:OEN>
+        <ns1:Grade>GR5</ns1:Grade>
+        <ns1:Name><ns1:First>Turnip</ns1:First><ns1:Last>Annex</ns1:Last></ns1:Name>
+        <ns1:Gender>X</ns1:Gender>
+        <ns1:BirthDate>2014-01-24</ns1:BirthDate>
+        <ns1:Address/>
       </ns1:Student>
     </ns1:Students>
   </ns1:School>
