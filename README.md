@@ -28,7 +28,20 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run build        # Production build (webpack)
 npm run start        # Serve the production build
 npm run lint         # Run ESLint
+npm test             # Run unit and validation integration tests
 ```
+
+### Validation demo
+
+Download the synthetic
+[STIX validation demo](public/samples/stix-validation-demo.stix) and upload it
+through **Validate & Fix** to review the same general, postal-code, and
+phone-number cases exercised by the integration tests. It demonstrates safe
+postal and phone normalization, structural failures, placeholder handling, and
+the non-blocking Canadian geographic area-code policy. Its metadata, student,
+and nested guardian phones include canonical extensions, safe common variants,
+and cases that intentionally require manual correction. The fixture contains
+synthetic names and data only.
 
 ## Custom Validation Rulesets
 

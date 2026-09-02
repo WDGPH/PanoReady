@@ -22,7 +22,7 @@ export const CLEANING_CONTROLLED_VOCAB: Record<string, keyof RulesProfile> = {
 export const ALL_CLEANABLE_FIELDS = [
   "SchoolName", "FirstName", "MiddleName", "LastName",
   "AliasFirstName", "AliasMiddleName", "AliasLastName",
-  "BirthDate", "OEN", "ContactPhone",
+  "BirthDate", "OEN", "Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber",
   "City", "Province", "PostalCode", "StreetNumber",
   "StreetName", "StreetNumberSuffix", "Unit",
   "Grade", "Gender", "Language",

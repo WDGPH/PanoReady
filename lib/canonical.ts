@@ -244,7 +244,9 @@ export function serializeCanonicalXml(upload: CanonicalUpload): string {
     }).join("");
     return `<School>${element("SchoolNumber", school.schoolNumber)}${element("Name", school.name)}<Students>${students}</Students></School>`;
   }).join("");
-  return `<?xml version="1.0" encoding="utf-8"?><SchoolUpload xmlns="${ONTARIO_NAMESPACE}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="${ONTARIO_NAMESPACE} studentuploaddata.xsd"><Metadata>${metadata}</Metadata>${schools}</SchoolUpload>`;
+  const xml = `<SchoolUpload xmlns:ns1="${ONTARIO_NAMESPACE}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="${ONTARIO_NAMESPACE} studentuploaddata.xsd"><Metadata>${metadata}</Metadata>${schools}</SchoolUpload>`;
+  const prefixed = xml.replace(/<(\/?)([A-Z][A-Za-z0-9]*)(?=[\s>])/g, "<$1ns1:$2");
+  return `<?xml version="1.0" encoding="utf-8"?>${prefixed}`;
 }
 
 export function flattenCanonicalStudent(student: CanonicalStudent, school: CanonicalSchool): Record<string, string> {

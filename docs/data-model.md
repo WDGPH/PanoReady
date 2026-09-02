@@ -90,6 +90,7 @@ type ValidationIssue = {
   schoolNumber?: string;    // school number for display
   studentName?: string;     // student name for display
   field?: string;           // XML field name (e.g. "Grade", "BirthDate")
+  currentValue?: string;    // source value for a non-student issue (e.g. metadata)
   message: string;          // human-readable description of the problem
   suggestedFix?: string;    // correction the app recommends, if deterministic
   autoFixable: boolean;     // whether a suggestedFix exists and is safe to apply

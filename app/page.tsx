@@ -752,6 +752,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
     const genders = Array.from(gendersSet).sort();
     const lo = isFinite(ageMin) ? ageMin : 0;
     const hi = isFinite(ageMax) ? ageMax : 99;
+    /* eslint-disable react-hooks/set-state-in-effect -- Reset all filter controls atomically when a new export dataset is loaded. */
     setFilterOpts({ schools, grades, genders });
     setSelectedSchools(schools);
     setSelectedGrades(grades);
@@ -759,6 +760,7 @@ function ResultView({ session, onStartOver }: { session: SessionData; onStartOve
     setAgeBounds([lo, hi]);
     setMinAge(lo);
     setMaxAge(hi);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [session.exportResult]);
 
   const customStudents = (session.exportResult?.allStudents ?? []).filter((s) => {
@@ -1435,7 +1437,7 @@ function ValidateIssuesView({
               <tbody>
                 {filtered.map(issue => {
                   const record = initialResult.records.find(r => r.id === issue.recordId);
-                  const currentValue = issue.field && record ? (record.fields[issue.field] ?? "") : "";
+                  const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                   return (
                     <tr key={issue.id}>
                       <td><SeverityBadge severity={issue.severity} /></td>
@@ -1543,8 +1545,8 @@ function ValidateFixView({
       if (newValue === undefined || newValue === "") continue;
       if (!issue.recordId || !issue.field) continue;
       const record = records.find(r => r.id === issue.recordId);
-      if (!record) continue;
-      const oldValue = record.fields[issue.field] ?? "";
+      const oldValue = issue.currentValue ?? (record ? (record.fields[issue.field] ?? "") : "");
+      if (!record && issue.currentValue === undefined) continue;
       fixes.push({
         issueId: issue.id,
         recordId: issue.recordId,
@@ -1623,7 +1625,7 @@ function ValidateFixView({
             <tbody>
               {visibleIssues.map(issue => {
                 const record = records.find(r => r.id === issue.recordId);
-                const currentValue = issue.field && record ? (record.fields[issue.field] ?? "") : "";
+                const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                 const pendingVal = pending[issue.id] ?? "";
                 return (
                   <tr key={issue.id} style={{ opacity: !issue.field ? 0.5 : 1 }}>
@@ -1703,11 +1705,13 @@ function ValidateRevalidateView({
   useEffect(() => {
     const fixedXml = applyValidationFixes(session.originalXml, session.fixes);
     const revalidated = validateXml(fixedXml, session.validationRules);
+    /* eslint-disable react-hooks/set-state-in-effect -- Revalidation is the mounted screen's one-time transition from pending to complete. */
     setResult({
       ...session,
       revalidatedResult: revalidated,
       finalXml: fixedXml,
     });
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [session]);
 
   if (!result) {
@@ -2018,6 +2022,7 @@ function ValidateDownloadView({
     const genders = Array.from(gendersSet).sort();
     const lo = isFinite(ageMin) ? ageMin : 0;
     const hi = isFinite(ageMax) ? ageMax : 99;
+    /* eslint-disable react-hooks/set-state-in-effect -- Reset all filter controls atomically when validation results change. */
     setFilterOpts({ schools, grades, genders });
     setSelectedSchools(schools);
     setSelectedGrades(grades);
@@ -2025,6 +2030,7 @@ function ValidateDownloadView({
     setAgeBounds([lo, hi]);
     setMinAge(lo);
     setMaxAge(hi);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [result]);
 
   const filteredRecords = (result.records ?? []).filter((r) => {
@@ -2281,7 +2287,10 @@ export default function App() {
   const [cleaningSummary, setCleaningSummary] = useState<CleaningSummaryEntry[] | null>(null);
 
   // Sync activeRules from localStorage on mount
-  useEffect(() => { setActiveRules(getActiveRules()); }, []);
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is browser-only and must be read after hydration. */
+    setActiveRules(getActiveRules());
+  }, []);
 
   const goHome = () => {
     setView("home");
