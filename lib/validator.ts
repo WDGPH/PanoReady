@@ -814,6 +814,25 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           issue(issues, { ...base, severity: "error", field, ruleId: `${field.toUpperCase()}_ALLOWED_VALUE`, message: `${field} value "${value}" is not allowed.`, suggestedFix: alias, autoFixable: !!alias });
         }
       }
+      // Guardian relationship is conditional: a missing Guardian is valid, but
+      // a Guardian carrying any name or phone data must identify the relationship.
+      for (const [index, guardian] of student.guardians.entries()) {
+        const hasGuardianInformation = Boolean(
+          guardian.name.first.trim() || guardian.name.middle.trim() || guardian.name.last.trim()
+            || guardian.phone?.number.trim() || guardian.relationship.trim(),
+        );
+        if (hasGuardianInformation && !guardian.relationship.trim()) {
+          const field = index === 0 ? "GuardianRelationship" : "Guardian2Relationship";
+          issue(issues, {
+            ...base,
+            severity: "error",
+            field,
+            ruleId: "GUARDIAN_RELATIONSHIP_REQUIRED",
+            message: `Guardian ${index + 1} has information but no Relationship. Add the relationship or remove the Guardian information.`,
+            autoFixable: false,
+          });
+        }
+      }
       if (fields.BirthDate) {
         if (!validRealDate(fields.BirthDate)) {
           const parsed = new Date(fields.BirthDate);

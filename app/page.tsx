@@ -1708,7 +1708,9 @@ function ValidateFixView({
     for (const issue of issues) {
       if (issue.repairProposal) continue;
       const newValue = pending[issue.id];
-      if (newValue === undefined || newValue === "") continue;
+      // A staged blank is an intentional correction, particularly when
+      // removing an invalid phone. Only untouched fields are skipped.
+      if (newValue === undefined) continue;
       if (!issue.recordId || !issue.field) continue;
       const record = records.find(r => r.id === issue.recordId);
       const oldValue = issue.currentValue ?? (record ? (record.fields[issue.field] ?? "") : "");
@@ -1756,7 +1758,7 @@ function ValidateFixView({
     if (!record || !draft) return count;
     return count + ADDRESS_REPAIR_FIELDS.filter((field) => (draft[field] ?? "") !== (record.fields[field] ?? "")).length;
   }, 0);
-  const pendingCount = Object.values(pending).filter(v => v !== "").length + addressChangeCount;
+  const pendingCount = Object.keys(pending).length + addressChangeCount;
   const fixableCount = issues.filter(i => i.autoFixable).length;
 
   return (
@@ -1783,7 +1785,7 @@ function ValidateFixView({
       {/* Bulk action info */}
       <div style={{ borderLeft: "2px solid var(--color-info-text)", padding: "6px 0 6px 14px", marginBottom: 20, fontSize: 12, color: "var(--color-text-secondary)" }}>
         <strong style={{ color: "var(--color-info-text)" }}>Bulk-safe fixes</strong> are pre-filled automatically: whitespace trimming, grade/gender code normalization, deterministic date reformatting.
-        Manual fields require you to type a correction — leave blank to skip.
+        Manual fields require you to type a correction. Use “Clear value” when an existing value should be removed.
       </div>
 
       {/* Filters */}
@@ -1894,6 +1896,16 @@ function ValidateFixView({
                               title={`Use suggested: ${issue.suggestedFix}`}
                             >
                               Use suggested
+                            </button>
+                          )}
+                          {issue.field.includes("Phone") && (
+                            <button
+                              type="button"
+                              onClick={() => setPending(p => ({ ...p, [issue.id]: "" }))}
+                              className="btn btn-ghost"
+                              style={{ fontSize: 11, padding: "4px 7px", whiteSpace: "nowrap" as const }}
+                            >
+                              Clear value
                             </button>
                           )}
                         </div>
