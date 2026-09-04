@@ -36,6 +36,19 @@ test("canonical XML round trip preserves nested guardians, address, and typed ph
   assert.deepEqual(roundTrip.schools[0].students[0].address, upload.schools[0].students[0].address);
 });
 
+test("omits empty guardians but flags partial guardians without a relationship", () => {
+  const source = xml().replace(
+    "<Guardian><Name><First>Ann</First><Last>Lovelace</Last></Name><Relationship>MOTHER</Relationship><Phone type=\"MOBILE\">519-555-2222</Phone></Guardian>",
+    "<Guardian><Name></Name></Guardian><Guardian><Name><First>Ann</First></Name></Guardian>",
+  );
+  const upload = parseCanonicalXml(source);
+  assert.equal(upload.schools[0].students[0].guardians.length, 1);
+  const result = validateXml(source);
+  assert.ok(result.issues.some((issue) => issue.ruleId === "GUARDIAN_RELATIONSHIP_REQUIRED" && issue.field === "GuardianRelationship"));
+  assert.equal(result.gate, "BLOCKED");
+  assert.equal(serializeCanonicalXml(upload).match(/<ns1:Guardian>/g)?.length, 1);
+});
+
 test("validator enforces metadata and every populated controlled field", () => {
   const invalid = xml().replace("<Language>en</Language>", "<Language>bad</Language>")
     .replace("<CountryOfOrigin>CA</CountryOfOrigin>", "<CountryOfOrigin>bad</CountryOfOrigin>")

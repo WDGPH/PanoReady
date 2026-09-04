@@ -98,6 +98,13 @@ function name(value: unknown): CanonicalName {
   return { first: text(n.First), middle: text(n.Middle), last: text(n.Last) };
 }
 
+function hasGuardianInformation(guardian: CanonicalGuardian): boolean {
+  return Boolean(
+    guardian.name.first.trim() || guardian.name.middle.trim() || guardian.name.last.trim()
+      || guardian.relationship.trim() || guardian.phone?.number.trim(),
+  );
+}
+
 function rootNamespace(xml: string): string | null {
   const withoutProlog = xml.replace(/^\s*<\?xml[\s\S]*?\?>/i, "").replace(/^\s*<!--([\s\S]*?)-->/, "").trimStart();
   const match = withoutProlog.match(/^<([A-Za-z_][\w.-]*:)?SchoolUpload\b([^>]*)>/i);
@@ -163,7 +170,7 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
         inspectKeys(guardian, ["Name", "Relationship", "Phone"], `${studentPath}/Guardian`, diagnostics);
         inspectKeys(node(guardian.Name), ["First", "Middle", "Last"], `${studentPath}/Guardian/Name`, diagnostics);
         return { name: name(guardian.Name), relationship: text(guardian.Relationship), phone: phone(guardian.Phone) };
-      });
+      }).filter(hasGuardianInformation);
       const alias = name(student.AliasName);
       const hasAlias = alias.first || alias.middle || alias.last;
       return {
@@ -228,7 +235,7 @@ export function serializeCanonicalXml(upload: CanonicalUpload): string {
     + (m.boardNumber || m.boardName ? `<SchoolBoard>${element("BoardNumber", m.boardNumber)}${element("Name", m.boardName)}</SchoolBoard>` : "");
   const schools = upload.schools.map((school) => {
     const students = school.students.map((student) => {
-      const guardians = student.guardians.slice(0, 2).map((guardian) =>
+      const guardians = student.guardians.slice(0, 2).filter(hasGuardianInformation).map((guardian) =>
         `<Guardian>${nameXml("Name", guardian.name, true)}${element("Relationship", guardian.relationship)}${phoneElement("Phone", guardian.phone)}</Guardian>`
       ).join("");
       const a = student.address;

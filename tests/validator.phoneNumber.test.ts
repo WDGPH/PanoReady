@@ -90,6 +90,27 @@ describe("phone-number validator integration", () => {
     expect(validateXml(fixedXml).issues.filter((issue) => issue.field === "Phone")).toEqual([]);
   });
 
+  it("allows an explicitly staged blank to remove an invalid phone", () => {
+    const xml = stixWithPhones(["766-838-917x766"]);
+    const initial = validateXml(xml);
+    const issue = initial.issues.find((candidate) => candidate.field === "Phone");
+    expect(issue).toBeDefined();
+
+    const fixedXml = applyValidationFixes(xml, [{
+      issueId: issue!.id,
+      recordId: issue!.recordId!,
+      field: issue!.field!,
+      oldValue: issue!.currentValue!,
+      newValue: "",
+      ruleId: issue!.ruleId,
+      appliedAt: 0,
+    }]);
+
+    expect(fixedXml).not.toContain("766-838-917x766");
+    expect(fixedXml).not.toContain("<ns1:Phone");
+    expect(validateXml(fixedXml).issues.filter((candidate) => candidate.field === "Phone")).toEqual([]);
+  });
+
   it("accepts canonical extensions and auto-fixes common unambiguous variants", () => {
     const xml = stixWithPhones([
       "519-824-1234x1",
