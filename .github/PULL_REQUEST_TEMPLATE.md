@@ -10,7 +10,7 @@
 
 - [ ] `npm run check`
 - [ ] `mkdocs build --strict` (when documentation changes)
-- [ ] I used only synthetic or properly anonymized test data
+- [ ] I used only synthetic test data
 
 ## Documentation and visuals
 

@@ -2,9 +2,9 @@
 
 ## Prerequisites
 
-- Node.js 20.9 or newer
+- Node.js 22 or 24 (24 is the default in `.nvmrc`)
 - npm
-- Python 3.9 or newer to build the documentation
+- Python 3.12 (the CI version) or newer to build the documentation
 
 ## Run the app
 
@@ -36,7 +36,7 @@ Run the same application checks used in continuous integration:
 npm run check
 ```
 
-This runs ESLint and creates a production build. Keep test inputs synthetic and free of student or personal information.
+This runs ESLint, generates Next.js route types, checks TypeScript, runs the regression tests, and creates a production build. Keep test inputs synthetic and free of student or personal information.
 
 ## Build the documentation
 
@@ -52,3 +52,13 @@ Use `mkdocs build --strict` before submitting documentation changes. The `site/`
 ## Contribution principles
 
 Automatic data fixes must be deterministic and explainable. Changes that transmit record data, add analytics, or persist it beyond existing browser-local behaviour require explicit privacy and security review. See the repository's [contribution guide](https://github.com/WDGPH/PanoReady/blob/main/CONTRIBUTING.md).
+
+## Tests and dependency updates
+
+`npm test` runs Node's test runner through `tsx`. Tests in `tests/core.test.ts` use invented records and build a workbook in memory. They cover validation and correction, cleaning mappings, report aggregation, comparison, ruleset rejection, CSV escaping, and workbook conversion.
+
+Add regression tests when changing data behaviour. UI changes also need a browser check; there is no automated end-to-end browser suite yet.
+
+Run `npm audit` when updating dependencies and review the findings. Commit `package-lock.json` with dependency changes. See [release maintenance](releasing.md#dependency-maintenance) for the SheetJS distribution source.
+
+Read `AGENTS.md` and the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing framework code. Historical planning notes are kept in `notes/`, outside the published site. Private workbook inspection notes are excluded from Git and the documentation build.

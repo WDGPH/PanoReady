@@ -13,7 +13,7 @@
   },
   "homepage": "https://wdgph.github.io/PanoReady/",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "next dev --webpack --port 3000",
@@ -21,7 +21,9 @@
     "build": "next build --webpack",
     "start": "next start --port 3000",
     "lint": "eslint",
-    "check": "npm run lint && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -34,11 +36,11 @@
     "fast-xml-parser": "^5.6.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.8.0",
-    "next": "16.2.3",
+    "next": "16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.5.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -46,8 +48,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.3",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

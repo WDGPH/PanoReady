@@ -1,15 +1,15 @@
 # Getting started
 
-PanoReady runs in a modern web browser and processes source records locally. You do not need to install anything to use a deployed instance.
+PanoReady runs in a modern web browser and processes source records locally. Use your organization's deployed instance, or follow [Development](development.md) to run it locally. The GitHub Pages site contains documentation, not the application.
 
 ## Choose an input
 
 PanoReady accepts:
 
 - STIX XML files (`.xml`); and
-- Excel macro-enabled workbooks (`.xlsm`) that contain the expected student and school columns.
+- Excel macro-enabled workbooks (`.xlsm`) with a `Student Info` sheet (or a usable first sheet) containing recognized headers such as `OEN`, `Grade`, `First Name`, `Last Name`, and `Birthdate`.
 
-When importing a workbook, review the detected school and reporting metadata before continuing. PanoReady remembers workbook metadata in that browser's local storage for convenience.
+When importing a workbook, review the detected school and reporting metadata before continuing. PanoReady remembers workbook metadata in that browser's local storage. This can include creator and contact details. Clear the site's browser data when those saved details should be removed; this also removes custom rulesets, so export any rulesets you need first. Workbook macros are not executed.
 
 !!! warning "Use approved data-handling practices"
     Local browser processing means PanoReady does not upload file contents, but source and downloaded files still contain sensitive records. Follow your organization's requirements for storage, access, transfer, passwords, and deletion.
@@ -40,7 +40,7 @@ Custom rulesets are stored only in the current browser's local storage. Export t
 
 ### The file cannot be read
 
-Confirm that the file has an `.xml` or `.xlsm` extension and is not open or corrupted. For XML, confirm that it is well formed and contains the expected STIX structure.
+Confirm that the file has an `.xml` or `.xlsm` extension and is readable. For XML, confirm that it is well formed and contains the expected STIX structure.
 
 ### A generated ZIP will not open in File Explorer
 

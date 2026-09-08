@@ -12,17 +12,19 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build
+      - name: Lint, typecheck, test, and build
+        run: npm run check

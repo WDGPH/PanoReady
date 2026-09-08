@@ -23,7 +23,7 @@ PanoReady accepts STIX XML and Excel macro-enabled workbook (`.xlsm`) inputs. Va
 
 ## Quick start
 
-Requirements: [Node.js](https://nodejs.org/) 20.9 or newer and npm.
+Requirements: [Node.js](https://nodejs.org/) 22 or 24 (24 is the default in `.nvmrc`) and npm.
 
 ```bash
 git clone https://github.com/WDGPH/PanoReady.git
@@ -39,14 +39,16 @@ Open <http://localhost:3000>.
 ```bash
 npm run dev      # Start the development server
 npm run lint     # Run ESLint
+npm run typecheck # Check TypeScript
+npm test         # Run regression tests
 npm run build    # Create a production build
 npm run start    # Serve the production build
-npm run check    # Run all repository checks
+npm run check    # Run application checks
 ```
 
 ## Documentation
 
-The full user and technical documentation is available at <https://wdgph.github.io/PanoReady/> and in the [`docs`](docs/) directory.
+The documentation site is configured to publish at <https://wdgph.github.io/PanoReady/> and in the [`docs`](docs/) directory.
 
 To preview the documentation locally:
 
@@ -59,6 +61,8 @@ mkdocs serve
 
 Then open <http://127.0.0.1:8000>.
 
+See [deployment](docs/deployment.md) for hosting and [the release checklist](docs/releasing.md) for repository settings and release checks.
+
 ## Custom validation rulesets
 
 Export the built-in rules from the **Validation ruleset** menu, edit the JSON, and import it back into PanoReady. Custom rulesets remain in the browser's local storage and can be shared as files. See the [ruleset reference](docs/rulesets.md) for every available field.
@@ -70,6 +74,8 @@ PanoReady performs file parsing, validation, cleaning, comparison, and generatio
 ## Contributing
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and use the issue templates before opening a pull request.
+
+See [CHANGELOG.md](CHANGELOG.md) for unreleased changes.
 
 ## License
 
