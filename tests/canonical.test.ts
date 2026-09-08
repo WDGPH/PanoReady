@@ -44,9 +44,27 @@ test("preserves empty guardians and flags partial guardians without a relationsh
   const upload = parseCanonicalXml(source);
   assert.equal(upload.schools[0].students[0].guardians.length, 2);
   const result = validateXml(source);
-  assert.ok(result.issues.some((issue) => issue.ruleId === "GUARDIAN_RELATIONSHIP_REQUIRED" && issue.field === "Guardian2Relationship"));
+  const emptyGuardianErrors = result.issues.filter((issue) => issue.ruleId === "EMPTY_GUARDIAN");
+  const guardianErrors = result.issues.filter((issue) => issue.ruleId === "GUARDIAN_RELATIONSHIP_REQUIRED");
+  assert.deepEqual(emptyGuardianErrors.map((issue) => issue.field), ["Guardian"]);
+  assert.deepEqual(guardianErrors.map((issue) => issue.field), ["Guardian2Relationship"]);
   assert.equal(result.gate, "BLOCKED");
   assert.equal(serializeCanonicalXml(upload).match(/<ns1:Guardian>/g)?.length, 2);
+
+  const fixes = [...emptyGuardianErrors, ...guardianErrors].map((issue) => ({
+    issueId: issue.id,
+    recordId: issue.recordId!,
+    field: issue.field!,
+    oldValue: "",
+    newValue: issue.ruleId === "EMPTY_GUARDIAN" ? "" : "FATHER",
+    ruleId: issue.ruleId,
+    appliedAt: 0,
+  }));
+  const fixed = applyValidationFixes(source, fixes);
+  assert.equal(fixed.match(/<ns1:Guardian>/g)?.length, 1);
+  assert.ok(fixed.includes("<ns1:Relationship>FATHER</ns1:Relationship>"));
+  assert.equal(validateXml(fixed).issues.filter((issue) => issue.ruleId === "EMPTY_GUARDIAN").length, 0);
+  assert.equal(validateXml(fixed).issues.filter((issue) => issue.ruleId === "GUARDIAN_RELATIONSHIP_REQUIRED").length, 0);
 });
 
 test("validator enforces metadata and every populated controlled field", () => {
