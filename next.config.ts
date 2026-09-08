@@ -8,9 +8,20 @@ import type { NextConfig } from "next";
 // Next.js on 3000. Do NOT use process.env.PORT here — it will bake in 8888.
 const APP_PORT = "3000";
 const nbPrefix = process.env.NB_PREFIX || "";
-const assetPrefix = nbPrefix ? `${nbPrefix}/proxy/${APP_PORT}` : "";
+const isGitHubPages = process.env.GITHUB_PAGES === "true";
+const pagesBasePath = "/PanoReady";
+const assetPrefix = isGitHubPages
+  ? pagesBasePath
+  : nbPrefix
+    ? `${nbPrefix}/proxy/${APP_PORT}`
+    : "";
 
 const nextConfig: NextConfig = {
+  // GitHub Pages serves this project below /PanoReady and cannot run a Node.js
+  // server. Keep the normal server build for every other environment.
+  output: isGitHubPages ? "export" : undefined,
+  basePath: isGitHubPages ? pagesBasePath : undefined,
+  trailingSlash: isGitHubPages,
   assetPrefix: assetPrefix || undefined,
   // Required when accessing `next dev` through a notebook/Jupyter proxy host.
   // Include wildcard and `null` to support iframe/opaque origins used by some notebook proxies.

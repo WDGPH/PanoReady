@@ -1,6 +1,11 @@
 # Deployment
 
-The application and documentation are separate sites. GitHub Pages publishes the MkDocs documentation; it does not start the Next.js application.
+One GitHub Pages deployment publishes both sites:
+
+- PanoReady: <https://wdgph.github.io/PanoReady/>
+- Documentation: <https://wdgph.github.io/PanoReady/docs/>
+
+GitHub Pages has one published site per repository. The workflow builds the static Next.js application into `out/`, builds MkDocs into `out/docs/`, and uploads that combined directory as one Pages artifact. Separate Pages deployment jobs would replace the same published site instead of creating independent sites.
 
 ## Run the application
 
@@ -18,13 +23,13 @@ The build downloads Google fonts through `next/font/google`. Allow access to Goo
 
 Test `/` and `/reports` on the deployed instance, then process a synthetic XML file and workbook. Check downloads and ruleset persistence in the browsers your users run.
 
-## Publish documentation
+## Publish on GitHub Pages
 
-The `Documentation` GitHub Actions workflow builds on every pull request and push to `main`. Only runs on `main` can deploy.
+The `GitHub Pages` workflow builds the application and documentation on every pull request and push to `main`. Pull requests verify both builds. Only pushes to `main` upload and deploy the combined site.
 
-A repository administrator must select **GitHub Actions** under **Settings → Pages → Build and deployment → Source**. The workflow then uploads `site/` and deploys it through the `github-pages` environment. Check any environment approval rules if deployment waits for approval.
+A repository administrator must select **GitHub Actions** under **Settings → Pages → Build and deployment → Source**. Check any `github-pages` environment approval rules if deployment waits for approval.
 
-For a fork, update `site_url`, `repo_url`, `repo_name`, and `edit_uri` in `mkdocs.yml`, and the repository links in the README and policies. Set up Pages in the fork as well.
+For a fork, update the GitHub Pages base path in `next.config.ts`; update `site_url`, `repo_url`, `repo_name`, and `edit_uri` in `mkdocs.yml`; and update repository links in the README and policies. Set up Pages in the fork as well.
 
 To build locally:
 
@@ -36,6 +41,6 @@ mkdocs build --strict
 mkdocs serve
 ```
 
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed.
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed. The Pages workflow instead passes `--site-dir out/docs` so the documentation is included below the application.
 
 Internal pages and anchors are checked using [MkDocs link validation](https://www.mkdocs.org/user-guide/configuration/#validation). External URLs still need review when publishing.
