@@ -55,7 +55,7 @@ Automatic data fixes must be deterministic and explainable. Changes that transmi
 
 ## Tests and dependency updates
 
-`npm test` runs Node's test runner through `tsx`. Tests in `tests/core.test.ts` use invented records and build a workbook in memory. They cover validation and correction, cleaning mappings, report aggregation, comparison, ruleset rejection, CSV escaping, and workbook conversion.
+`npm test` runs the Vitest suite. Tests use synthetic values and cover the canonical model, field definitions, address repair, phone and postal-code handling, ruleset import, and validator integration.
 
 Add regression tests when changing data behaviour. UI changes also need a browser check; there is no automated end-to-end browser suite yet.
 

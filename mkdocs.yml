@@ -58,6 +58,9 @@ nav:
       - Validation rules: validation-rules.md
   - Technical reference:
       - Data model: data-model.md
+      - System design: system-design-panoready.md
+      - Canonical runtime: canonical-runtime.md
+      - Proposed import contracts: canonical-import-contracts.md
       - Development: development.md
       - Deployment: deployment.md
       - Release checklist: releasing.md
