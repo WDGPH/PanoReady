@@ -1,4 +1,4 @@
-name: Documentation
+name: GitHub Pages
 
 on:
   push:
@@ -10,16 +10,27 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-${{ github.ref }}
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install application dependencies
+        run: npm ci
+      - name: Build static application
+        run: npm run build
+        env:
+          GITHUB_PAGES: "true"
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -29,12 +40,14 @@ jobs:
       - name: Install documentation dependencies
         run: python -m pip install -r requirements-docs.txt
       - name: Build documentation
-        run: mkdocs build --strict
+        run: mkdocs build --strict --site-dir out/docs
+      - name: Disable Jekyll processing
+        run: touch out/.nojekyll
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: out
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
