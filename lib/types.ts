@@ -183,7 +183,10 @@ export interface RulesProfile {
   fieldLengths: Record<string, number>;
   dateFields: string[];
   postalCodePattern: string;
-  phoneConfig: { placeholderNumbers: string[] };
+  phoneConfig: {
+    placeholderNumbers: string[];
+    canadianAreaCodeCheck?: "off" | "info" | "warning";
+  };
   gradeAliases: Record<string, string>;
   genderAliases: Record<string, string>;
   duplicateDetection: { checkOen: boolean; checkNameDobSchool: boolean };
@@ -225,6 +228,32 @@ export interface CustomRuleset {
 
 export type ValidationSeverity = "error" | "warning" | "info";
 
+export type DiagnosticLayer =
+  | "IMPORT"
+  | "CANONICAL"
+  | "PROFILE"
+  | "IDENTITY"
+  | "XML"
+  | "XSD"
+  | "RECONCILIATION";
+
+export type RepairConfidence = "safe" | "review" | "manual";
+
+export type RepairChange = {
+  field: string;
+  currentValue: string;
+  proposedValue: string;
+};
+
+export type AddressRepairProposal = {
+  kind: "address";
+  id: string;
+  confidence: RepairConfidence;
+  title: string;
+  explanation: string;
+  changes: RepairChange[];
+};
+
 export type ValidationIssue = {
   id: string;
   severity: ValidationSeverity;
@@ -232,11 +261,17 @@ export type ValidationIssue = {
   schoolNumber?: string;
   studentName?: string;
   field?: string;
+  /** Source value for issues outside a student record, such as file metadata. */
+  currentValue?: string;
   message: string;
   suggestedFix?: string;
   autoFixable: boolean;
   ruleId: string;
   xmlPath?: string;
+  layer?: DiagnosticLayer;
+  sourceLocation?: string;
+  /** A coordinated, multi-field correction that can be reviewed as one unit. */
+  repairProposal?: AddressRepairProposal;
 };
 
 export type AppliedFix = {
@@ -247,6 +282,8 @@ export type AppliedFix = {
   newValue: string;
   ruleId: string;
   appliedAt: number;
+  /** Links multiple field changes applied from one repair card. */
+  repairId?: string;
 };
 
 export type StudentRecord = {
@@ -255,7 +292,7 @@ export type StudentRecord = {
   fields: Record<string, string>;
 };
 
-export type GateState = "READY" | "BLOCKED" | "PENDING";
+export type GateState = "READY" | "READY_WITH_WARNINGS" | "REVIEW_REQUIRED" | "BLOCKED" | "PENDING";
 
 export type ValidationResult = {
   issues: ValidationIssue[];
@@ -263,6 +300,29 @@ export type ValidationResult = {
   schoolCount: number;
   studentCount: number;
   gate: GateState;
+  xsdValidated?: boolean;
+};
+
+export type ImportMappingStatus = "MAPPED" | "AMBIGUOUS" | "DUPLICATE" | "UNMAPPED" | "IGNORED";
+
+export type ImportColumnMapping = {
+  column: number;
+  sourceHeader: string;
+  canonicalField?: string;
+  status: ImportMappingStatus;
+  populatedCount: number;
+};
+
+export type ImportPreview = {
+  worksheet: string;
+  headerRow: number;
+  firstDataRow: number;
+  sourceRowCount: number;
+  canonicalStudentCount: number;
+  columns: ImportColumnMapping[];
+  diagnostics: ValidationIssue[];
+  transformationCount: number;
+  reconciled: boolean;
 };
 
 export type ValidateSession = {

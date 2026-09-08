@@ -6,14 +6,7 @@ import { X, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import type { CustomRuleset, RulesProfile, CleaningProfile, CleaningMapping } from "@/lib/types";
 import { BUILTIN_ID, defaultRules, listCustomRulesets, saveCustomRuleset } from "@/lib/rulesets";
 import { getCleanableFields } from "@/lib/cleaning";
-
-// Known STIX field names: union of requiredFields + fieldLengths keys from default JSON
-const KNOWN_FIELDS = [
-  "FirstName", "LastName", "BirthDate", "Grade", "SchoolNumber",
-  "MiddleName", "AliasFirstName", "AliasMiddleName", "AliasLastName",
-  "OEN", "PostalCode", "City", "StreetName", "StreetNumber",
-  "StreetNumberSuffix", "Unit",
-];
+import { REQUIRED_FIELD_GROUPS } from "@/lib/fields";
 
 const FIELD_LENGTH_KEYS = [
   "FirstName", "LastName", "MiddleName", "AliasFirstName",
@@ -361,7 +354,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
         <Dialog.Overlay
           style={{
             position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.55)",
+            background: "var(--color-overlay)",
             zIndex: 50,
           }}
         />
@@ -467,35 +460,42 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                 <div style={{ fontSize: 13, color: "var(--color-text-muted)", marginBottom: 14 }}>
                   Fields that must be non-empty on every student record.
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {KNOWN_FIELDS.map((field) => {
-                    const checked = rules.requiredFields.includes(field);
-                    return (
-                      <label
-                        key={field}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 10,
-                          padding: "8px 10px", borderRadius: 3, cursor: "pointer",
-                          background: checked ? "var(--color-success-bg)" : "transparent",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            setRules((r) => ({
-                              ...r,
-                              requiredFields: e.target.checked
-                                ? [...r.requiredFields, field]
-                                : r.requiredFields.filter((f) => f !== field),
-                            }));
-                          }}
-                          style={{ accentColor: "var(--color-brand-500)", cursor: "pointer" }}
-                        />
-                        <span style={{ fontSize: 13, fontFamily: "var(--font-mono)" }}>{field}</span>
-                      </label>
-                    );
-                  })}
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  {REQUIRED_FIELD_GROUPS.map((group) => (
+                    <section key={group.label}>
+                      <div style={labelStyle}>{group.label}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 2 }}>
+                        {group.fields.map((field) => {
+                          const checked = rules.requiredFields.includes(field);
+                          return (
+                            <label
+                              key={field}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 10,
+                                padding: "8px 10px", borderRadius: 3, cursor: "pointer",
+                                background: checked ? "var(--color-success-bg)" : "transparent",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setRules((r) => ({
+                                    ...r,
+                                    requiredFields: e.target.checked
+                                      ? [...new Set([...r.requiredFields, field])]
+                                      : r.requiredFields.filter((f) => f !== field),
+                                  }));
+                                }}
+                                style={{ accentColor: "var(--color-brand-500)", cursor: "pointer" }}
+                              />
+                              <span style={{ fontSize: 13, fontFamily: "var(--font-mono)" }}>{field}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               </div>
             )}
@@ -588,6 +588,28 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                 </div>
 
                 <div>
+                  <label style={labelStyle}>Canadian Geographic Area-Code Check</label>
+                  <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
+                    Flag structurally valid NANP numbers whose area code is not an active Canadian geographic area code. This policy check never blocks validation.
+                  </div>
+                  <select
+                    value={rules.phoneConfig.canadianAreaCodeCheck ?? "off"}
+                    onChange={(e) => setRules((r) => ({
+                      ...r,
+                      phoneConfig: {
+                        ...r.phoneConfig,
+                        canadianAreaCodeCheck: e.target.value as "off" | "info" | "warning",
+                      },
+                    }))}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, cursor: "pointer" }}
+                  >
+                    <option value="off">Off</option>
+                    <option value="info">Info</option>
+                    <option value="warning">Warning</option>
+                  </select>
+                </div>
+
+                <div>
                   <label style={labelStyle}>Date Fields</label>
                   <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
                     Fields that must contain a valid YYYY-MM-DD date.
@@ -610,8 +632,8 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                 </div>
                 {(
                   [
-                    { key: "checkOen" as const, label: "Check for duplicate OEN", desc: "Flag records that share an OEN value." },
-                    { key: "checkNameDobSchool" as const, label: "Check for duplicate Name + DOB + School", desc: "Flag records with matching first name, last name, date of birth, and school number." },
+                    { key: "checkOen" as const, label: "Check for duplicate OEN", desc: "Error and block when two records in the same school share an OEN; warn (without blocking) when the match is across different schools, e.g. dual enrollment." },
+                    { key: "checkNameDobSchool" as const, label: "Check for duplicate Name + DOB", desc: "Error and block when two records in the same school share a first name, last name, and birth date; warn (without blocking) when the match is across different schools." },
                   ] as const
                 ).map(({ key, label, desc }) => (
                   <label
@@ -880,7 +902,7 @@ function EditorFieldPicker({ fields, onPick, onClose }: { fields: string[]; onPi
     <div style={{
       position: "absolute", top: "100%", left: 0, zIndex: 20, marginTop: 4,
       background: "var(--color-surface-1)", border: "1px solid var(--color-border)",
-      borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+      borderRadius: 8, padding: 8, minWidth: 160, boxShadow: "0 4px 16px var(--color-shadow)",
     }}>
       {fields.map((f) => (
         <button

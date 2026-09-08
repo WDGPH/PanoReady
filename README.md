@@ -13,8 +13,8 @@ Built by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/)
 
 | Workflow | Description |
 |---|---|
-| **Validate & Fix** | Validate required fields, code values, formats, and duplicates; apply safe fixes; revalidate; and export XML and reports. |
-| **Clean XML** | Normalize phone numbers and unit fields and flag suspicious street numbers for review. |
+| **Validate & Fix** | Preview workbook imports, validate metadata and records, apply reviewed fixes, reconcile the result, and export XML and reports. The final status remains `REVIEW_REQUIRED` until the official XSD is available. |
+| **Clean XML** | Normalize phone numbers and unit fields and review address problems. |
 | **Export Reports** | Export student data, school and grade summaries, filtered CSVs, and an Excel workbook. |
 | **Pretty Print** | Reformat XML with consistent indentation. |
 | **Compare Files** | Compare two STIX snapshots and review record, field, school, and transfer changes. |
@@ -40,7 +40,7 @@ Open <http://localhost:3000>.
 npm run dev      # Start the development server
 npm run lint     # Run ESLint
 npm run typecheck # Check TypeScript
-npm test         # Run regression tests
+npm test         # Run the Vitest suite
 npm run build    # Create a production build
 npm run start    # Serve the production build
 npm run check    # Run application checks
@@ -60,6 +60,8 @@ mkdocs serve
 ```
 
 Then open <http://127.0.0.1:8000>.
+
+The synthetic [validation demo](public/samples/stix-validation-demo.stix) exercises representative metadata, postal-code, and phone-number findings without using operational records.
 
 See [deployment](docs/deployment.md) for hosting and [the release checklist](docs/releasing.md) for repository settings and release checks.
 
