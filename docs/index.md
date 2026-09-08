@@ -23,7 +23,7 @@ PanoReady accepts STIX XML and supported Excel macro-enabled workbooks (`.xlsm`)
 
 ## Configure validation
 
-Validation and cleaning policy is defined by a bundled JSON ruleset. You can export it, create a custom variant, and import that variant without changing application code. Start with the [ruleset reference](rulesets.md) and [validation rules](validation-rules.md).
+Validation settings and optional value mappings are configured through rulesets. The separate Clean XML workflow uses fixed cleaning logic. You can export it, create a custom variant, and import that variant without changing application code. Start with the [ruleset reference](rulesets.md) and [validation rules](validation-rules.md).
 
 ## Open-source project
 

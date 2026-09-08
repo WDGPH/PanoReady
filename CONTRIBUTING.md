@@ -11,7 +11,7 @@ Thank you for helping improve PanoReady. Contributions may include bug reports, 
 
 ## Set up a development environment
 
-PanoReady requires Node.js 20.9 or newer.
+PanoReady requires Node.js 22 or 24 (24 is the default in `.nvmrc`).
 
 ```bash
 git clone https://github.com/WDGPH/PanoReady.git
@@ -26,7 +26,7 @@ The app is available at <http://localhost:3000>.
 
 1. Create a focused branch from the latest `main`.
 2. Keep changes small and explain policy-sensitive validation behavior in comments and documentation.
-3. Use synthetic, anonymized test data only.
+3. Use synthetic test data only.
 4. Update relevant files in `docs/` when behavior or workflows change.
 5. Run the checks before opening a pull request:
 

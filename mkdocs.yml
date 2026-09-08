@@ -59,4 +59,18 @@ nav:
   - Technical reference:
       - Data model: data-model.md
       - Development: development.md
+      - Deployment: deployment.md
+      - Release checklist: releasing.md
   - Project policies: project-policies.md
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+
+# Local workbook analysis may exist in developer checkouts; never publish it.
+exclude_docs: |
+  /official-template-internals.md

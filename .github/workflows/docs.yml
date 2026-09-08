@@ -3,24 +3,14 @@ name: Documentation
 on:
   push:
     branches: [main]
-    paths:
-      - docs/**
-      - mkdocs.yml
-      - requirements-docs.txt
-      - .github/workflows/docs.yml
   pull_request:
-    paths:
-      - docs/**
-      - mkdocs.yml
-      - requirements-docs.txt
-      - .github/workflows/docs.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pages
+  group: docs-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -40,13 +30,13 @@ jobs:
       - name: Build documentation
         run: mkdocs build --strict
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
