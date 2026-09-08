@@ -814,6 +814,31 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           issue(issues, { ...base, severity: "error", field, ruleId: `${field.toUpperCase()}_ALLOWED_VALUE`, message: `${field} value "${value}" is not allowed.`, suggestedFix: alias, autoFixable: !!alias });
         }
       }
+      // An absent Guardian is valid. Once a Guardian element exists, Panorama
+      // requires its Relationship child to contain a value—even if the other
+      // Guardian fields are empty.
+      for (const [index, guardian] of student.guardians.entries()) {
+        if (!guardian.relationship.trim()) {
+          const hasGuardianDetails = Boolean(
+            guardian.name.first.trim() || guardian.name.middle.trim() || guardian.name.last.trim()
+              || guardian.phone?.number.trim(),
+          );
+          const field = hasGuardianDetails
+            ? (index === 0 ? "GuardianRelationship" : "Guardian2Relationship")
+            : (index === 0 ? "Guardian" : "Guardian2");
+          issue(issues, {
+            ...base,
+            severity: "error",
+            field,
+            ruleId: hasGuardianDetails ? "GUARDIAN_RELATIONSHIP_REQUIRED" : "EMPTY_GUARDIAN",
+            message: hasGuardianDetails
+              ? `Guardian ${index + 1} is missing a relationship.`
+              : `Guardian ${index + 1} is an empty placeholder. Panorama rejects Guardian elements without a relationship.`,
+            suggestedFix: hasGuardianDetails ? undefined : "",
+            autoFixable: !hasGuardianDetails,
+          });
+        }
+      }
       if (fields.BirthDate) {
         if (!validRealDate(fields.BirthDate)) {
           const parsed = new Date(fields.BirthDate);
@@ -1081,6 +1106,7 @@ function setCanonicalStudentField(student: CanonicalStudent, school: CanonicalSc
 export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
   if (fixes.length === 0) return xmlText;
   const upload = parseCanonicalXml(xmlText);
+  const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
   for (const fix of fixes) {
     if (fix.recordId === "metadata" && fix.field === "MetadataContactPhone") {
       upload.metadata.contactPhone = { number: fix.newValue, type: upload.metadata.contactPhone?.type ?? "" };
@@ -1090,7 +1116,17 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
     if (!coordinates) continue;
     const school = upload.schools[coordinates.si];
     const student = school?.students[coordinates.pi];
-    if (school && student) setCanonicalStudentField(student, school, fix.field, fix.newValue);
+    if (!school || !student) continue;
+    if (fix.field === "Guardian" || fix.field === "Guardian2") {
+      const removals = guardianRemovals.get(student) ?? new Set<number>();
+      removals.add(fix.field === "Guardian2" ? 1 : 0);
+      guardianRemovals.set(student, removals);
+      continue;
+    }
+    setCanonicalStudentField(student, school, fix.field, fix.newValue);
+  }
+  for (const [student, indexes] of guardianRemovals) {
+    for (const index of [...indexes].sort((a, b) => b - a)) student.guardians.splice(index, 1);
   }
   return serializeCanonicalXml(upload);
 }
