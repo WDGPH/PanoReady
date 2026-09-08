@@ -70,7 +70,6 @@ function NavBar() {
           <a href="https://wdgph.github.io/PanoReady/docs/" className="no-underline" style={{ color: "var(--color-text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>Docs</a>
           <Link href="./about" className="no-underline" style={{ color: "var(--color-text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>About</Link>
         </nav>
-        <span className="privacy">Files stay in this browser</span>
       </div>
     </header>
   );
