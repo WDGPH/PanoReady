@@ -48,7 +48,7 @@ npm run check    # Run application checks
 
 ## Documentation
 
-The documentation site is configured to publish at <https://wdgph.github.io/PanoReady/> and in the [`docs`](docs/) directory.
+The application is published at <https://wdgph.github.io/PanoReady/>. The documentation is published from the same Pages deployment at <https://wdgph.github.io/PanoReady/docs/> and is maintained in the [`docs`](docs/) directory.
 
 To preview the documentation locally:
 
