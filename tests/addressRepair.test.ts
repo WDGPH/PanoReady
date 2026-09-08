@@ -125,6 +125,17 @@ describe("unit number fused to the street number", () => {
       expect(analyzeStreetNumberUnitPrefix({ StreetNumber: value, Unit: "" }), value).toBeUndefined();
     }
   });
+
+  it("surfaces 34-8773 as a reviewable unit/street-number split", () => {
+    const result = validateXml(studentXml("<StreetNumber>34-8773</StreetNumber><City>Guelph</City><Province>ON</Province>"));
+    const issue = result.issues.find((candidate) => candidate.field === "StreetNumber" && candidate.ruleId === "FIELD_LENGTH");
+
+    expect(issue?.repairProposal).toMatchObject({ confidence: "review" });
+    expect(issue?.repairProposal?.changes).toEqual([
+      { field: "StreetNumber", currentValue: "34-8773", proposedValue: "8773" },
+      { field: "Unit", currentValue: "", proposedValue: "34" },
+    ]);
+  });
 });
 
 describe("a street number and name found in Unit", () => {
