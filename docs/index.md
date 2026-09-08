@@ -1,29 +1,33 @@
-# TWIG STIX Cleaner — Documentation
+# PanoReady
 
-TWIG STIX Cleaner is a browser-based utility for validating, cleaning, and exporting Ontario school enrollment data in STIX XML format. All processing happens entirely in your browser — no data is ever uploaded to a server.
+PanoReady is a browser-based utility for validating, cleaning, comparing, and exporting Ontario school enrolment data in STIX XML format.
+
+**Your record data stays on your device.** File parsing and generated outputs are handled in the browser; source files are not uploaded to a PanoReady server.
+
+[Get started](getting-started.md){ .md-button .md-button--primary }
+[View on GitHub](https://github.com/WDGPH/PanoReady){ .md-button }
 
 ## Workflows
 
 | Workflow | Purpose | Output |
 |---|---|---|
-| [Validate & Fix](./workflow-validate-and-fix.md) | Optional cleaning step (raw → canonical value mappings), deep validation against rules, interactive fix editor, revalidation, audit trail | Cleaned XML + issue report CSV |
-| [Clean XML](./workflow-clean-xml.md) | Auto-fix phone numbers and address unit fields, optional manual review | Cleaned XML |
-| [Export Reports](./workflow-export-reports.md) | Extract student data into spreadsheets with optional filtering | CSV files + Excel workbook |
-| [Pretty Print](./workflow-pretty-print.md) | Reformat XML with consistent indentation | Formatted XML |
+| [Validate & Fix](workflow-validate-and-fix.md) | Clean and validate records, review issues, apply safe fixes, and revalidate | XML, issue reports, summaries, optional encrypted ZIP |
+| [Clean XML](workflow-clean-xml.md) | Normalize phone numbers and unit fields and review suspicious street numbers | Cleaned XML |
+| [Export Reports](workflow-export-reports.md) | Extract student data and aggregate school or grade information | CSV files and Excel workbook |
+| [Pretty Print](workflow-pretty-print.md) | Reformat XML with consistent indentation | Formatted XML |
+| [Compare Files](workflow-compare-files.md) | Compare previous and current snapshots, including school and field changes | Comparison views and current XML export |
 
-## How to Use
+## Input formats
 
-1. Open the app in your browser.
-2. Drag and drop (or click to browse) a STIX XML file onto the upload zone.
-3. Select a workflow from the four workflow cards.
-4. Follow the on-screen steps for that workflow.
-5. Download your output files.
+PanoReady accepts STIX XML and supported Excel macro-enabled workbooks (`.xlsm`). Workbook imports include a metadata review step before conversion to STIX XML.
 
-## Privacy
+## Configure validation
 
-All XML parsing, validation, and cleaning runs locally in your browser using JavaScript. No file contents are transmitted over a network at any point.
+Validation settings and optional value mappings are configured through rulesets. The separate Clean XML workflow uses fixed cleaning logic. You can export it, create a custom variant, and import that variant without changing application code. Start with the [ruleset reference](rulesets.md) and [validation rules](validation-rules.md).
 
-## Reference
+## Open-source project
 
-- [Validation Rules Reference](./validation-rules.md) — All rules checked during Validate & Fix, including field requirements, allowed values, and auto-fix logic.
-- [Type & Data Model Reference](./data-model.md) — TypeScript interfaces for workflows, issues, fixes, and student records.
+PanoReady is maintained by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/) and released under the [MIT License](https://github.com/WDGPH/PanoReady/blob/main/LICENSE). Contributions are welcome; see the [project policies](project-policies.md) and [development guide](development.md).
+
+!!! warning "Protect sensitive information"
+    Do not attach real student records or other sensitive information to GitHub issues or pull requests. Follow your organization's policies when handling source files and generated downloads.

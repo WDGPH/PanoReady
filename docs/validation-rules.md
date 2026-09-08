@@ -23,38 +23,38 @@ This page documents every rule checked during the [Validate & Fix](./workflow-va
 
 Checks that the uploaded file is valid XML. This is the first check — if it fails, no other rules run.
 
-**Pass condition:** `fast-xml-parser` can parse the file without throwing.  
+**Pass condition:** `fast-xml-parser` can parse the file without throwing.
 **Auto-fix:** No. A malformed XML file must be corrected externally.
 
 ---
 
 ### Rule: `root-element`
 
-**Severity:** error  
+**Severity:** error
 **Field:** (structural)
 
 Checks that the root element is `ns1:SchoolUpload`.
 
-**Pass condition:** The parsed document has a root key of `ns1:SchoolUpload`.  
+**Pass condition:** The parsed document has a root key of `ns1:SchoolUpload`.
 **Auto-fix:** No.
 
 ---
 
 ### Rule: `school-structure`
 
-**Severity:** error  
+**Severity:** error
 **Field:** `SchoolNumber`
 
 Each `ns1:School` element must have a `SchoolNumber` attribute or child element.
 
-**Pass condition:** `SchoolNumber` is present and non-empty on the school element.  
+**Pass condition:** `SchoolNumber` is present and non-empty on the school element.
 **Auto-fix:** No.
 
 ---
 
 ### Rule: `required-fields`
 
-**Severity:** error  
+**Severity:** error
 **Fields:** `FirstName`, `LastName`, `BirthDate`, `Grade`, `SchoolNumber`
 
 Each student record must have all required fields present and non-empty.
@@ -65,14 +65,14 @@ Each student record must have all required fields present and non-empty.
 FirstName, LastName, BirthDate, Grade, SchoolNumber
 ```
 
-**Pass condition:** Each required field exists and contains at least one non-whitespace character.  
+**Pass condition:** Each required field exists and contains at least one non-whitespace character.
 **Auto-fix:** No. Missing required fields must be supplied manually.
 
 ---
 
 ### Rule: `grade-value`
 
-**Severity:** error  
+**Severity:** error
 **Field:** `Grade`
 
 The `Grade` field must be one of the allowed values.
@@ -108,7 +108,7 @@ JK, SK, GR1, GR2, GR3, GR4, GR5, GR6, GR7, GR8, GR9, GR10, GR11, GR12
 
 ### Rule: `gender-value`
 
-**Severity:** error  
+**Severity:** error
 **Field:** `Gender`
 
 The `Gender` field must be one of the allowed values.
@@ -134,7 +134,7 @@ M, F, X, U
 
 ### Rule: `province-value`
 
-**Severity:** warning  
+**Severity:** warning
 **Field:** `Province`
 
 The `Province` field must be a valid Canadian province or territory code.
@@ -151,7 +151,7 @@ AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT
 
 ### Rule: `birthdate-format`
 
-**Severity:** error  
+**Severity:** error
 **Field:** `BirthDate`
 
 The `BirthDate` field must be in `YYYY-MM-DD` format and represent a parseable calendar date.
@@ -296,7 +296,7 @@ subscriber number exists nor that it is active or belongs to the stated person.
 
 ### Rule: `oen-format`
 
-**Severity:** error  
+**Severity:** error
 **Field:** `OEN`
 
 The Ontario Education Number (OEN) must be exactly 9 digits.
@@ -309,7 +309,7 @@ The Ontario Education Number (OEN) must be exactly 9 digits.
 
 ### Rule: `field-length`
 
-**Severity:** warning  
+**Severity:** warning
 **Field:** varies
 
 Field values must not exceed the maximum length for that field.
@@ -341,7 +341,7 @@ than this generic length rule. Invalid postal codes are never auto-truncated.
 
 ### Rule: `whitespace`
 
-**Severity:** info  
+**Severity:** info
 **Field:** varies
 
 Fields with leading or trailing whitespace are flagged.
@@ -356,24 +356,24 @@ issue.
 
 ### Rule: `duplicate-oen`
 
-**Severity:** error  
+**Severity:** error
 **Field:** `OEN`
 
 Each OEN must appear only once in the file. A duplicate OEN indicates two records share the same student identifier.
 
-**Pass condition:** No two student records have the same non-empty OEN value.  
+**Pass condition:** No two student records have the same non-empty OEN value.
 **Auto-fix:** No. Duplicate OENs require manual investigation to determine which record is correct.
 
 ---
 
 ### Rule: `duplicate-name-dob-school`
 
-**Severity:** warning  
+**Severity:** warning
 **Field:** `FirstName`, `LastName`, `BirthDate`, `SchoolNumber`
 
 Flags student records where the combination of `FirstName + LastName + BirthDate + SchoolNumber` appears more than once, indicating a possible duplicate enrollment.
 
-**Pass condition:** No two records share the same name, date of birth, and school.  
+**Pass condition:** No two records share the same name, date of birth, and school.
 **Auto-fix:** No.
 
 ---

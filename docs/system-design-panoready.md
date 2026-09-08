@@ -1,7 +1,7 @@
 # PanoReady — System Design
 
-**Status:** Implemented browser-only architecture with documented limitations  
-**Date:** 2026-09-02  
+**Status:** Implemented browser-only architecture with documented limitations
+**Date:** 2026-09-02
 **Audience:** Product, engineering, data-quality, and privacy stakeholders
 
 ## 1. Executive summary
