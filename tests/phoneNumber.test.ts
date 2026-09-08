@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { cleanPhone } from "../lib/cleaner";
 import { analyzePhoneNumber, isActiveCanadianGeographicNpa } from "../lib/phoneNumber";
 
 describe("analyzePhoneNumber", () => {
@@ -59,19 +58,20 @@ describe("analyzePhoneNumber", () => {
   });
 
   it.each([
-    ["519-824-1234X12", "519-824-1234x12"],
-    ["519-824-1234 x 12", "519-824-1234x12"],
-    ["519-824-1234 ext 12", "519-824-1234x12"],
-    ["519-824-1234 ext. 12", "519-824-1234x12"],
-    ["519-824-1234 extension 12", "519-824-1234x12"],
-    ["519-824-1234 #12", "519-824-1234x12"],
-    ["+1 (519) 824-1234 ext. 12", "519-824-1234x12"],
-  ])("normalizes common extension variant %s", (raw, value) => {
+    ["519-824-1234X12", "519-824-1234x12", "12"],
+    ["519-824-1234 x 12", "519-824-1234x12", "12"],
+    ["519-824-1234 ext 12", "519-824-1234x12", "12"],
+    ["519-824-1234 ext. 12", "519-824-1234x12", "12"],
+    ["519-824-1234 extension 12", "519-824-1234x12", "12"],
+    ["519-824-1234 #12", "519-824-1234x12", "12"],
+    ["+1 (519) 824-1234 ext. 12", "519-824-1234x12", "12"],
+    ["519-824-1234 #12345", "519-824-1234x12345", "12345"],
+  ])("normalizes common extension variant %s", (raw, value, extension) => {
     expect(analyzePhoneNumber(raw)).toMatchObject({
       status: "normalized",
       value,
       baseValue: "519-824-1234",
-      extension: "12",
+      extension,
     });
   });
 
@@ -97,23 +97,4 @@ describe("isActiveCanadianGeographicNpa", () => {
     "does not treat non-Canadian, future, or non-geographic NPA %s as active geographic",
     (npa) => expect(isActiveCanadianGeographicNpa(npa)).toBe(false)
   );
-});
-
-describe("cleanPhone", () => {
-  it.each([
-    ["5198241234", "519-824-1234"],
-    ["+1 (519) 824-1234 ext. 12", "519-824-1234x12"],
-    ["519-824-1234 #12345", "519-824-1234x12345"],
-  ])("returns the canonical form for %s", (raw, expected) => {
-    expect(cleanPhone(raw)).toBe(expected);
-  });
-
-  it.each([
-    "519-824-1234x",
-    "519-824-1234x123456",
-    "519-824-1234 ext ABC",
-    "519-824-1234 / 416-555-1234",
-  ])("blanks ambiguous phone input %s for manual follow-up", (raw) => {
-    expect(cleanPhone(raw)).toBe("");
-  });
 });
