@@ -1320,6 +1320,22 @@ function suggestedAddressDraft(issue: ValidationIssue, records: StudentRecord[])
   return draft;
 }
 
+function guardianRelationshipContext(issue: ValidationIssue, record?: StudentRecord) {
+  if (!record || (issue.field !== "GuardianRelationship" && issue.field !== "Guardian2Relationship")) return null;
+  const second = issue.field === "Guardian2Relationship";
+  const prefix = second ? "Guardian2" : "Guardian";
+  const name = [record.fields[`${prefix}FirstName`], record.fields[`${prefix}LastName`]].filter(Boolean).join(" ");
+  const phone = record.fields[`${prefix}PhoneNumber`] ?? "";
+  const phoneType = record.fields[`${prefix}PhoneType`] ?? "";
+  return {
+    label: second ? "Guardian 2" : "Guardian 1",
+    name,
+    phone: phone ? `${phone}${phoneType ? ` (${phoneType})` : ""}` : "",
+    hasDetails: Boolean(name || phone),
+    oen: record.fields.OEN ?? "",
+  };
+}
+
 // ─── ValidateIssuesView ───────────────────────────────────────────────────────
 // Screen 2: Review Issues
 
@@ -1415,6 +1431,20 @@ function ValidateIssuesView({
   };
 
   const stagedFixes = Object.values(stagedAddressFixes).flat();
+  const emptyGuardianIssues = allIssues.filter((issue) => issue.ruleId === "EMPTY_GUARDIAN" && issue.recordId && issue.field);
+  const removeEmptyGuardianPlaceholders = () => {
+    const now = Date.now();
+    const fixes: AppliedFix[] = emptyGuardianIssues.map((issue) => ({
+      issueId: issue.id,
+      recordId: issue.recordId!,
+      field: issue.field!,
+      oldValue: "Empty Guardian placeholder",
+      newValue: "",
+      ruleId: issue.ruleId,
+      appliedAt: now,
+    }));
+    onApply([...stagedFixes, ...fixes]);
+  };
   const canSkip = stagedFixes.length === 0 && (initialResult.gate === "READY" || initialResult.gate === "REVIEW_REQUIRED");
 
   return (
@@ -1441,6 +1471,24 @@ function ValidateIssuesView({
         <StatCard label="Warnings"     value={warningCount}     accent="yellow" />
         <StatCard label="Auto-fixable" value={fixableCount}     accent="teal" />
       </div>
+
+      {emptyGuardianIssues.length > 0 && (
+        <div className="card" style={{ padding: "16px 18px", marginBottom: 18, borderColor: "var(--color-warning-border)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 650, fontSize: 13, marginBottom: 3 }}>
+                {emptyGuardianIssues.length} empty Guardian placeholder{emptyGuardianIssues.length === 1 ? "" : "s"}
+              </div>
+              <div style={{ color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.5 }}>
+                These elements contain no Guardian name, phone, or relationship. Only these fully empty placeholders will be removed.
+              </div>
+            </div>
+            <button type="button" onClick={removeEmptyGuardianPlaceholders} className="btn btn-primary" style={{ gap: 6, whiteSpace: "nowrap" }}>
+              <Wrench size={13} /> Remove {emptyGuardianIssues.length} &amp; Revalidate
+            </button>
+          </div>
+        </div>
+      )}
 
       <div>
           {/* Filters */}
@@ -1518,6 +1566,7 @@ function ValidateIssuesView({
                   {filtered.map(issue => {
                     const record = records.find(r => r.id === issue.recordId);
                     const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
+                    const guardianContext = guardianRelationshipContext(issue, record);
                     const staged = !!stagedAddressFixes[issue.id];
                     const isOpen = openAddressIssueId === issue.id;
                     const proposal = issue.repairProposal;
@@ -1534,7 +1583,17 @@ function ValidateIssuesView({
                               <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
                             ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
                           </td>
-                          <td style={{ fontSize: 12, lineHeight: 1.5 }}>{issue.message}</td>
+                          <td style={{ fontSize: 12, lineHeight: 1.5 }}>
+                            <div>{issue.message}</div>
+                            {guardianContext && (
+                              <div style={{ marginTop: 5, color: "var(--color-text-secondary)" }}>
+                                <strong>{guardianContext.label}:</strong>{guardianContext.hasDetails
+                                  ? <>{guardianContext.name ? ` ${guardianContext.name}` : ""}{guardianContext.name && guardianContext.phone ? " · " : ""}{guardianContext.phone}</>
+                                  : " Empty in source XML"}
+                                {guardianContext.oen && <div>Student OEN: {guardianContext.oen}</div>}
+                              </div>
+                            )}
+                          </td>
                           <td>
                             {proposal ? (
                               <button
@@ -1556,6 +1615,8 @@ function ValidateIssuesView({
                                   : "Review complete address"}
                                 <ChevronDown size={12} style={{ transform: isOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
                               </button>
+                            ) : issue.ruleId === "EMPTY_GUARDIAN" ? (
+                              <span style={{ color: "var(--color-info-text)", fontSize: 11, fontWeight: 600 }}>Bulk removal available</span>
                             ) : issue.suggestedFix ? (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                                 <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "var(--color-text-primary)" }}>{issue.suggestedFix}</code>
@@ -1563,6 +1624,8 @@ function ValidateIssuesView({
                                   <span style={{ fontSize: 9, border: "1px solid var(--color-border)", color: "var(--color-text-muted)", borderRadius: 3, padding: "1px 5px", fontWeight: 600, letterSpacing: "0.03em" }}>AUTO</span>
                                 )}
                               </span>
+                            ) : guardianContext ? (
+                              <span style={{ color: "var(--color-info-text)", fontSize: 11, fontWeight: 600 }}>Choose in Fix Data</span>
                             ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Manual</span>}
                           </td>
                         </tr>
@@ -1654,13 +1717,14 @@ function ValidateFixView({
   onApply: (fixes: AppliedFix[]) => void;
 }) {
   const records = session.initialResult.records;
+  const rules = session.validationRules ?? defaultRules;
   // Address fixes already staged and applied from the Issue Review page arrive via session.fixes;
   // don't re-offer those issues here, and fold the fixes back in unchanged when this page applies its own.
   const resolvedIssueIds = new Set(session.fixes.map((f) => f.issueId));
   const issues = session.initialResult.issues.filter((issue) => !resolvedIssueIds.has(issue.id));
   const addressIssues = issues.filter((issue) => issue.repairProposal?.kind === "address" && issue.recordId);
 
-  // pending: issueId → new value (empty = skip)
+  // pending: issueId → new value. A present empty value is an intentional removal.
   const [pending, setPending] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const issue of issues) {
@@ -1865,12 +1929,23 @@ function ValidateFixView({
                 const record = records.find(r => r.id === issue.recordId);
                 const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                 const pendingVal = pending[issue.id] ?? "";
+                const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
+                const isEmptyGuardian = issue.ruleId === "EMPTY_GUARDIAN";
+                const guardianContext = guardianRelationshipContext(issue, record);
                 return (
                   <tr key={issue.id} style={{ opacity: !issue.field ? 0.5 : 1 }}>
                     <td><SeverityBadge severity={issue.severity} /></td>
                     <td style={{ fontSize: 12 }}>
                       <div style={{ fontWeight: 500 }}>{issue.studentName || "—"}</div>
                       <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{issue.schoolNumber}</div>
+                      {guardianContext && (
+                        <div style={{ color: "var(--color-text-secondary)", fontSize: 11, marginTop: 5, lineHeight: 1.45 }}>
+                          <strong>{guardianContext.label}:</strong>{guardianContext.hasDetails
+                            ? <>{guardianContext.name ? ` ${guardianContext.name}` : ""}{guardianContext.name && guardianContext.phone ? <br /> : null}{guardianContext.phone}</>
+                            : " Empty in source XML"}
+                          {guardianContext.oen && <div>OEN: {guardianContext.oen}</div>}
+                        </div>
+                      )}
                     </td>
                     <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>
                     <td>
@@ -1881,13 +1956,28 @@ function ValidateFixView({
                     <td style={{ minWidth: 200 }}>
                       {issue.field ? (
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <input
-                            className="input"
-                            value={pendingVal}
-                            onChange={e => setPending(p => ({ ...p, [issue.id]: e.target.value }))}
-                            placeholder={issue.suggestedFix ?? "Enter corrected value…"}
-                            style={{ fontSize: 12, padding: "5px 8px" }}
-                          />
+                          {isEmptyGuardian ? (
+                            <span style={{ color: "var(--color-info-text)", fontSize: 11, fontWeight: 600 }}>Remove empty Guardian placeholder</span>
+                          ) : isGuardianRelationship ? (
+                            <select
+                              className="input"
+                              value={pendingVal}
+                              onChange={e => setPending(p => ({ ...p, [issue.id]: e.target.value }))}
+                              style={{ fontSize: 12, padding: "5px 8px" }}
+                              aria-label={`Relationship for ${issue.studentName || "student"}`}
+                            >
+                              <option value="">Select relationship…</option>
+                              {rules.allowedRelationshipValues.map(value => <option key={value} value={value}>{value}</option>)}
+                            </select>
+                          ) : (
+                            <input
+                              className="input"
+                              value={pendingVal}
+                              onChange={e => setPending(p => ({ ...p, [issue.id]: e.target.value }))}
+                              placeholder={issue.suggestedFix ?? "Enter corrected value…"}
+                              style={{ fontSize: 12, padding: "5px 8px" }}
+                            />
+                          )}
                           {issue.suggestedFix && pendingVal !== issue.suggestedFix && (
                             <button
                               onClick={() => setPending(p => ({ ...p, [issue.id]: issue.suggestedFix! }))}
