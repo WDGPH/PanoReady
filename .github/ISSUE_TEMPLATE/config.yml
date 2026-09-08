@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/WDGPH/PanoReady/security/advisories/new
     about: Report security vulnerabilities privately.
   - name: Documentation
-    url: https://wdgph.github.io/PanoReady/
+    url: https://wdgph.github.io/PanoReady/docs/
     about: Review the user and technical documentation before opening an issue.
