@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, Fragment } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, Fragment } from "react";
 import Link from "next/link";
 import {
   Wand2, FileText,
@@ -13,10 +13,10 @@ import {
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
-import { cleanXml, applyReviewUpdates, prettyPrintXml } from "@/lib/cleaner";
+import { prettyPrintXml } from "@/lib/cleaner";
 import { compareStixFiles } from "@/lib/compare";
 import { applyReviewCorrections, extractSchoolXml, safeExportPart } from "@/lib/stixExport";
-import { processExport, buildSchoolCounts, buildGradeCounts } from "@/lib/pullInfo";
+import { processExport } from "@/lib/pullInfo";
 import { downloadText, downloadBlob, toCsv } from "@/lib/utils";
 import {
   validateXml,
@@ -29,7 +29,7 @@ import {
 } from "@/lib/validator";
 import { applyCleaningProfile } from "@/lib/cleaning";
 import type {
-  Workflow, SessionData,
+  Workflow,
   ValidateSession, ValidationIssue, AppliedFix,
   ValidationSeverity, RulesProfile, StixComparison,
   StudentRecord, CleaningProfile, CleaningSummaryEntry,
@@ -49,8 +49,6 @@ import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 
 type View =
   | "home"
-  | "review"
-  | "result"
   | "clean-step"
   | "clean-summary"
   | "validate-issues"
@@ -124,16 +122,12 @@ function GateBadge({ gate }: { gate: string }) {
 
 const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
   { id: "validate", label: "Validate & Fix",  description: "Check required fields, code values, formats, and duplicates. Apply safe fixes, then download the result." },
-  { id: "clean",    label: "Clean XML",       description: "Standardize phone and unit values. Send uncertain street numbers to review." },
-  { id: "export",   label: "Export Reports",  description: "Turn student records into CSV and Excel reports, with school and grade summaries." },
-  { id: "pretty",   label: "Pretty Print",    description: "Reformat the XML with consistent indentation for easier review." },
   { id: "compare",  label: "Compare Files",   description: "Compare two files and inspect record, field, and school-level changes." },
 ];
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 
-function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
-  onDone: (data: SessionData, next: View) => void;
+function HomeView({ onParsed, onCompare, activeRules, onRulesChange }: {
   onParsed: (xmlText: string, records: StudentRecord[], fileName: string, requiredFields?: string[]) => void;
   onCompare: (comparison: StixComparison) => void;
   activeRules: RulesProfile;
@@ -324,36 +318,17 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
         return;
       }
 
-      if (workflow === "validate") {
-        // Parse records first; errors throw and are caught below.
-        const parsed = parseStixXml(xmlText);
-        onParsed(xmlText, parsed, selectedFile.name);
-        return;
-      }
-
-      if (workflow === "clean") {
-        const { cleanedXml, issues, stats } = cleanXml(xmlText);
-        const session: SessionData = { workflow, fileName: selectedFile.name, xmlContent: xmlText, autoCleanXml: cleanedXml, issues, stats };
-        if (issues.length > 0) { onDone(session, "review"); }
-        else { onDone({ ...session, cleanXml: cleanedXml }, "result"); }
-      } else if (workflow === "export") {
-        const exportResult = processExport(xmlText);
-        onDone({ workflow, fileName: selectedFile.name, xmlContent: xmlText, exportResult }, "result");
-      } else {
-        const prettyXml = prettyPrintXml(xmlText);
-        onDone({ workflow, fileName: selectedFile.name, xmlContent: xmlText, cleanXml: prettyXml }, "result");
-      }
+      // workflow === "validate"
+      // Parse records first; errors throw and are caught below.
+      const parsed = parseStixXml(xmlText);
+      onParsed(xmlText, parsed, selectedFile.name);
     } catch (err) {
       setError(`Processing failed: ${err instanceof Error ? err.message : String(err)}`);
       setProcessing(false);
     }
   };
 
-  const wLabel = workflow === "validate" ? "Validate & Fix"
-    : workflow === "clean" ? "Clean XML"
-    : workflow === "export" ? "Generate Reports"
-    : workflow === "pretty" ? "Pretty Print XML"
-    : "Compare Files";
+  const wLabel = workflow === "validate" ? "Validate & Fix" : "Compare Files";
 
   return (
     <main style={{ flex: 1, display: "flex", justifyContent: "center", padding: "72px 24px 100px" }}>
@@ -610,333 +585,6 @@ function HomeView({ onDone, onParsed, onCompare, activeRules, onRulesChange }: {
           Built by Wellington-Dufferin-Guelph Public Health · MIT License
         </p>
       </div>
-    </main>
-  );
-}
-
-// ─── ReviewView ───────────────────────────────────────────────────────────────
-
-function ReviewView({ session, onBack, onDone }: { session: SessionData; onBack: () => void; onDone: (updated: SessionData) => void }) {
-  const issues = session.issues ?? [];
-  const [updates, setUpdates] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const issue of issues) {
-      init[issue.type === "street_number" ? `${issue.id}_number` : `${issue.id}_unit`] = issue.current;
-    }
-    return init;
-  });
-  const [applying, setApplying] = useState(false);
-
-  const apply = () => {
-    if (!session.autoCleanXml) return;
-    setApplying(true);
-    try {
-      const cleanXmlResult = applyReviewUpdates(session.autoCleanXml, updates);
-      onDone({ ...session, cleanXml: cleanXmlResult });
-    } catch {
-      setApplying(false);
-    }
-  };
-
-  return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
-      <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 20, padding: "5px 9px", gap: 5, fontSize: 13 }}>
-        <ArrowLeft size={13} /> Back
-      </button>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 28 }}>
-        <div style={{ flexShrink: 0, paddingTop: 2 }}>
-          <AlertTriangle size={20} style={{ color: "var(--color-warning-text)" }} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 5px" }}>Manual Review Required</h1>
-          <p style={{ color: "var(--color-text-secondary)", margin: 0, fontSize: 13, lineHeight: 1.6 }}>
-            {issues.length} issue{issues.length !== 1 ? "s" : ""} need your attention.
-          </p>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 20, marginBottom: 28, background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "12px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, color: "var(--color-warning-text)" }}>{issues.filter(i => i.type === "street_number").length}</span>
-          <span style={{ color: "var(--color-text-muted)", fontSize: 13 }}>street numbers</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, color: "var(--color-warning-text)" }}>{issues.filter(i => i.type === "unit").length}</span>
-          <span style={{ color: "var(--color-text-muted)", fontSize: 13 }}>unit fields</span>
-        </div>
-        <div style={{ marginLeft: "auto", color: "var(--color-text-muted)", fontSize: 11, alignSelf: "center" }}>
-          {session.stats?.phones_cleaned ?? 0} phones fixed · {session.stats?.units_standardized ?? 0} units standardized
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {issues.map((issue, idx) => {
-          const isStreet = issue.type === "street_number";
-          const accent = "var(--color-warning-text)";
-          const key = isStreet ? `${issue.id}_number` : `${issue.id}_unit`;
-          return (
-            <div key={issue.id} className="card" style={{ padding: "18px 22px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 500, color: accent, letterSpacing: "0.05em" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent, flexShrink: 0 }} />
-                    {isStreet ? "Street number" : "Unit field"}
-                  </span>
-                  <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{idx + 1}/{issues.length}</span>
-                </div>
-                <div style={{ display: "flex", gap: 12, color: "var(--color-text-muted)", fontSize: 11 }}>
-                  {issue.school_name && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><School size={11} />{issue.school_name}</span>}
-                  {issue.street_name && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={11} />{[issue.street_number, issue.street_name].filter(Boolean).join(" ")}</span>}
-                </div>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: "var(--color-text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 5 }}>Original Value</div>
-                <code style={{ background: "var(--color-surface-2)", borderRadius: 5, padding: "6px 10px", fontSize: 12, color: "var(--color-error-text)", display: "inline-block" }}>{issue.current}</code>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--color-text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 5 }}>Replacement (leave blank to clear)</div>
-                <input className="input" value={updates[key] ?? ""} onChange={(e) => setUpdates((p) => ({ ...p, [key]: e.target.value }))} placeholder={`Corrected ${isStreet ? "street number" : "unit"}, or clear to remove`} style={{ fontFamily: "var(--font-mono)", fontSize: 13 }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ marginTop: 28, display: "flex", gap: 10 }}>
-        <button onClick={onBack} className="btn btn-secondary" style={{ flexShrink: 0 }}><ArrowLeft size={15} /> Start Over</button>
-        <button onClick={apply} disabled={applying} className="btn btn-primary" style={{ flex: 1, justifyContent: "center", opacity: applying ? 0.7 : 1 }}>
-          {applying ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <ArrowRight size={15} />}
-          {applying ? "Applying…" : "Apply & Download"}
-        </button>
-      </div>
-    </main>
-  );
-}
-
-// ─── ResultView ───────────────────────────────────────────────────────────────
-
-function ResultView({ session, onStartOver }: { session: SessionData; onStartOver: () => void }) {
-  const baseName = session.fileName.replace(/\.(xml|xlsm)$/i, "");
-
-  const dlXml = (content: string, suffix: string) =>
-    downloadText(content, `${baseName}_${suffix}.xml`, "application/xml");
-
-  const dlCsv = (data: Record<string, unknown>[], name: string) =>
-    downloadText(toCsv(data), `${baseName}_${name}.csv`, "text/csv");
-
-  const dlExcel = () => {
-    const exp = session.exportResult!;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exp.allStudents),      "All_Students");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exp.filteredStudents), "Filtered_Students");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exp.schoolCounts),     "School_Counts");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exp.gradeCounts),      "Grade_Counts");
-    XLSX.writeFile(wb, `${baseName}_report.xlsx`);
-  };
-
-  // ── Custom report filter state (export workflow only) ─────────────────────
-  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
-  const [selectedGrades,  setSelectedGrades]  = useState<string[]>([]);
-  const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
-  const [minAge, setMinAge] = useState(0);
-  const [maxAge, setMaxAge] = useState(99);
-  const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
-  const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[] });
-
-  useEffect(() => {
-    const students = session.exportResult?.allStudents ?? [];
-    const schoolsSet = new Set<string>();
-    const gradesSet  = new Set<string>();
-    const gendersSet = new Set<string>();
-    let ageMin = Infinity, ageMax = -Infinity;
-    for (const s of students) {
-      if (s.SchoolName) schoolsSet.add(s.SchoolName);
-      if (s.Grade)      gradesSet.add(s.Grade);
-      if (s.Gender)     gendersSet.add(s.Gender);
-      const age = computeAge(s.BirthDate);
-      if (age !== null) { if (age < ageMin) ageMin = age; if (age > ageMax) ageMax = age; }
-    }
-    const schools = Array.from(schoolsSet).sort();
-    const grades  = Array.from(gradesSet).sort();
-    const genders = Array.from(gendersSet).sort();
-    const lo = isFinite(ageMin) ? ageMin : 0;
-    const hi = isFinite(ageMax) ? ageMax : 99;
-    /* eslint-disable react-hooks/set-state-in-effect -- Reset all filter controls atomically when a new export dataset is loaded. */
-    setFilterOpts({ schools, grades, genders });
-    setSelectedSchools(schools);
-    setSelectedGrades(grades);
-    setSelectedGenders(genders);
-    setAgeBounds([lo, hi]);
-    setMinAge(lo);
-    setMaxAge(hi);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [session.exportResult]);
-
-  const customStudents = (session.exportResult?.allStudents ?? []).filter((s) => {
-    const age = computeAge(s.BirthDate);
-    if (s.SchoolName && !selectedSchools.includes(s.SchoolName)) return false;
-    if (s.Grade      && !selectedGrades.includes(s.Grade))       return false;
-    if (s.Gender     && !selectedGenders.includes(s.Gender))     return false;
-    if (age !== null && (age < minAge || age > maxAge))           return false;
-    return true;
-  });
-
-  const dlCustomExcel = () => {
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customStudents),                                     "Students");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSchoolCounts(customStudents) as unknown as Record<string,unknown>[]), "School_Counts");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildGradeCounts(customStudents)  as unknown as Record<string,unknown>[]), "Grade_Counts");
-    XLSX.writeFile(wb, `${baseName}_custom_report.xlsx`);
-  };
-
-  return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
-      <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 22, padding: "5px 9px", gap: 5, fontSize: 13 }}>
-        <ArrowLeft size={13} /> Process another file
-      </button>
-      <div style={{ borderLeft: "2px solid var(--verde)", padding: "6px 0 6px 18px", display: "flex", alignItems: "center", gap: 14, marginBottom: 34 }}>
-        <CheckCircle2 size={26} style={{ color: "var(--color-brand-400)", flexShrink: 0 }} />
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "var(--color-brand-400)", marginBottom: 2 }}>Processing Complete</div>
-          <div style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
-            {session.fileName} · {session.workflow === "clean" ? "XML cleaned" : session.workflow === "export" ? "Student data extracted" : "XML reformatted"}
-          </div>
-        </div>
-      </div>
-
-      {session.workflow === "clean" && session.stats && (
-        <>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Cleaning Summary</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 28, marginBottom: 24 }}>
-            <StatCard label="Phones Fixed"        value={session.stats.phones_cleaned}   accent="green" />
-            <StatCard label="Phones Cleared"      value={session.stats.phones_blank}     accent="yellow" />
-            <StatCard label="Units Standardized"  value={session.stats.units_standardized} accent="teal" />
-            <StatCard label="Issues Reviewed"     value={(session.stats.street_review ?? 0) + (session.stats.units_review ?? 0)} />
-          </div>
-          <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Wand2 size={18} style={{ color: "var(--color-text-muted)" }} /></div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_clean.xml</div>
-                <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>Cleaned STIX XML</div>
-              </div>
-            </div>
-            <button onClick={() => dlXml(session.cleanXml!, "clean")} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Download</button>
-          </div>
-        </>
-      )}
-
-      {session.workflow === "pretty" && (
-        <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><FileText size={18} style={{ color: "var(--color-text-muted)" }} /></div>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_pretty.xml</div>
-              <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>Reformatted XML</div>
-            </div>
-          </div>
-          <button onClick={() => dlXml(session.cleanXml!, "pretty")} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Download</button>
-        </div>
-      )}
-
-      {session.workflow === "export" && session.exportResult && (() => {
-        const exp = session.exportResult;
-        const schoolCount = new Set(exp.allStudents.map((s) => s.SchoolName)).size;
-        return (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Export Summary</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 28, marginBottom: 24 }}>
-              <StatCard label="Total Students"         value={exp.allStudents.length}      accent="green" />
-              <StatCard label="Filtered (Gr7–8 12/13)" value={exp.filteredStudents.length} accent="teal" />
-              <StatCard label="Schools"                value={schoolCount} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {([
-                { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_all_students.csv`,   sub: `${exp.allStudents.length} students`,                       fn: () => dlCsv(exp.allStudents as unknown as Record<string,unknown>[],      "all_students") },
-                { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_filtered.csv`,       sub: `${exp.filteredStudents.length} Gr7–8 born 2012–2013`,      fn: () => dlCsv(exp.filteredStudents as unknown as Record<string,unknown>[],  "filtered") },
-                { icon: <School size={16} style={{ color: "var(--color-text-muted)" }} />, title: `${baseName}_school_counts.csv`,  sub: "Students per school per birth year",                       fn: () => dlCsv(exp.schoolCounts as unknown as Record<string,unknown>[],      "school_counts") },
-                { icon: <BarChart3 size={16} style={{ color: "var(--color-warning-text)" }} />, title: `${baseName}_grade_counts.csv`, sub: "Students per school per grade",                        fn: () => dlCsv(exp.gradeCounts as unknown as Record<string,unknown>[],       "grade_counts") },
-              ] as const).map(({ icon, title, sub, fn }) => (
-                <div key={title} className="card" style={{ padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-                    <div style={{ background: "var(--color-surface-2)", borderRadius: 3, padding: 8 }}>{icon}</div>
-                    <div>
-                      <div style={{ fontWeight: 500, fontSize: 12, fontFamily: "var(--font-mono)", marginBottom: 2 }}>{title}</div>
-                      <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{sub}</div>
-                    </div>
-                  </div>
-                  <button onClick={fn} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> CSV</button>
-                </div>
-              ))}
-              <div style={{ background: "var(--color-surface-1)", border: "2px solid var(--color-brand-600)", borderRadius: 4, padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><FileText size={18} style={{ color: "var(--color-text-muted)" }} /></div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_report.xlsx</div>
-                    <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>All 4 sheets in one Excel workbook</div>
-                  </div>
-                </div>
-                <button onClick={dlExcel} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Excel</button>
-              </div>
-            </div>
-
-            {/* ── Custom Filter & Export ───────────────────────────────────── */}
-            <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                <SlidersHorizontal size={15} style={{ color: "var(--color-text-muted)" }} />
-                <div>
-                  <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Export Custom Report</div>
-                  <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>Narrow by school, grade, gender, or age — then download a targeted CSV or Excel</div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <FilterCheckboxGroup
-                    label="School"
-                    options={filterOpts.schools}
-                    selected={selectedSchools}
-                    onToggle={(v) => setSelectedSchools((s) => toggleItem(s, v))}
-                    onAll={() => setSelectedSchools(filterOpts.schools)}
-                    onNone={() => setSelectedSchools([])}
-                  />
-                  <FilterCheckboxGroup
-                    label="Grade"
-                    options={filterOpts.grades}
-                    selected={selectedGrades}
-                    onToggle={(v) => setSelectedGrades((s) => toggleItem(s, v))}
-                    onAll={() => setSelectedGrades(filterOpts.grades)}
-                    onNone={() => setSelectedGrades([])}
-                  />
-                  <FilterCheckboxGroup
-                    label="Gender"
-                    options={filterOpts.genders}
-                    selected={selectedGenders}
-                    onToggle={(v) => setSelectedGenders((s) => toggleItem(s, v))}
-                    onAll={() => setSelectedGenders(filterOpts.genders)}
-                    onNone={() => setSelectedGenders([])}
-                  />
-                  <AgeRangeFilter
-                    minBound={ageBounds[0]} maxBound={ageBounds[1]}
-                    minAge={minAge} maxAge={maxAge}
-                    onChange={(min, max) => { setMinAge(min); setMaxAge(max); }}
-                  />
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, background: "var(--color-surface-2)", borderRadius: 4, padding: "12px 16px", border: "1px solid var(--color-border)" }}>
-                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                    <span style={{ fontWeight: 800, color: "var(--color-text-primary)", fontSize: 22, lineHeight: 1 }}>{customStudents.length}</span>
-                    <span style={{ marginLeft: 6 }}>of {exp.allStudents.length} students match</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => dlCsv(customStudents as unknown as Record<string,unknown>[], "custom")} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Students CSV</button>
-                    <button onClick={() => dlCsv(buildSchoolCounts(customStudents) as unknown as Record<string,unknown>[], "custom_schools")} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> School Counts CSV</button>
-                    <button onClick={() => dlCsv(buildGradeCounts(customStudents) as unknown as Record<string,unknown>[], "custom_grades")} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Grade Counts CSV</button>
-                    <button onClick={dlCustomExcel} className="btn btn-primary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Excel</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        );
-      })()}
     </main>
   );
 }
@@ -2328,6 +1976,20 @@ function ValidateDownloadView({
     downloadText(csv, `${baseName}_issue_report.csv`, "text/csv");
   };
 
+  const dlPretty = () => downloadText(prettyPrintXml(xml), `${baseName}_pretty.xml`, "application/xml");
+
+  const exportResult = useMemo(() => processExport(xml), [xml]);
+  const dlExportCsv = (data: Record<string, unknown>[], name: string) =>
+    downloadText(toCsv(data), `${baseName}_${name}.csv`, "text/csv");
+  const dlExportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportResult.allStudents),      "All_Students");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportResult.filteredStudents), "Filtered_Students");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportResult.schoolCounts),     "School_Counts");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportResult.gradeCounts),      "Grade_Counts");
+    XLSX.writeFile(wb, `${baseName}_report.xlsx`);
+  };
+
   const errorCount   = result.issues.filter(i => i.severity === "error").length;
   const warningCount = result.issues.filter(i => i.severity === "warning").length;
 
@@ -2485,6 +2147,20 @@ function ValidateDownloadView({
           </div>
           <button onClick={dlReport} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> CSV</button>
         </div>
+
+        {/* Pretty-printed XML */}
+        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}>
+              <FileCode size={18} style={{ color: "var(--color-text-muted)" }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_pretty.xml</div>
+              <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>Reformatted for easier review — not for submission</div>
+            </div>
+          </div>
+          <button onClick={dlPretty} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> Download</button>
+        </div>
       </div>
 
       <Dialog.Root open={encryptOpen} onOpenChange={(open) => { if (!open) closeEncrypt(); }}>
@@ -2500,7 +2176,49 @@ function ValidateDownloadView({
         </Dialog.Portal>
       </Dialog.Root>
 
-      {/* ── Filter & Report section ─────────────────────────────────────────── */}
+      {/* ── Export Reports section ──────────────────────────────────────────── */}
+      <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+          <BarChart3 size={15} style={{ color: "var(--color-text-muted)" }} />
+          <div>
+            <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Export Reports</div>
+            <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>
+              CSV and Excel reports built from every student record in this file
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {([
+            { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_all_students.csv`,   sub: `${exportResult.allStudents.length} students`,                       fn: () => dlExportCsv(exportResult.allStudents as unknown as Record<string,unknown>[],      "all_students") },
+            { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_filtered_students.csv`, sub: `${exportResult.filteredStudents.length} Gr7–8 born 2012–2013`,   fn: () => dlExportCsv(exportResult.filteredStudents as unknown as Record<string,unknown>[],  "filtered_students") },
+            { icon: <School size={16} style={{ color: "var(--color-text-muted)" }} />, title: `${baseName}_school_counts.csv`,  sub: "Students per school per birth year",                                fn: () => dlExportCsv(exportResult.schoolCounts as unknown as Record<string,unknown>[],      "school_counts") },
+            { icon: <BarChart3 size={16} style={{ color: "var(--color-warning-text)" }} />, title: `${baseName}_grade_counts.csv`, sub: "Students per school per grade",                                 fn: () => dlExportCsv(exportResult.gradeCounts as unknown as Record<string,unknown>[],       "grade_counts") },
+          ] as const).map(({ icon, title, sub, fn }) => (
+            <div key={title} className="card" style={{ padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <div style={{ background: "var(--color-surface-2)", borderRadius: 3, padding: 8 }}>{icon}</div>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 12, fontFamily: "var(--font-mono)", marginBottom: 2 }}>{title}</div>
+                  <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{sub}</div>
+                </div>
+              </div>
+              <button onClick={fn} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> CSV</button>
+            </div>
+          ))}
+          <div style={{ background: "var(--color-surface-1)", border: "2px solid var(--color-brand-600)", borderRadius: 4, padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><FileText size={18} style={{ color: "var(--color-text-muted)" }} /></div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_report.xlsx</div>
+                <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>All 4 sheets in one Excel workbook</div>
+              </div>
+            </div>
+            <button onClick={dlExportExcel} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Excel</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Filter & Custom Report section ──────────────────────────────────── */}
       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid var(--color-border)" }}>
         {/* Section header */}
         <button
@@ -2510,7 +2228,7 @@ function ValidateDownloadView({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <SlidersHorizontal size={15} style={{ color: "var(--color-text-muted)" }} />
             <div>
-              <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Export Reports</div>
+              <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Custom Report</div>
               <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>
                 Narrow by school, grade, gender, or age — then download targeted CSVs
               </div>
@@ -2613,7 +2331,6 @@ async function readFileText(f: File): Promise<string> {
 
 export default function App() {
   const [view, setView]                   = useState<View>("home");
-  const [session, setSession]             = useState<SessionData | null>(null);
   const [validateSess, setValidateSess]   = useState<ValidateSession | null>(null);
   const [comparison, setComparison]       = useState<StixComparison | null>(null);
   // Lifted so CleaningView and validation both see the same ruleset
@@ -2632,7 +2349,6 @@ export default function App() {
 
   const goHome = () => {
     setView("home");
-    setSession(null);
     setValidateSess(null);
     setComparison(null);
     setPendingFile(null);
@@ -2658,7 +2374,6 @@ export default function App() {
 
       {view === "home" && (
         <HomeView
-          onDone={(data, next) => { setSession(data); setView(next); }}
           onCompare={(result) => { setComparison(result); setView("compare"); }}
           activeRules={activeRules}
           onRulesChange={setActiveRules}
@@ -2669,18 +2384,6 @@ export default function App() {
             setView("clean-step");
           }}
         />
-      )}
-
-      {view === "review" && session && (
-        <ReviewView
-          session={session}
-          onBack={() => setView("home")}
-          onDone={(updated) => { setSession(updated); setView("result"); }}
-        />
-      )}
-
-      {view === "result" && session && (
-        <ResultView session={session} onStartOver={goHome} />
       )}
 
       {view === "compare" && comparison && (

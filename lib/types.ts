@@ -1,32 +1,4 @@
-export type Workflow = "validate" | "clean" | "export" | "pretty" | "compare";
-
-export interface CleanStats {
-  phones_cleaned: number;
-  phones_blank: number;
-  units_standardized: number;
-  units_review: number;
-  street_review: number;
-}
-
-export type IssueType = "street_number" | "unit";
-
-export interface Issue {
-  id: string;
-  type: IssueType;
-  index: number;
-  current: string;
-  school_name: string;
-  school_number: string;
-  // street_number issues
-  street_name?: string;
-  // unit issues
-  street_number?: string;
-}
-
-export interface ReviewUpdate {
-  issueId: string;
-  value: string; // empty string means clear
-}
+export type Workflow = "validate" | "compare";
 
 export interface Student {
   SchoolName: string;
@@ -152,18 +124,6 @@ export interface StixComparison {
   signal: ComparisonSignal;
   recommendation: string;
   recommendationDetail: string;
-}
-
-/** Shape stored in sessionStorage between pages */
-export interface SessionData {
-  workflow: Workflow;
-  fileName: string;
-  xmlContent: string;         // original XML text
-  autoCleanXml?: string;      // XML after auto-clean pass (pre-review)
-  cleanXml?: string;          // final clean XML (post-review)
-  issues?: Issue[];
-  stats?: CleanStats;
-  exportResult?: ExportResult;
 }
 
 // ─── Rules & Ruleset types ────────────────────────────────────────────────────
