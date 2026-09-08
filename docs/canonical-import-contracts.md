@@ -8,8 +8,8 @@ It is not a replacement for the official `studentuploaddata.xsd`. The supplied o
 
 The machine-readable companions are:
 
-- [`schemas/canonical-upload.schema.json`](../schemas/canonical-upload.schema.json), which defines the source-independent upload model; and
-- [`schemas/source-profile.schema.json`](../schemas/source-profile.schema.json), which defines reusable mapping profiles for public schools, private schools, boards, daycares, and other sources.
+- [`schemas/canonical-upload.schema.json`](https://github.com/WDGPH/PanoReady/blob/main/schemas/canonical-upload.schema.json), which defines the source-independent upload model; and
+- [`schemas/source-profile.schema.json`](https://github.com/WDGPH/PanoReady/blob/main/schemas/source-profile.schema.json), which defines reusable mapping profiles for public schools, private schools, boards, daycares, and other sources.
 
 JSON Schema validity means an object has the correct structure and primitive formats. It does not by itself mean the upload is ready for submission. Export readiness is governed by the validation and reconciliation contracts below.
 

@@ -20,6 +20,12 @@
 
 # production
 /build
+/site
+
+# Python documentation tooling
+/.venv
+__pycache__/
+*.py[cod]
 
 # misc
 .DS_Store
@@ -40,3 +46,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Private workbook inspection notes
+/docs/official-template-internals.md

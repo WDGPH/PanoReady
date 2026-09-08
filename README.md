@@ -1,72 +1,84 @@
-# TWIG STIX Cleaner
+# PanoReady
 
-A browser-based tool for cleaning, validating, and exporting Ontario school enrollment data in STIX XML format. All processing happens client-side — student records never leave your device.
+[![CI](https://github.com/WDGPH/PanoReady/actions/workflows/ci.yml/badge.svg)](https://github.com/WDGPH/PanoReady/actions/workflows/ci.yml)
+[![Documentation](https://github.com/WDGPH/PanoReady/actions/workflows/docs.yml/badge.svg)](https://github.com/WDGPH/PanoReady/actions/workflows/docs.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 
-Built by Wellington-Dufferin-Guelph Public Health.
+PanoReady is a browser-based tool for validating, cleaning, comparing, and exporting Ontario school enrolment data in STIX XML format. All record processing happens on your device; files are not uploaded to a server.
 
-## Features
+Built by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/).
+
+## What it does
 
 | Workflow | Description |
 |---|---|
-| **Validate & Fix** | Canonical workbook import preview, template lookup normalization, full metadata/nested-field/code validation, safe fixes, reconciliation, and download. Final status remains `REVIEW_REQUIRED` until the official XSD is supplied. |
-| **Clean XML** | Fix phone numbers, standardize unit fields, and flag suspicious street numbers for manual review. |
-| **Export Reports** | Parse students into spreadsheets. Includes a filtered view for Gr7–8 students born 2012–2013 with per-school summaries. |
+| **Validate & Fix** | Preview workbook imports, validate metadata and records, apply reviewed fixes, reconcile the result, and export XML and reports. The final status remains `REVIEW_REQUIRED` until the official XSD is available. |
+| **Clean XML** | Normalize phone numbers and unit fields and review address problems. |
+| **Export Reports** | Export student data, school and grade summaries, filtered CSVs, and an Excel workbook. |
 | **Pretty Print** | Reformat XML with consistent indentation. |
+| **Compare Files** | Compare two STIX snapshots and review record, field, school, and transfer changes. |
 
-## Getting Started
+PanoReady accepts STIX XML and Excel macro-enabled workbook (`.xlsm`) inputs. Validated and compared XML can optionally be downloaded in an AES-256 password-protected ZIP archive.
+
+## Quick start
+
+Requirements: [Node.js](https://nodejs.org/) 22 or 24 (24 is the default in `.nvmrc`) and npm.
 
 ```bash
-npm install
+git clone https://github.com/WDGPH/PanoReady.git
+cd PanoReady
+npm ci
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open <http://localhost:3000>.
 
-### Other scripts
+## Development commands
 
 ```bash
-npm run build        # Production build (webpack)
-npm run start        # Serve the production build
-npm run lint         # Run ESLint
-npm test             # Run unit and validation integration tests
+npm run dev      # Start the development server
+npm run lint     # Run ESLint
+npm run typecheck # Check TypeScript
+npm test         # Run the Vitest suite
+npm run build    # Create a production build
+npm run start    # Serve the production build
+npm run check    # Run application checks
 ```
 
-### Validation demo
+## Documentation
 
-Download the synthetic
-[STIX validation demo](public/samples/stix-validation-demo.stix) and upload it
-through **Validate & Fix** to review the same general, postal-code, and
-phone-number cases exercised by the integration tests. It demonstrates safe
-postal and phone normalization, structural failures, placeholder handling, and
-the non-blocking Canadian geographic area-code policy. Its metadata, student,
-and nested guardian phones include canonical extensions, safe common variants,
-and cases that intentionally require manual correction. The fixture contains
-synthetic names and data only.
+The documentation site is configured to publish at <https://wdgph.github.io/PanoReady/> and in the [`docs`](docs/) directory.
 
-## Custom Validation Rulesets
+To preview the documentation locally:
 
-The built-in ruleset validates against STIX Wellington-Dufferin-Guelph defaults. If your board uses different grade codes, allows additional phone placeholder numbers, or has stricter required-field rules, you can create a custom ruleset without touching any code — changes only affect your browser session.
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m pip install -r requirements-docs.txt
+mkdocs serve
+```
 
-### Quick start
+Then open <http://127.0.0.1:8000>.
 
-1. In the **Validate & Fix** or **Reports** workflow, open the **Validation ruleset** dropdown and click **Export** — this downloads the built-in rules as a `.json` file.
-2. Edit the file in any text editor. See [docs/rulesets.md](docs/rulesets.md) for a full field-by-field guide.
-3. Click **Import** to load it. Select it from the dropdown and validate as normal.
+The synthetic [validation demo](public/samples/stix-validation-demo.stix) exercises representative metadata, postal-code, and phone-number findings without using operational records.
 
-Rulesets are saved in your browser's localStorage and persist between sessions. They are never uploaded anywhere. To share a ruleset with a colleague, send them the exported `.json` file — they import it the same way.
+See [deployment](docs/deployment.md) for hosting and [the release checklist](docs/releasing.md) for repository settings and release checks.
 
-## Tech Stack
+## Custom validation rulesets
 
-- [Next.js 16](https://nextjs.org) — React framework
-- [React 19](https://react.dev)
-- [fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) — XML parsing
-- [xlsx](https://sheetjs.com) — Excel export
-- [lucide-react](https://lucide.dev) — Icons
+Export the built-in rules from the **Validation ruleset** menu, edit the JSON, and import it back into PanoReady. Custom rulesets remain in the browser's local storage and can be shared as files. See the [ruleset reference](docs/rulesets.md) for every available field.
 
-## Privacy
+## Privacy and security
 
-This app is 100% in-browser. No data is uploaded to any server. All XML processing, validation, and file generation runs locally in your browser.
+PanoReady performs file parsing, validation, cleaning, comparison, and generation in the browser. Do not attach real student data or other sensitive information to public issues. Please report vulnerabilities according to the [security policy](SECURITY.md).
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and use the issue templates before opening a pull request.
+
+See [CHANGELOG.md](CHANGELOG.md) for unreleased changes.
 
 ## License
 
-MIT
+PanoReady is available under the [MIT License](LICENSE).

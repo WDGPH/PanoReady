@@ -54,7 +54,7 @@ Every ruleset file must include these fields:
 
 ### `requiredFields`
 
-**Controls:** `required-field` rule  
+**Controls:** `required-field` rule
 **Type:** array of strings
 
 ```json
@@ -69,7 +69,7 @@ Use the canonical field names shown in the editor when importing a ruleset JSON.
 
 ### `allowedGradeValues`
 
-**Controls:** `grade-value` rule  
+**Controls:** `grade-value` rule
 **Type:** array of strings
 
 ```json
@@ -82,7 +82,7 @@ The exact grade codes accepted after aliases are applied. If your board submits 
 
 ### `allowedGenderValues`
 
-**Controls:** `gender-value` rule  
+**Controls:** `gender-value` rule
 **Type:** array of strings
 
 ```json
@@ -95,7 +95,7 @@ Case-sensitive. Extend this list if your SIS exports additional codes that your 
 
 ### `allowedProvinceValues`
 
-**Controls:** `province-value` rule  
+**Controls:** `province-value` rule
 **Type:** array of strings
 
 ```json
@@ -108,7 +108,7 @@ Standard two-letter Canadian province/territory codes.
 
 ### `allowedLanguageValues`
 
-**Controls:** `language-value` rule  
+**Controls:** `language-value` rule
 **Type:** array of strings
 
 ISO 639-1 language codes. The built-in list includes all 184 codes defined in the standard. You would rarely need to change this.
@@ -117,7 +117,7 @@ ISO 639-1 language codes. The built-in list includes all 184 codes defined in th
 
 ### `allowedCountryValues`
 
-**Controls:** `country-value` rule  
+**Controls:** `country-value` rule
 **Type:** array of strings
 
 ISO 3166-1 alpha-2 country codes. The built-in list includes all current codes. You would rarely need to change this.
@@ -126,7 +126,7 @@ ISO 3166-1 alpha-2 country codes. The built-in list includes all current codes. 
 
 ### `allowedStreetTypeValues`
 
-**Controls:** `street-type-value` rule  
+**Controls:** `street-type-value` rule
 **Type:** array of strings
 
 ```json
@@ -139,7 +139,7 @@ Canada Post street type abbreviations (English and French). Add any locally-used
 
 ### `allowedRelationshipValues`
 
-**Controls:** `relationship-value` rule  
+**Controls:** `relationship-value` rule
 **Type:** array of strings
 
 ```json
@@ -153,7 +153,7 @@ Relationship codes for emergency contacts. Extend if your SIS uses additional co
 
 ### `allowedPhoneTypeValues`
 
-**Controls:** `phone-type-value` rule  
+**Controls:** `phone-type-value` rule
 **Type:** array of strings
 
 ```json
@@ -164,7 +164,7 @@ Relationship codes for emergency contacts. Extend if your SIS uses additional co
 
 ### `allowedStreetDirectionValues`
 
-**Controls:** `street-direction-value` rule  
+**Controls:** `street-direction-value` rule
 **Type:** array of strings
 
 ```json
@@ -175,7 +175,7 @@ Relationship codes for emergency contacts. Extend if your SIS uses additional co
 
 ### `allowedFullLoadTypeValues`
 
-**Controls:** `full-load-type-value` rule  
+**Controls:** `full-load-type-value` rule
 **Type:** array of strings
 
 ```json
@@ -188,7 +188,7 @@ You would rarely need to change this.
 
 ### `fieldLengths`
 
-**Controls:** `field-too-long` rule  
+**Controls:** `field-too-long` rule
 **Type:** object — field name → maximum character length
 
 ```json
@@ -219,7 +219,7 @@ complete result.
 
 ### `dateFields`
 
-**Controls:** `date-format` rule  
+**Controls:** `date-format` rule
 **Type:** array of strings
 
 ```json
@@ -232,7 +232,7 @@ Fields that must contain a valid `YYYY-MM-DD` date. The default only checks `Bir
 
 ### `postalCodePattern`
 
-**Controls:** `postal-code-format` rule  
+**Controls:** `postal-code-format` rule
 **Type:** string (regular expression)
 
 ```json
@@ -281,7 +281,7 @@ the structural/policy distinction, source provenance, and verification date.
 
 ### `gradeAliases`
 
-**Controls:** `grade-value` rule (auto-fix step)  
+**Controls:** `grade-value` rule (auto-fix step)
 **Type:** object — raw value → canonical value
 
 ```json
@@ -300,7 +300,7 @@ When a grade value is not in `allowedGradeValues`, the validator checks this map
 
 ### `genderAliases`
 
-**Controls:** `gender-value` rule (auto-fix step)  
+**Controls:** `gender-value` rule (auto-fix step)
 **Type:** object — raw value → canonical value
 
 ```json
@@ -320,7 +320,7 @@ Same pattern as `gradeAliases`. Aliases are case-sensitive (both the key and the
 
 ### `duplicateDetection`
 
-**Controls:** `OEN_DUPLICATE`/`OEN_DUAL_ENROLLMENT` and `NAME_DOB_DUPLICATE`/`IDENTITY_REVIEW` rules  
+**Controls:** `OEN_DUPLICATE`/`OEN_DUAL_ENROLLMENT` and `NAME_DOB_DUPLICATE`/`IDENTITY_REVIEW` rules
 **Type:** object
 
 ```json
@@ -341,7 +341,7 @@ Set either value to `false` to disable that duplicate check entirely, in both it
 
 ### `cleaning`
 
-**Controls:** Cleaning step in Validate & Fix (Step 1)  
+**Controls:** Cleaning step in Validate & Fix (Step 1)
 **Type:** object (optional — omit entirely if you have no cleaning rules)
 
 ```json
@@ -362,10 +362,10 @@ Set either value to `false` to disable that duplicate check entirely, in both it
 
 The cleaning profile defines field-value substitutions applied to student records **before** the validation rules run. Fields in `enabledFields` are processed in order; within each field, mappings are evaluated top-to-bottom and the first match wins.
 
-**`enabledFields`** — array of strings  
+**`enabledFields`** — array of strings
 Fields to apply mappings to. Only fields listed here are cleaned, even if `mappings` has entries for other fields.
 
-**`mappings`** — object  
+**`mappings`** — object
 A record keyed by field name. Each value is an ordered array of mapping objects:
 
 | Property | Required | Description |
