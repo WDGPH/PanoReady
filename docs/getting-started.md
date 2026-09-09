@@ -1,6 +1,6 @@
 # Getting started
 
-PanoReady runs in a modern web browser and processes source records locally. Use your organization's deployed instance, or follow [Development](development.md) to run it locally. The GitHub Pages site contains documentation, not the application.
+PanoReady runs in a modern web browser and processes source records locally. Use the [deployed application](https://wdgph.github.io/PanoReady/), or follow [Development](development.md) to run it locally. Documentation is available under the deployed site's `/docs/` path.
 
 ## Choose an input
 
@@ -18,17 +18,16 @@ When importing a workbook, review the detected school and reporting metadata bef
 
 1. Open PanoReady in your browser.
 2. Select a workflow.
-3. Choose or drag in the source file. **Compare Files** requires a previous and a current file.
-4. Review any detected workbook metadata or validation ruleset.
+3. Choose or drag in the source file. **Compare Files** requires a previous and a current file; either input may be XML or a supported workbook.
+4. For workbook input, review detected metadata and resolve populated columns that are unmapped or mapped more than once. For **Validate & Fix**, also confirm the selected ruleset.
 5. Process the file and review the result before downloading it.
 
 See the workflow guides for detailed behaviour:
 
 - [Validate & Fix](workflow-validate-and-fix.md)
-- [Clean XML](workflow-clean-xml.md)
-- [Export Reports](workflow-export-reports.md)
-- [Pretty Print](workflow-pretty-print.md)
 - [Compare Files](workflow-compare-files.md)
+
+Cleaning mappings, report exports, and pretty-printed XML are available inside **Validate & Fix**; they are no longer separate workflow choices.
 
 ## Custom rulesets
 

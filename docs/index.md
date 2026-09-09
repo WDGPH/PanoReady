@@ -1,6 +1,6 @@
 # PanoReady
 
-PanoReady is a browser-based utility for validating, cleaning, comparing, and exporting Ontario school enrolment data in STIX XML format.
+PanoReady is a browser-based utility with two workflows for preparing and comparing Ontario school enrolment data in STIX XML format.
 
 **Your record data stays on your device.** File parsing and generated outputs are handled in the browser; source files are not uploaded to a PanoReady server.
 
@@ -12,11 +12,8 @@ PanoReady is a browser-based utility for validating, cleaning, comparing, and ex
 
 | Workflow | Purpose | Output |
 |---|---|---|
-| [Validate & Fix](workflow-validate-and-fix.md) | Clean and validate records, review issues, apply safe fixes, and revalidate | XML, issue reports, summaries, optional encrypted ZIP |
-| [Clean XML](workflow-clean-xml.md) | Normalize phone numbers and unit fields and review suspicious street numbers | Cleaned XML |
-| [Export Reports](workflow-export-reports.md) | Extract student data and aggregate school or grade information | CSV files and Excel workbook |
-| [Pretty Print](workflow-pretty-print.md) | Reformat XML with consistent indentation | Formatted XML |
-| [Compare Files](workflow-compare-files.md) | Compare previous and current snapshots, including school and field changes | Comparison views and current XML export |
+| [Validate & Fix](workflow-validate-and-fix.md) | Import, optionally clean, validate, review issues, apply fixes, and revalidate | Validated and formatted XML, optional encrypted ZIP, issue reports, CSV summaries, and Excel workbook |
+| [Compare Files](workflow-compare-files.md) | Compare previous and current snapshots, review changes, and correct current values | Comparison views and logs, full or school-scoped current XML, optional encrypted ZIP |
 
 ## Input formats
 
@@ -24,7 +21,7 @@ PanoReady accepts STIX XML and supported Excel macro-enabled workbooks (`.xlsm`)
 
 ## Configure validation
 
-Validation settings and optional value mappings are configured through rulesets. The separate Clean XML workflow uses fixed cleaning logic. You can export it, create a custom variant, and import that variant without changing application code. Start with the [ruleset reference](rulesets.md) and [validation rules](validation-rules.md).
+Validation settings and optional cleaning mappings are configured through rulesets in **Validate & Fix**. You can export the built-in ruleset, create a custom variant, and import that variant without changing application code. Start with the [ruleset reference](rulesets.md) and [validation rules](validation-rules.md).
 
 ## Open-source project
 
