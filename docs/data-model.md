@@ -9,35 +9,16 @@ This page documents the TypeScript types and interfaces used across all workflow
 ### `Workflow`
 
 ```ts
-type Workflow = "validate" | "clean" | "export" | "pretty";
+type Workflow = "validate" | "compare";
 ```
 
 Identifies which workflow the user selected. Used to route the app between processing paths and result screens.
 
 ---
 
-### `SessionData`
-
-Holds state for the Clean XML, Export Reports, and Pretty Print workflows.
-
-```ts
-interface SessionData {
-  workflow: Workflow;
-  fileName: string;
-  xmlContent: string;        // original uploaded XML
-  autoCleanXml?: string;     // XML after auto-clean pass (before manual review)
-  cleanXml?: string;         // XML after manual review overrides applied
-  issues?: Issue[];          // items flagged for manual review (Clean workflow)
-  stats?: CleanStats;        // summary counts from auto-cleaning
-  exportResult?: ExportResult; // parsed and aggregated data (Export workflow)
-}
-```
-
----
-
 ### `ValidateSession`
 
-Holds state for the Validate & Fix workflow. Kept separate from `SessionData` because the validate workflow has a multi-step state machine (initial validation → staged fixes → revalidation).
+Holds state for the multi-step Validate & Fix workflow.
 
 ```ts
 type ValidateSession = {
@@ -45,8 +26,9 @@ type ValidateSession = {
   originalXml: string;
   initialResult: ValidationResult;   // result of first validateXml() call
   fixes: AppliedFix[];               // fixes staged by the user in the fix editor
+  validationRules?: RulesProfile;    // snapshot used for revalidation
   revalidatedResult?: ValidationResult; // result after fixes applied
-  finalXml?: string;                 // cleaned XML ready to download
+  finalXml?: string;                 // corrected XML ready to download
 };
 ```
 
@@ -64,7 +46,8 @@ type ValidationResult = {
   records: StudentRecord[];
   schoolCount: number;
   studentCount: number;
-  gate: "READY" | "BLOCKED" | "PENDING";
+  gate: "READY" | "READY_WITH_WARNINGS" | "REVIEW_REQUIRED" | "BLOCKED" | "PENDING";
+  xsdValidated?: boolean;
 };
 ```
 
@@ -74,7 +57,8 @@ type ValidationResult = {
 | `records` | Parsed student records extracted from the XML |
 | `schoolCount` | Number of `ns1:School` elements found |
 | `studentCount` | Total number of student records found |
-| `gate` | `READY` = no errors; `BLOCKED` = one or more errors present; `PENDING` = not yet validated |
+| `gate` | Readiness state. The current validator returns `BLOCKED` for errors, `REVIEW_REQUIRED` for review warnings, and `READY` otherwise. The union also reserves `READY_WITH_WARNINGS` and `PENDING`. |
+| `xsdValidated` | Whether authoritative XSD validation was completed; currently `false` |
 
 ---
 
@@ -96,6 +80,9 @@ type ValidationIssue = {
   autoFixable: boolean;     // whether a suggestedFix exists and is safe to apply
   ruleId: string;           // which rule produced this issue (e.g. "grade-value")
   xmlPath?: string;         // XPath-style pointer to the element in the XML
+  layer?: DiagnosticLayer;  // import/canonical/XML/etc. diagnostic layer
+  sourceLocation?: string;  // workbook cell or other source location
+  repairProposal?: AddressRepairProposal; // coordinated multi-field repair
 };
 ```
 
@@ -114,6 +101,7 @@ type AppliedFix = {
   newValue: string;    // value written by the fix
   ruleId: string;      // rule that raised the original issue
   appliedAt: number;   // Unix timestamp (ms) when the fix was staged
+  repairId?: string;   // links fields changed by one repair card
 };
 ```
 
@@ -181,40 +169,9 @@ interface CleaningSummaryEntry {
 
 ---
 
-## Clean Workflow Types
+## Validate & Fix reporting types
 
-### `CleanStats`
-
-Summary counts produced by `cleanXml()`.
-
-```ts
-interface CleanStats {
-  phonesCleaned: number;       // phone fields successfully formatted
-  phonesBlanked: number;       // phone fields that could not be cleaned and were emptied
-  unitsStandardized: number;   // unit fields normalized to a known abbreviation
-  needsReview: number;         // items flagged for manual review
-}
-```
-
----
-
-### `Issue`
-
-An item that the auto-cleaner could not resolve and flagged for manual review.
-
-```ts
-interface Issue {
-  schoolNumber: string;
-  studentName: string;
-  field: string;          // "StreetNumber" or "Unit"
-  currentValue: string;   // value after auto-cleaning (may be unchanged)
-  xmlPath: string;        // location in the XML for write-back
-}
-```
-
----
-
-## Export Workflow Types
+These types support the report downloads on the Validate & Fix download screen; reporting is not a separate workflow.
 
 ### `Student`
 
@@ -231,7 +188,7 @@ interface Student {
   AliasMiddleName: string;
   AliasLastName: string;
   BirthDate: string;
-  BirthYear: string;       // derived: first 4 chars of BirthDate
+  BirthYear: number | null; // derived from a valid YYYY-MM-DD BirthDate
   Grade: string;
   Class: string;
   OEN: string;
@@ -243,9 +200,23 @@ interface Student {
   StreetNumberSuffix: string;
   StreetName: string;
   StreetType: string;
+  StreetDirection: string;
+  RuralRoute: string;
+  PoBoxNumber: string;
   City: string;
   Province: string;
   PostalCode: string;
+  PhoneType: string;
+  GuardianFirstName: string;
+  GuardianLastName: string;
+  GuardianRelationship: string;
+  GuardianPhoneNumber: string;
+  GuardianPhoneType: string;
+  Guardian2FirstName: string;
+  Guardian2LastName: string;
+  Guardian2Relationship: string;
+  Guardian2PhoneNumber: string;
+  Guardian2PhoneType: string;
 }
 ```
 
@@ -272,10 +243,9 @@ One row in the School Counts report.
 
 ```ts
 interface SchoolCount {
-  SchoolNumber: string;
   SchoolName: string;
-  BirthYear: string;
-  Count: number;
+  BirthYear: number | null;
+  StudentCount: number;
 }
 ```
 
@@ -287,9 +257,21 @@ One row in the Grade Counts report.
 
 ```ts
 interface GradeCount {
-  SchoolNumber: string;
   SchoolName: string;
   Grade: string;
-  Count: number;
+  GradeCount: number;
 }
 ```
+
+---
+
+## Compare Files types
+
+`StixComparison` is the result of `compareStixFiles()`. It stores source filenames and the current XML, student and school totals, matched/unchanged/added/removed/changed/moved counts, the calculated change rate and signal, and these detail collections:
+
+- `recordChanges`: added, removed, and changed records with per-field before/after values;
+- `fieldChanges`: aggregate counts by compared field;
+- `schoolChanges`: previous/current and change counts by school; and
+- `schoolTransfers`: matched students whose school name changed.
+
+Review decisions and proposed corrections are transient UI state in `CompareView`; they are not part of `StixComparison`. Proposed corrections are applied to an exported copy of `currentXml`.

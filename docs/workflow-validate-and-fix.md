@@ -1,6 +1,6 @@
 # Workflow: Validate & Fix
 
-The Validate & Fix workflow performs a full structural and rules-based validation of a STIX XML file, lets you review and apply corrections, revalidates after fixes, and produces a cleaned XML file alongside a complete audit report.
+The Validate & Fix workflow imports STIX XML or a supported workbook, optionally applies cleaning mappings, validates metadata and records, lets you review and apply corrections, revalidates the result, and provides XML and reporting downloads.
 
 ## When to Use
 
@@ -11,11 +11,13 @@ Use this workflow when you need to:
 
 ## Step-by-Step Flow
 
-### Step 0 — Upload
+### Step 0 — Select rules and import
 
-On the home screen, drop or select your STIX XML file, then click the **Validate & Fix** card.
+Select **Validate & Fix**, choose the validation ruleset, and then drop or select a STIX XML or `.xlsm` workbook. Click **Validate & Fix** to process it.
 
-The app parses the XML into student records. If the XML is not well-formed, an error is shown and you are returned to the upload screen. After a successful parse you are taken to the Cleaning step before validation runs.
+For workbook input, review the detected file metadata and import preview first. Populated columns that are unmapped or mapped more than once block processing until you map or explicitly ignore them. PanoReady converts the workbook to STIX XML without executing macros.
+
+The app then parses the XML into student records. A malformed or unsupported document produces an error on the upload screen. After a successful parse, the workflow opens the optional cleaning step before validation runs.
 
 ---
 
@@ -104,7 +106,8 @@ A READY / BLOCKED badge in the top-right corner reflects the overall gate state:
 
 | State | Meaning |
 |---|---|
-| `READY` | No blocking errors found; file can proceed to download. |
+| `READY` | No blocking errors or review warnings were found. |
+| `REVIEW_REQUIRED` | No blocking errors remain, but one or more warnings require review. Informational Canadian area-code policy findings do not produce this state. |
 | `BLOCKED` | One or more errors are present; the file should not be submitted without review. |
 | `PENDING` | Validation has not yet run. |
 
@@ -198,7 +201,7 @@ If blocking errors remain after fixes (gate is still BLOCKED), a warning banner 
 
 The Download screen provides the final outputs.
 
-**Gate banner:** Prominently shows READY or BLOCKED.
+**Gate banner:** Shows `READY`, `REVIEW_REQUIRED`, or `BLOCKED` based on the latest validation result.
 
 **Summary stats:**
 
@@ -211,7 +214,18 @@ The Download screen provides the final outputs.
 | File | Contents |
 |---|---|
 | `{original-filename}_validated.xml` | The cleaned XML file with all staged fixes written in. |
+| `{original-filename}_validated.zip` | The validated XML in an optional AES-256 encrypted ZIP. Passwords must contain at least eight characters and are not saved. |
 | `{original-filename}_issue_report.csv` | A CSV audit log of every issue found, including whether it was fixed and what the new value is. |
+| `{original-filename}_pretty.xml` | A reformatted copy for easier inspection, not for submission. |
+| `{original-filename}_all_students.csv` | All extracted student rows. |
+| `{original-filename}_filtered_students.csv` | Students in `GR7` or `GR8` whose birth year is 2012 or 2013. This built-in filter is fixed. |
+| `{original-filename}_school_counts.csv` | Student counts grouped by school name and birth year. |
+| `{original-filename}_grade_counts.csv` | Student counts grouped by school name and grade. |
+| `{original-filename}_report.xlsx` | The four preceding student and summary datasets as separate worksheets. |
+
+The **Filter & Custom Report** section can narrow the latest validated records by school, grade, gender, and age. It downloads school-summary, age-group, and issue CSVs for the current selection. Records with an unparseable birth date are not excluded by the age range.
+
+The pretty-print download parses and serializes the XML, so it can change whitespace, comments, processing instructions, and empty-tag formatting. Keep the validated XML as the submission-oriented output.
 
 **Issue report CSV columns:**
 
@@ -275,7 +289,7 @@ applyValidationFixes(xml, fixes)  ← lib/validator.ts
 cleanedXml + validateXml(cleanedXml)  ← revalidation pass
     │
     ▼
-Download cleanedXml + generateIssueReportCsv()
+Download validated/formatted XML, reports, or an encrypted ZIP
 ```
 
 ---

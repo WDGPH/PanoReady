@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 
-PanoReady is a browser-based tool for validating, cleaning, comparing, and exporting Ontario school enrolment data in STIX XML format. All record processing happens on your device; files are not uploaded to a server.
+PanoReady is a browser-based tool with two workflows for preparing Ontario school enrolment data in STIX XML format. All record processing happens on your device; files are not uploaded to a server.
 
 Built by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/).
 
@@ -13,11 +13,8 @@ Built by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/)
 
 | Workflow | Description |
 |---|---|
-| **Validate & Fix** | Preview workbook imports, validate metadata and records, apply reviewed fixes, reconcile the result, and export XML and reports. The final status remains `REVIEW_REQUIRED` until the official XSD is available. |
-| **Clean XML** | Normalize phone numbers and unit fields and review address problems. |
-| **Export Reports** | Export student data, school and grade summaries, filtered CSVs, and an Excel workbook. |
-| **Pretty Print** | Reformat XML with consistent indentation. |
-| **Compare Files** | Compare two STIX snapshots and review record, field, school, and transfer changes. |
+| **Validate & Fix** | Preview workbook imports, apply optional cleaning mappings, validate metadata and records, review fixes, revalidate, and download XML, audit files, formatted XML, and reports. |
+| **Compare Files** | Compare previous and current STIX snapshots; review record, field, school, and transfer changes; and export the reviewed current XML and comparison logs. |
 
 PanoReady accepts STIX XML and Excel macro-enabled workbook (`.xlsm`) inputs. Validated and compared XML can optionally be downloaded in an AES-256 password-protected ZIP archive.
 
@@ -71,7 +68,7 @@ Export the built-in rules from the **Validation ruleset** menu, edit the JSON, a
 
 ## Privacy and security
 
-PanoReady performs file parsing, validation, cleaning, comparison, and generation in the browser. Do not attach real student data or other sensitive information to public issues. Please report vulnerabilities according to the [security policy](SECURITY.md).
+PanoReady performs file parsing, validation, cleaning, comparison, and output generation in the browser. Do not attach real student data or other sensitive information to public issues. Please report vulnerabilities according to the [security policy](SECURITY.md).
 
 ## Contributing
 
