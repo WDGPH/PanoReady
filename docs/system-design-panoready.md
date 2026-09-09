@@ -10,7 +10,7 @@ PanoReady is a browser-based utility for preparing Ontario school-enrollment dat
 
 The application has no backend, accounts, upload endpoint, or server-side data store. Parsing, normalization, validation, XML serialization, and file generation run in the user’s browser. This is the primary privacy boundary: source records remain on the user’s device unless the user chooses to download or share an output.
 
-The current readiness limitation is deliberate: the authoritative `studentuploaddata.xsd` is not available in the supplied workbook or from an authoritative public source. Therefore, files without implemented validation errors remain `REVIEW_REQUIRED` with `XSD_SCHEMA_UNAVAILABLE` until the schema and accepted-file fixtures are supplied.
+The authoritative `studentuploaddata.xsd` is not available in the supplied workbook or from an authoritative public source. The current runtime records `xsdValidated: false`; its gate reflects implemented findings rather than authoritative schema conformance.
 
 ## 2. Goals and non-goals
 
@@ -37,11 +37,8 @@ The repository describes operational users who prepare school enrollment files b
 
 | Workflow | Input | Processing | Output |
 |---|---|---|---|
-| Validate & Fix | STIX XML or canonical workbook intake | Structure, required fields, controlled values, formats, duplicates, safe corrections, revalidation | Cleaned XML and issue report CSV |
-| Clean XML | STIX XML | Phone formatting, unit standardization, street-number review | Cleaned XML |
-| Export Reports | STIX XML | Student extraction, filtering, school/grade aggregation | CSV files and Excel workbook |
-| Pretty Print | STIX XML | Consistent indentation | Formatted XML |
-| Compare Files | Two STIX snapshots | Record, field, and school-level change detection | On-screen comparison and exportable results |
+| Validate & Fix | STIX XML or workbook intake | Optional mapping cleanup, structure and field validation, reviewed corrections, revalidation, formatting, filtering, and report generation | Validated/formatted XML, issue and summary reports, Excel workbook, optional encrypted ZIP |
+| Compare Files | Two STIX XML or workbook snapshots | Record, field, school, and transfer change detection with review decisions and corrections | Comparison logs and reviewed full or school-scoped XML, optional encrypted ZIP |
 
 ## 4. Architecture
 
@@ -108,7 +105,7 @@ Macro execution and formula execution are disabled. Local resource limits includ
 | `lib/excel.ts` | Workbook metadata discovery, canonical header mapping, lookup extraction, normalization, and import preview |
 | `lib/canonical.ts` | Namespace-tolerant STIX parsing into canonical metadata, schools, students, guardians, addresses, phones, and provenance |
 | `lib/validator.ts` | XML/canonical validation, issue generation, gate calculation, fix application, and CSV reports |
-| `lib/cleaner.ts` | Phone and address cleanup, review updates, and pretty printing |
+| `lib/cleaner.ts` | XML pretty printing and shared unit normalization helper |
 | `lib/stixExport.ts` | Structure-preserving XML corrections and school-scoped XML extraction |
 | `lib/compare.ts` | Comparison of current and prior STIX snapshots |
 | `lib/pullInfo.ts` | Student extraction and report aggregation |
@@ -124,7 +121,7 @@ The main in-memory contracts are:
 - `CanonicalStudent`: identity fields, OEN, grade, class, gender, birth date, guardians, address, phone, and provenance.
 - `ValidationIssue`: severity, field/record context, message, suggested fix, auto-fixability, rule ID, and location.
 - `AppliedFix`: issue/record/field correlation, old/new values, rule ID, and timestamp.
-- `ValidationResult`: issues, records, school/student counts, and gate (`READY`, `BLOCKED`, `PENDING`, or the implemented `REVIEW_REQUIRED` limitation).
+- `ValidationResult`: issues, records, school/student counts, XSD-validation status, and gate (`READY`, `REVIEW_REQUIRED`, or `BLOCKED`; the type also reserves `READY_WITH_WARNINGS` and `PENDING`).
 
 The source profile and canonical upload schemas are versioned JSON Schema artifacts. The canonical model is the integration boundary between source formats and downstream validation/export behavior.
 
@@ -139,9 +136,9 @@ Safe transformations include whitespace trimming, known code/alias normalization
 The gate is intentionally explicit:
 
 - `BLOCKED`: at least one blocking validation error remains.
-- `READY`: all required validation prerequisites pass; enabling this state also requires authoritative XSD validation and accepted-file tests.
+- `READY`: no implemented errors or review warnings remain. The current result can still have `xsdValidated: false`.
 - `PENDING`: validation has not completed.
-- `REVIEW_REQUIRED`: implemented checks pass, but authoritative XSD validation is unavailable.
+- `REVIEW_REQUIRED`: no blocking errors remain, but one or more review warnings remain.
 
 Failures should be readable and local: invalid XML, unexpected root/namespace, unsupported entities, oversized input, missing required values, invalid controlled values, duplicate singleton elements, and ambiguous values are surfaced as actionable diagnostics.
 
@@ -163,7 +160,7 @@ Failures should be readable and local: invalid XML, unexpected root/namespace, u
 | Structure-preserving XML edits | Retains fields the app does not understand | DOM path matching must remain carefully tested |
 | Deterministic-only auto-fixes | Prevents silent data corruption | More manual review for ambiguous cases |
 | Local custom rulesets | Supports board/PHU variation without a backend | Ruleset sharing and governance are user-managed |
-| Conservative readiness gate | Prevents overstating compliance without the official XSD | Users cannot receive final `READY` status until the dependency is supplied |
+| Explicit XSD status separate from the gate | Makes the missing authoritative check visible without blocking local validation work | Operators must understand that `READY` currently means only the implemented checks passed |
 
 ## 12. Testing and verification
 
@@ -175,7 +172,7 @@ Recommended release checks:
 2. Add golden-file tests for accepted and rejected STIX/XML and workbook inputs.
 3. Verify source → canonical → serialized → reparsed counts reconcile.
 4. Exercise upload errors, filters, safe bulk fixes, manual corrections, revalidation, gate transitions, downloads, and comparison flows.
-5. When supplied, run authoritative XSD validation and accepted-file compatibility tests before enabling `READY`.
+5. When supplied, add authoritative XSD validation and accepted-file compatibility tests and define how failures affect the gate.
 
 ## 13. Risks and open decisions
 
@@ -187,4 +184,4 @@ Recommended release checks:
 
 ## 14. Definition of done
 
-PanoReady is complete for the current browser-only scope when a user can locally intake a supported workbook or STIX XML file, inspect diagnostics, apply safe fixes and explicit manual corrections, revalidate, and download cleaned XML plus transparent reports without any source data leaving the browser. Final `READY` status remains contingent on the authoritative XSD and compatibility fixtures.
+PanoReady is complete for the current browser-only scope when a user can locally intake a supported workbook or STIX XML file, inspect diagnostics, apply safe fixes and explicit manual corrections, revalidate, and download corrected XML plus transparent reports without any source data leaving the browser. Authoritative XSD conformance remains outside the current readiness guarantee.

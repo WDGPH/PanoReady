@@ -380,7 +380,7 @@ Flags student records where the combination of `FirstName + LastName + BirthDate
 
 ## Custom Rulesets
 
-The allowed values, field lengths, patterns, and aliases that drive these rules are configurable. You can create board-specific rulesets — no code changes required — using the **Validation ruleset** dropdown in the Validate & Fix or Reports workflow.
+The allowed values, field lengths, patterns, and aliases that drive these rules are configurable. You can create board-specific rulesets without code changes by using the **Validation ruleset** control in **Validate & Fix**.
 
 See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, including how each ruleset field maps to the rule IDs above.
 

@@ -20,4 +20,4 @@ PanoReady now routes spreadsheet and XML intake through one source-independent s
 
 `/home/jovyan/Template Aug2026.xlsm` contains only a schema-location reference to `studentuploaddata.xsd`; it does not contain that file or an embedded equivalent, and its VBA does not validate against an XSD. The schema is also not publicly discoverable from an authoritative Ontario source.
 
-Consequently, a file with no implemented validation errors receives `REVIEW_REQUIRED` with `XSD_SCHEMA_UNAVAILABLE`. Once WDGPH supplies the authoritative schema, browser-local XSD validation and golden accepted-file tests remain necessary before enabling `READY`.
+The runtime records `xsdValidated: false`, but the current gate is based on implemented findings: errors produce `BLOCKED`, review warnings produce `REVIEW_REQUIRED`, and a file without either produces `READY`. `READY` therefore means that the checks implemented by PanoReady passed; it does not claim authoritative XSD conformance. Once WDGPH supplies the schema, browser-local XSD validation and golden accepted-file tests should be added.
