@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 
-export default function NavBar() {
+export default function NavBar({ showPrivacy = true }: { showPrivacy?: boolean }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -16,7 +16,7 @@ export default function NavBar() {
             About
           </Link>
         </nav>
-        <span className="privacy">Files stay in this browser</span>
+        {showPrivacy && <span className="privacy">Files stay in this browser</span>}
       </div>
     </header>
   );

@@ -102,7 +102,7 @@ export interface ComparisonSchoolTransfer {
 
 export type ComparisonSignal = "stable" | "moderate" | "high";
 
-export interface StixComparison {
+export interface STIXComparison {
   previousFileName: string;
   currentFileName: string;
   currentXml: string;

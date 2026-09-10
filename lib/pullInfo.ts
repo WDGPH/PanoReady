@@ -1,10 +1,10 @@
 /**
  * Browser-native port of pull_info.py
- * Reshapes StudentRecord[] (parseStixXml, lib/validator.ts) → Student records → filtered/summarized datasets
+ * Reshapes StudentRecord[] (parseSTIXXml, lib/validator.ts) → Student records → filtered/summarized datasets
  */
 
 import type { Student, ExportResult, SchoolCount, GradeCount, StudentRecord } from "./types";
-import { parseStixXml } from "./validator";
+import { parseSTIXXml } from "./validator";
 
 export function birthYearFromDate(birthDate: string): number | null {
   const match = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -27,7 +27,7 @@ export function studentFromRecord(record: StudentRecord): Student {
 }
 
 export function parseXml(xmlText: string): Student[] {
-  return parseStixXml(xmlText).map(studentFromRecord);
+  return parseSTIXXml(xmlText).map(studentFromRecord);
 }
 
 export function filterStudents(students: Student[]): Student[] {

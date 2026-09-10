@@ -3,7 +3,7 @@ import { test } from "vitest";
 import * as XLSX from "xlsx";
 import { flattenCanonicalStudent, parseCanonicalXml, serializeCanonicalXml } from "../lib/canonical";
 import { importWorkbook } from "../lib/excel";
-import { applyValidationFixes, parseStixXml, validateXml } from "../lib/validator";
+import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
 import { standardizeUnit } from "../lib/cleaner";
 
 const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-1234</ContactPhone><ContactEmail>analyst@example.ca</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
@@ -312,8 +312,8 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
 });
 
 test("fixes operate through the canonical model for default-namespace XML", () => {
-  const records = parseStixXml(xml());
+  const records = parseSTIXXml(xml());
   assert.equal(records[0].fields.FirstName, "Ada");
   const fixed = applyValidationFixes(xml(), [{ issueId: "manual", recordId: "school0:student0", field: "FirstName", oldValue: "Ada", newValue: "Augusta", ruleId: "MANUAL", appliedAt: 1 }]);
-  assert.equal(parseStixXml(fixed)[0].fields.FirstName, "Augusta");
+  assert.equal(parseSTIXXml(fixed)[0].fields.FirstName, "Augusta");
 });
