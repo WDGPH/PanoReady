@@ -1,38 +1,43 @@
 "use client";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, RefreshCw, Wand2 } from "lucide-react";
+import { ArrowRight, RefreshCw, Wand2 } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 import { defaultRules } from "@/lib/rulesets";
-import type { AppliedFix, ValidateSession, ValidationSeverity } from "@/lib/types";
+import type { AppliedFix, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
 import { guardianRelationshipContext, suggestedAddressDraft } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
+import { issueTypeLabel, matchesReviewFilter } from "./overview";
+import type { ReviewFilter } from "./overview";
 
 // ─── ValidateFixView ──────────────────────────────────────────────────────────
 // Screen 3: Fix Data
 
 export default function FixView({
   session,
-  onBack,
   onApply,
+  filter = {},
+  onClearFilter,
 }: {
   session: ValidateSession;
-  onBack: () => void;
   onApply: (fixes: AppliedFix[]) => void;
+  filter?: ReviewFilter;
+  onClearFilter: () => void;
 }) {
   const records = session.initialResult.records;
   const rules = session.validationRules ?? defaultRules;
-  // Address fixes already staged and applied from the Issue Review page arrive via session.fixes;
-  // don't re-offer those issues here, and fold the fixes back in unchanged when this page applies its own.
+  // Retain previously applied fixes when revisiting this step.
   const resolvedIssueIds = new Set(session.fixes.map((f) => f.issueId));
-  const issues = session.initialResult.issues.filter((issue) => !resolvedIssueIds.has(issue.id));
+  const recordSchools = new Map(records.map(record => [record.id, record.fields.SchoolNumber]));
+  const issues = session.initialResult.issues.filter((issue) => !resolvedIssueIds.has(issue.id)
+    && matchesReviewFilter(issue, filter, recordSchools.get(issue.recordId ?? "") ?? issue.schoolNumber ?? ""));
   const addressIssues = issues.filter((issue) => issue.repairProposal?.kind === "address" && issue.recordId);
 
   // pending: issueId → new value. A present empty value is an intentional removal.
   const [pending, setPending] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const issue of issues) {
-      if (!issue.repairProposal && issue.autoFixable && issue.suggestedFix !== undefined) {
+      if (!issue.repairProposal && issue.ruleId !== "EMPTY_GUARDIAN" && issue.autoFixable && issue.suggestedFix !== undefined) {
         init[issue.id] = issue.suggestedFix;
       }
     }
@@ -42,31 +47,34 @@ export default function FixView({
     Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, suggestedAddressDraft(issue, records)])),
   );
   const [selectedAddressRepairs, setSelectedAddressRepairs] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, issue.repairProposal!.confidence === "safe"])),
+    Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, false])),
   );
 
-  const [onlyFixable, setOnlyFixable] = useState(true);
-  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("error");
+  const [removeGuardians, setRemoveGuardians] = useState(false);
+  const emptyGuardians = issues.filter(issue => issue.ruleId === "EMPTY_GUARDIAN" && issue.recordId && issue.field);
+  const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
 
-  const visibleIssues = issues
-    .filter(i => !i.repairProposal)
-    .filter(i => !onlyFixable || i.autoFixable || i.field)
-    .filter(i => severityFilter === "all" || i.severity === severityFilter);
-  const visibleAddressIssues = addressIssues.filter(i => severityFilter === "all" || i.severity === severityFilter);
+  const isAutomatic = (issue: ValidationIssue) => !issue.repairProposal && (issue.autoFixable || issue.ruleId === "EMPTY_GUARDIAN");
+  const groups = [
+    { label: "Automatic fixes", items: issues.filter(isAutomatic), automatic: true },
+    { label: "Needs review", items: issues.filter(issue => !isAutomatic(issue)), automatic: false },
+  ];
 
   const autoFillAll = () => {
     const next: Record<string, string> = { ...pending };
     for (const issue of issues) {
-      if (!issue.repairProposal && issue.autoFixable && issue.suggestedFix !== undefined) {
+      if (!issue.repairProposal && issue.ruleId !== "EMPTY_GUARDIAN" && issue.autoFixable && issue.suggestedFix !== undefined) {
         next[issue.id] = issue.suggestedFix;
       }
     }
     setPending(next);
-    setSelectedAddressRepairs(Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, issue.repairProposal!.confidence === "safe"])));
+    setRemoveGuardians(true);
+
   };
 
   const clearAll = () => {
     setPending({});
+    setRemoveGuardians(false);
     setSelectedAddressRepairs({});
   };
 
@@ -74,7 +82,7 @@ export default function FixView({
     const fixes: AppliedFix[] = [];
     const now = Date.now();
     for (const issue of issues) {
-      if (issue.repairProposal) continue;
+      if (issue.repairProposal || issue.ruleId === "EMPTY_GUARDIAN") continue;
       const newValue = pending[issue.id];
       // A staged blank is an intentional correction, particularly when
       // removing an invalid phone. Only untouched fields are skipped.
@@ -115,6 +123,9 @@ export default function FixView({
         });
       }
     }
+    if (removeGuardians) for (const issue of emptyGuardians) {
+      fixes.push({ issueId: issue.id, recordId: issue.recordId!, field: issue.field!, oldValue: "Empty Guardian placeholder", newValue: "", ruleId: issue.ruleId, appliedAt: now });
+    }
     onApply([...session.fixes, ...fixes]);
   };
 
@@ -126,37 +137,31 @@ export default function FixView({
     if (!record || !draft) return count;
     return count + ADDRESS_REPAIR_FIELDS.filter((field) => (draft[field] ?? "") !== (record.fields[field] ?? "")).length;
   }, 0);
-  const pendingCount = Object.keys(pending).length + addressChangeCount;
-  const fixableCount = issues.filter(i => i.autoFixable).length;
+  const pendingCount = Object.keys(pending).length + addressChangeCount + (removeGuardians ? emptyGuardians.length : 0);
 
   return (
-    <main style={{ flex: 1, maxWidth: 960, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
-      <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
-        <ArrowLeft size={13} /> Back to Issues
-      </button>
+    <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Fix Data</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Review corrections</h1>
           <p style={{ color: "var(--color-text-secondary)", margin: 0, fontSize: 13 }}>
-            {fixableCount} auto-fixable issues · {pendingCount} fixes staged
+            {pendingCount} changes selected
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={clearAll} className="btn btn-ghost" style={{ fontSize: 12, padding: "6px 12px" }}>Clear All</button>
           <button onClick={autoFillAll} className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px", gap: 5 }}>
-            <Wand2 size={13} /> Auto-fill All Fixable
+            <Wand2 size={13} /> Fill automatic fixes
           </button>
         </div>
       </div>
 
-      {/* Bulk action info */}
-      <div style={{ borderLeft: "2px solid var(--color-info-text)", padding: "6px 0 6px 14px", marginBottom: 20, fontSize: 12, color: "var(--color-text-secondary)" }}>
-        <strong style={{ color: "var(--color-info-text)" }}>Bulk-safe fixes</strong> are pre-filled automatically: whitespace trimming, grade/gender code normalization, deterministic date reformatting.
-        Manual fields require you to type a correction. Use “Clear value” when an existing value should be removed.
-      </div>
-
       {/* Filters */}
+      {Object.keys(filter).length > 0 && <div className="review-filter">
+        <span>{filter.schoolNumber !== undefined ? (filter.schoolNumber ? `School ${filter.schoolNumber}` : "File / unassigned") : filter.ruleId ? issueTypeLabel(filter.ruleId, filter.field) : "Blocking errors"} · {issues.length} issues</span>
+        <button className="btn btn-ghost" title="Clear the filter and reset selections" onClick={onClearFilter}>Show all issues</button>
+      </div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", marginBottom: 14 }}>
         <select
           className="input"
@@ -169,18 +174,28 @@ export default function FixView({
           <option value="warning">Warnings only</option>
           <option value="info">Info only</option>
         </select>
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer" }}>
-          <input type="checkbox" checked={onlyFixable} onChange={e => setOnlyFixable(e.target.checked)} />
-          Show only editable issues (fields with suggested fixes or manual edits)
-        </label>
+
       </div>
 
+      {groups.map(group => {
+        const visible = group.items.filter(issue => severityFilter === "all" || issue.severity === severityFilter);
+        const visibleIssues = visible.filter(issue => !issue.repairProposal && issue.ruleId !== "EMPTY_GUARDIAN");
+        const visibleAddressIssues = visible.filter(issue => issue.repairProposal && issue.recordId);
+        const visibleGuardians = visible.filter(issue => issue.ruleId === "EMPTY_GUARDIAN");
+        return <section key={group.label} aria-label={group.label} className="fix-group">
+          <h2>{group.label} <span className="optional-label">({group.items.length})</span></h2>
+          {group.automatic && group.items.length > 0 && <p className="cleaning-description">Review the selected corrections before applying.</p>}
+          {visible.length === 0 && <p className="cleaning-description">{group.items.length ? "No issues match this filter." : "No issues."}</p>}
+          {visibleGuardians.length > 0 && <label className="guardian-removal">
+            <input type="checkbox" checked={removeGuardians} onChange={event => setRemoveGuardians(event.target.checked)} />
+            Remove {emptyGuardians.length} empty Guardian placeholder{emptyGuardians.length === 1 ? "" : "s"}
+          </label>}
       {visibleAddressIssues.length > 0 && (
         <section style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
             <div>
               <h2 style={{ margin: "0 0 3px", fontSize: 16 }}>Address repairs</h2>
-              <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: 11 }}>Review the complete address and apply coordinated field changes without returning to the source workbook.</p>
+
             </div>
             <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{visibleAddressIssues.length} address{visibleAddressIssues.length === 1 ? "" : "es"}</span>
           </div>
@@ -206,7 +221,7 @@ export default function FixView({
                   onSelectedChange={(selected) => setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: selected }))}
                   onReset={() => {
                     setAddressDrafts((current) => ({ ...current, [proposal.id]: suggestedAddressDraft(issue, records) }));
-                    setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: proposal.confidence === "safe" }));
+                    setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: false }));
                   }}
                 />
               );
@@ -234,13 +249,14 @@ export default function FixView({
                 const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                 const pendingVal = pending[issue.id] ?? "";
                 const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
-                const isEmptyGuardian = issue.ruleId === "EMPTY_GUARDIAN";
+
                 const guardianContext = guardianRelationshipContext(issue, record);
                 return (
                   <tr key={issue.id} style={{ opacity: !issue.field ? 0.5 : 1 }}>
                     <td><SeverityBadge severity={issue.severity} /></td>
                     <td style={{ fontSize: 12 }}>
                       <div style={{ fontWeight: 500 }}>{issue.studentName || "—"}</div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>{issue.message}</div>
                       <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{issue.schoolNumber}</div>
                       {guardianContext && (
                         <div style={{ color: "var(--color-text-secondary)", fontSize: 11, marginTop: 5, lineHeight: 1.45 }}>
@@ -260,9 +276,7 @@ export default function FixView({
                     <td style={{ minWidth: 200 }}>
                       {issue.field ? (
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          {isEmptyGuardian ? (
-                            <span style={{ color: "var(--color-info-text)", fontSize: 11, fontWeight: 600 }}>Remove empty Guardian placeholder</span>
-                          ) : isGuardianRelationship ? (
+                          {isGuardianRelationship ? (
                             <select
                               className="input"
                               value={pendingVal}
@@ -315,14 +329,14 @@ export default function FixView({
         </div>
       </div>}
 
+        </section>;
+      })}
+
       {/* Apply */}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onBack} className="btn btn-secondary">
-          <ArrowLeft size={14} /> Back
-        </button>
         <button onClick={applyFixes} className="btn btn-primary" style={{ gap: 6 }}>
           <RefreshCw size={14} />
-          Apply {pendingCount > 0 ? `${pendingCount} Fix${pendingCount !== 1 ? "es" : ""}` : "Fixes"} & Revalidate
+          Apply fixes and recheck{pendingCount > 0 ? ` (${pendingCount})` : ""}
           <ArrowRight size={14} />
         </button>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Download, Loader2 } from "lucide-react";
+import { ArrowRight, Download, Loader2 } from "lucide-react";
 import { applyValidationFixes, validateXml } from "@/lib/validator";
 import type { ValidateSession } from "@/lib/types";
 import { GateBadge } from "./ValidationBadges";
@@ -10,11 +10,9 @@ import { GateBadge } from "./ValidationBadges";
 
 export default function RevalidateView({
   session,
-  onBack,
   onContinue,
 }: {
   session: ValidateSession;
-  onBack: () => void;
   onContinue: (result: ValidateSession) => void;
 }) {
   const [result, setResult] = useState<ValidateSession | null>(null);
@@ -33,9 +31,9 @@ export default function RevalidateView({
 
   if (!result) {
     return (
-      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <main style={{ flex: 1, width: "100%", maxWidth: "var(--page-width)", margin: "0 auto", padding: "0 var(--page-gutter)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--color-text-secondary)" }}>
-          <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> Revalidating…
+          <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> Rechecking your changes…
         </div>
       </main>
     );
@@ -51,14 +49,11 @@ export default function RevalidateView({
   const resolvedCount = prev.issues.length - next.issues.length;
 
   return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
-      <button onClick={onBack} className="btn btn-ghost" style={{ marginBottom: 18, padding: "5px 9px", gap: 5, fontSize: 13 }}>
-        <ArrowLeft size={13} /> Back to Fix
-      </button>
+    <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
 
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Revalidation Results</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Results after corrections</h1>
           <p style={{ color: "var(--color-text-secondary)", margin: 0, fontSize: 13 }}>
             {fixCount} fix{fixCount !== 1 ? "es" : ""} applied · {resolvedCount > 0 ? `${resolvedCount} issue${resolvedCount !== 1 ? "s" : ""} resolved` : "No issues resolved"}
           </p>
@@ -156,9 +151,6 @@ export default function RevalidateView({
       )}
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onBack} className="btn btn-secondary">
-          <ArrowLeft size={14} /> Back to Fix
-        </button>
         <button onClick={() => onContinue(result)} className="btn btn-primary" style={{ gap: 6 }}>
           <Download size={14} /> Continue to Download
           <ArrowRight size={14} />

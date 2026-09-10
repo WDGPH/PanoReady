@@ -6,17 +6,9 @@
  * and passing them to applyValidationFixes() in validator.ts.
  */
 
-import type { StudentRecord, CleaningProfile, CleaningSummaryEntry, RulesProfile } from "./types";
+import type { StudentRecord, CleaningProfile, CleaningSummaryEntry } from "./types";
 
 // ─── Field picker helpers (shared by CleaningView and RulesetEditor) ──────────
-
-/** Maps field names to the RulesProfile key that holds their allowed values. */
-export const CLEANING_CONTROLLED_VOCAB: Record<string, keyof RulesProfile> = {
-  Grade:    "allowedGradeValues",
-  Gender:   "allowedGenderValues",
-  Language: "allowedLanguageValues",
-  Province: "allowedProvinceValues",
-};
 
 /** All STIX fields eligible for cleaning mappings. */
 export const ALL_CLEANABLE_FIELDS = [
@@ -29,16 +21,11 @@ export const ALL_CLEANABLE_FIELDS = [
 ];
 
 /**
- * Fields available for cleaning given the active rules.
- * Excludes controlled-vocab fields whose allowed-values are already populated.
+ * Cleaning precedes validation, including checks of controlled vocabularies.
+ * All supported fields remain available regardless of the selected checks.
  */
-export function getCleanableFields(rules: RulesProfile): string[] {
-  return ALL_CLEANABLE_FIELDS.filter((f) => {
-    const key = CLEANING_CONTROLLED_VOCAB[f] as keyof RulesProfile | undefined;
-    if (!key) return true;
-    const vals = rules[key] as string[];
-    return !vals || vals.length === 0;
-  });
+export function getCleanableFields(): string[] {
+  return [...ALL_CLEANABLE_FIELDS];
 }
 
 /**
@@ -80,6 +67,7 @@ export function applyCleaningProfile(
           : rawValue.toLowerCase() === raw.toLowerCase();
 
         if (matches) {
+          if (rawValue === canonical) break;
           newFields[field] = canonical;
           changed = true;
           const fieldCounts = counts.get(field)!;
