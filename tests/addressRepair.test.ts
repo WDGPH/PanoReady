@@ -5,7 +5,7 @@ import {
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
 } from "../lib/addressRepair";
-import { applyValidationFixes, parseStixXml, validateXml } from "../lib/validator";
+import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
 import type { AppliedFix } from "../lib/types";
 
 const address = (streetNumber: string, streetName = "", suffix = "") => ({
@@ -79,7 +79,7 @@ describe("address repair proposals", () => {
     }));
 
     const fixedXml = applyValidationFixes(xml, fixes);
-    const fields = parseStixXml(fixedXml)[0].fields;
+    const fields = parseSTIXXml(fixedXml)[0].fields;
     expect(fields.StreetNumber).toBe("51");
     expect(fields.StreetName).toBe("Keats");
     // Applying the compound repair must not disturb address fields the proposal never touched.

@@ -1,5 +1,5 @@
 import { parseXml } from "./pullInfo";
-import type { ComparisonFieldChange, ComparisonRecordChange, ComparisonSchoolChange, ComparisonSchoolTransfer, StixComparison, Student } from "./types";
+import type { ComparisonFieldChange, ComparisonRecordChange, ComparisonSchoolChange, ComparisonSchoolTransfer, STIXComparison, Student } from "./types";
 
 const COMPARED_FIELDS: Array<{ key: keyof Student; label: string }> = [
   { key: "SchoolName", label: "School" },
@@ -61,7 +61,7 @@ function studentName(student: Student): string {
   return [student.FirstName, student.MiddleName, student.LastName].filter(Boolean).join(" ") || "Unnamed student";
 }
 
-export function compareStixFiles(previousXml: string, currentXml: string, previousFileName: string, currentFileName: string): StixComparison {
+export function compareSTIXFiles(previousXml: string, currentXml: string, previousFileName: string, currentFileName: string): STIXComparison {
   const previous = parseXml(previousXml);
   const current = parseXml(currentXml);
   const previousByKey = indexStudents(previous);
