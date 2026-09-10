@@ -28,6 +28,13 @@ Open <http://localhost:3000>. The application uses the Next.js App Router and ru
 | `docs/` | MkDocs user and technical documentation |
 | `.github/` | Contribution templates and automation |
 
+### TypeScript file names
+
+- Use the lowercase names required by Next.js for route files, such as `page.tsx` and `layout.tsx`.
+- Use PascalCase for React component files and camelCase for non-component `.ts` modules.
+- Name tests after their module or subject and append `.test.ts`.
+- Write the STIX acronym as either `STIX` in PascalCase component/type names or `stix` in camelCase paths and filenames; do not use a mixed-case acronym.
+
 ## Checks
 
 Run the same application checks used in continuous integration:

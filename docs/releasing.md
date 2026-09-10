@@ -4,8 +4,8 @@ Use this checklist when preparing a public release. Files in the repository cann
 
 ## Repository setup
 
-- Confirm the existing MIT license and copyright holder are correct for the code being released.
-- Review tracked files and Git history for credentials, student records, and material that cannot be redistributed. Synthetic examples belong in tests; operational workbooks do not.
+- Confirm the MIT licence, copyright holder, and third-party systems and standards notice are correct for the code being released.
+- Review tracked files and Git history for credentials, student records, operational inputs, third-party reference assets, and other material that cannot be redistributed. Synthetic examples belong in tests; operational workbooks and reference documents do not.
 - Confirm the security-reporting link works and enable private vulnerability reporting in repository settings. Confirm the Code of Conduct contact route reaches someone responsible for the project.
 - Enable GitHub Pages with GitHub Actions as the source.
 - Protect `main` with pull-request review and required CI checks: `check (22)`, `check (24)`, and the documentation workflow's `build` job. Select their actual names after the first successful run.
