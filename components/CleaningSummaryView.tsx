@@ -18,17 +18,17 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
   const fields = Array.from(new Set(summary.map((e) => e.field)));
 
   return (
-    <main style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 840, margin: "0 auto", width: "100%", padding: "32px 24px 80px" }}>
+    <main style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: "var(--page-width)", margin: "0 auto", width: "100%", padding: "32px var(--page-gutter) 80px" }}>
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 6px" }}>
-          Cleaning applied
+          Preview cleaning changes
         </h2>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>
           {totalChanged === 0
-            ? "No records were changed — all mappings had zero matches."
-            : `${totalChanged} record field${totalChanged !== 1 ? "s" : ""} updated across ${fired.length} mapping${fired.length !== 1 ? "s" : ""}.`
+            ? "No values would change."
+            : `${totalChanged} record field${totalChanged !== 1 ? "s" : ""} will change across ${fired.length} mapping${fired.length !== 1 ? "s" : ""}.`
           }
         </p>
       </div>
@@ -43,7 +43,7 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
         }}>
           <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            {zeroMatches.length} mapping{zeroMatches.length !== 1 ? "s" : ""} matched no records.
+            {zeroMatches.length} mapping{zeroMatches.length !== 1 ? "s" : ""} would make no changes.
             Check spelling or the case-sensitivity setting.
           </span>
         </div>
@@ -74,7 +74,7 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
                       {entry.count === 0 ? (
                         <span style={{ fontSize: 11, color: "var(--color-warning-text)" }}>
                           <AlertTriangle size={11} style={{ verticalAlign: "middle", marginRight: 3 }} />
-                          no matches
+                          no changes
                         </span>
                       ) : (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--color-brand-400)", fontWeight: 600 }}>
@@ -117,7 +117,7 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
             background: "var(--color-brand-400)", color: "var(--color-black)",
           }}
         >
-          Continue to validation <ArrowRight size={15} />
+          Apply cleaning and validate <ArrowRight size={15} />
         </button>
       </div>
     </main>
