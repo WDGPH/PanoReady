@@ -8,7 +8,7 @@ import {
   ArrowRight, AlertTriangle, MapPin, School,
   Download, Users, BarChart3,
   ShieldX, Search, Filter, Wrench, RefreshCw,
-  ClipboardCheck, SlidersHorizontal, GitCompareArrows,
+  SlidersHorizontal, GitCompareArrows,
   Lock, X, FileCode, ChevronDown,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -16,7 +16,7 @@ import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
 import { prettyPrintXml } from "@/lib/cleaner";
 import { compareStixFiles } from "@/lib/compare";
 import { applyReviewCorrections, extractSchoolXml, safeExportPart } from "@/lib/stixExport";
-import { processExport } from "@/lib/pullInfo";
+import { birthYearFromDate, processExport, studentFromRecord } from "@/lib/pullInfo";
 import { downloadText, downloadBlob, toCsv } from "@/lib/utils";
 import {
   validateXml,
@@ -1998,35 +1998,41 @@ function ValidateDownloadView({
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedGrades,  setSelectedGrades]  = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
+  const [selectedBirthYears, setSelectedBirthYears] = useState<string[]>([]);
   const [minAge, setMinAge] = useState(0);
   const [maxAge, setMaxAge] = useState(99);
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
-  const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[] });
+  const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[], birthYears: [] as string[] });
 
   useEffect(() => {
     const records = result.records ?? [];
     const schoolsSet = new Set<string>();
     const gradesSet  = new Set<string>();
     const gendersSet = new Set<string>();
+    const birthYearsSet = new Set<string>();
     let ageMin = Infinity, ageMax = -Infinity;
     for (const r of records) {
       const sn = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim() || "(unknown)";
       schoolsSet.add(sn);
       if (r.fields.Grade)  gradesSet.add(String(r.fields.Grade).trim());
       if (r.fields.Gender) gendersSet.add(String(r.fields.Gender).trim());
+      const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
+      birthYearsSet.add(birthYear === null ? "(unknown)" : String(birthYear));
       const age = computeAge((r.fields.BirthDate || "").trim());
       if (age !== null) { if (age < ageMin) ageMin = age; if (age > ageMax) ageMax = age; }
     }
     const schools = Array.from(schoolsSet).sort();
     const grades  = Array.from(gradesSet).sort();
     const genders = Array.from(gendersSet).sort();
+    const birthYears = Array.from(birthYearsSet).sort((a, b) => a === "(unknown)" ? 1 : b === "(unknown)" ? -1 : Number(a) - Number(b));
     const lo = isFinite(ageMin) ? ageMin : 0;
     const hi = isFinite(ageMax) ? ageMax : 99;
     /* eslint-disable react-hooks/set-state-in-effect -- Reset all filter controls atomically when validation results change. */
-    setFilterOpts({ schools, grades, genders });
+    setFilterOpts({ schools, grades, genders, birthYears });
     setSelectedSchools(schools);
     setSelectedGrades(grades);
     setSelectedGenders(genders);
+    setSelectedBirthYears(birthYears);
     setAgeBounds([lo, hi]);
     setMinAge(lo);
     setMaxAge(hi);
@@ -2037,10 +2043,13 @@ function ValidateDownloadView({
     const sn     = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim() || "(unknown)";
     const grade  = (r.fields.Grade  || "").trim();
     const gender = (r.fields.Gender || "").trim();
+    const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
+    const birthYearOption = birthYear === null ? "(unknown)" : String(birthYear);
     const age    = computeAge((r.fields.BirthDate || "").trim());
     if (!selectedSchools.includes(sn)) return false;
     if (grade  && !selectedGrades.includes(grade))   return false;
     if (gender && !selectedGenders.includes(gender)) return false;
+    if (!selectedBirthYears.includes(birthYearOption)) return false;
     if (age !== null && (age < minAge || age > maxAge)) return false;
     return true;
   });
@@ -2055,6 +2064,11 @@ function ValidateDownloadView({
   const dlFilteredSchools = () => downloadText(generateSchoolSummaryCsv(filteredRecords), `${baseName}_filtered_schools.csv`, "text/csv");
   const dlFilteredAges    = () => downloadText(generateAgeGroupReportCsv(filteredRecords), `${baseName}_filtered_ages.csv`, "text/csv");
   const dlFilteredIssues  = () => downloadText(generateIssueReportCsv(filteredIssues, session.fixes), `${baseName}_filtered_issues.csv`, "text/csv");
+  const dlFilteredStudents = () => downloadText(
+    toCsv(filteredRecords.map(studentFromRecord) as unknown as Record<string, unknown>[]),
+    `${baseName}_filtered_students_custom.csv`,
+    "text/csv",
+  );
 
   return (
     <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
@@ -2267,6 +2281,14 @@ function ValidateDownloadView({
                 onAll={() => setSelectedGenders(filterOpts.genders)}
                 onNone={() => setSelectedGenders([])}
               />
+              <FilterCheckboxGroup
+                label="Birth year"
+                options={filterOpts.birthYears}
+                selected={selectedBirthYears}
+                onToggle={(v) => setSelectedBirthYears((s) => toggleItem(s, v))}
+                onAll={() => setSelectedBirthYears(filterOpts.birthYears)}
+                onNone={() => setSelectedBirthYears([])}
+              />
               <AgeRangeFilter
                 minBound={ageBounds[0]} maxBound={ageBounds[1]}
                 minAge={minAge} maxAge={maxAge}
@@ -2281,6 +2303,7 @@ function ValidateDownloadView({
                 <span style={{ marginLeft: 6 }}>of {result.studentCount} students match</span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={dlFilteredStudents} className="btn btn-primary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Students CSV</button>
                 <button onClick={dlFilteredSchools} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Schools CSV</button>
                 <button onClick={dlFilteredAges}    className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Age Groups CSV</button>
                 <button onClick={dlFilteredIssues}  className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 13px" }}><Download size={12} /> Issues CSV</button>

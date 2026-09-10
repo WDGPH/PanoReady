@@ -223,7 +223,7 @@ The Download screen provides the final outputs.
 | `{original-filename}_grade_counts.csv` | Student counts grouped by school name and grade. |
 | `{original-filename}_report.xlsx` | The four preceding student and summary datasets as separate worksheets. |
 
-The **Filter & Custom Report** section can narrow the latest validated records by school, grade, gender, and age. It downloads school-summary, age-group, and issue CSVs for the current selection. Records with an unparseable birth date are not excluded by the age range.
+The **Filter & Custom Report** section can narrow the latest validated records by school, grade, gender, birth year, and age. Birth year is derived from a valid `YYYY-MM-DD` birth date; missing or invalid dates appear as `(unknown)`. **Students CSV** downloads `{original-filename}_filtered_students_custom.csv` with the same student columns as the pre-generated `all_students.csv`, limited to the current selection. The section also downloads school-summary, age-group, and issue CSVs. Records with an unparseable birth date are not excluded by the age range, but can be included or excluded with the `(unknown)` birth-year option.
 
 The pretty-print download parses and serializes the XML, so it can change whitespace, comments, processing instructions, and empty-tag formatting. Keep the validated XML as the submission-oriented output.
 
