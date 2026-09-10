@@ -9,6 +9,8 @@ import {
 } from "../../lib/validator";
 import type { RulesProfile, StudentRecord, ValidationIssue } from "../../lib/types";
 import { defaultRules, getActiveRules } from "../../lib/rulesets";
+import { birthYearFromDate, studentFromRecord } from "../../lib/pullInfo";
+import { toCsv } from "../../lib/utils";
 import RulesetSelector from "../../components/RulesetSelector";
 
 function computeAge(birthDate: string): number | null {
@@ -321,6 +323,7 @@ export default function ReportsPage() {
     gate?: string;
   } | null>(null);
   const [filteredSummary, setFilteredSummary] = useState<{
+    studentCsv?: string;
     schoolCsv?: string;
     ageCsv?: string;
     issueCsv?: string;
@@ -330,6 +333,7 @@ export default function ReportsPage() {
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
+  const [selectedBirthYears, setSelectedBirthYears] = useState<string[]>([]);
   const [minAge, setMinAge] = useState(0);
   const [maxAge, setMaxAge] = useState(99);
   const [ageBounds, setAgeBounds] = useState<[number, number]>([0, 99]);
@@ -343,6 +347,7 @@ export default function ReportsPage() {
     schools: [] as string[],
     grades: [] as string[],
     genders: [] as string[],
+    birthYears: [] as string[],
   });
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -386,6 +391,7 @@ export default function ReportsPage() {
     const schoolsSet = new Set<string>();
     const gradesSet = new Set<string>();
     const gendersSet = new Set<string>();
+    const birthYearsSet = new Set<string>();
     let ageMin = Infinity;
     let ageMax = -Infinity;
 
@@ -394,6 +400,8 @@ export default function ReportsPage() {
       schoolsSet.add(sn || "(unknown)");
       if (r.fields.Grade) gradesSet.add(String(r.fields.Grade).trim());
       if (r.fields.Gender) gendersSet.add(String(r.fields.Gender).trim());
+      const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
+      birthYearsSet.add(birthYear === null ? "(unknown)" : String(birthYear));
 
       const age = computeAge((r.fields.BirthDate || "").trim());
       if (age !== null) {
@@ -405,15 +413,17 @@ export default function ReportsPage() {
     const schools = Array.from(schoolsSet).sort();
     const grades = Array.from(gradesSet).sort();
     const genders = Array.from(gendersSet).sort();
+    const birthYears = Array.from(birthYearsSet).sort((a, b) => a === "(unknown)" ? 1 : b === "(unknown)" ? -1 : Number(a) - Number(b));
 
     const resolvedMin = isFinite(ageMin) ? ageMin : 0;
     const resolvedMax = isFinite(ageMax) ? ageMax : 99;
 
     /* eslint-disable react-hooks/set-state-in-effect -- Reset all filter controls atomically when validation records change. */
-    setOptions({ schools, grades, genders });
+    setOptions({ schools, grades, genders, birthYears });
     setSelectedSchools(schools);
     setSelectedGrades(grades);
     setSelectedGenders(genders);
+    setSelectedBirthYears(birthYears);
     setAgeBounds([resolvedMin, resolvedMax]);
     setMinAge(resolvedMin);
     setMaxAge(resolvedMax);
@@ -430,11 +440,14 @@ export default function ReportsPage() {
         "(unknown)";
       const grade = (r.fields.Grade || "").trim();
       const gender = (r.fields.Gender || "").trim();
+      const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
+      const birthYearOption = birthYear === null ? "(unknown)" : String(birthYear);
       const age = computeAge((r.fields.BirthDate || "").trim());
 
       if (!selectedSchools.includes(sn)) return false;
       if (grade && !selectedGrades.includes(grade)) return false;
       if (gender && !selectedGenders.includes(gender)) return false;
+      if (!selectedBirthYears.includes(birthYearOption)) return false;
       if (age !== null && (age < minAge || age > maxAge)) return false;
       return true;
     });
@@ -448,12 +461,13 @@ export default function ReportsPage() {
 
     /* eslint-disable react-hooks/set-state-in-effect -- Keep downloadable CSV snapshots synchronized with the active filters. */
     setFilteredSummary({
+      studentCsv: toCsv(recs.map(studentFromRecord) as unknown as Record<string, unknown>[]),
       schoolCsv: generateSchoolSummaryCsv(recs),
       ageCsv: generateAgeGroupReportCsv(recs),
       issueCsv: generateIssueReportCsv(issues, []),
     });
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [rawRecords, rawIssues, selectedSchools, selectedGrades, selectedGenders, minAge, maxAge]);
+  }, [rawRecords, rawIssues, selectedSchools, selectedGrades, selectedGenders, selectedBirthYears, minAge, maxAge]);
 
   function download(filename: string, content?: string) {
     if (!content) return;
@@ -476,10 +490,13 @@ export default function ReportsPage() {
         "(unknown)";
       const grade = (r.fields.Grade || "").trim();
       const gender = (r.fields.Gender || "").trim();
+      const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
+      const birthYearOption = birthYear === null ? "(unknown)" : String(birthYear);
       const age = computeAge((r.fields.BirthDate || "").trim());
       if (!selectedSchools.includes(sn)) return false;
       if (grade && !selectedGrades.includes(grade)) return false;
       if (gender && !selectedGenders.includes(gender)) return false;
+      if (!selectedBirthYears.includes(birthYearOption)) return false;
       if (age !== null && (age < minAge || age > maxAge)) return false;
       return true;
     }).length;
@@ -513,7 +530,7 @@ export default function ReportsPage() {
         }}
       >
         Upload or paste STIX XML, validate, then filter by school, grade,
-        gender, and age to generate targeted CSV reports.
+        gender, birth year, and age to generate targeted CSV reports.
       </p>
 
       {/* File + XML input */}
@@ -720,6 +737,7 @@ export default function ReportsPage() {
                     setSelectedSchools(options.schools);
                     setSelectedGrades(options.grades);
                     setSelectedGenders(options.genders);
+                    setSelectedBirthYears(options.birthYears);
                     setMinAge(ageBounds[0]);
                     setMaxAge(ageBounds[1]);
                   }}
@@ -740,6 +758,7 @@ export default function ReportsPage() {
                     setSelectedSchools([]);
                     setSelectedGrades([]);
                     setSelectedGenders([]);
+                    setSelectedBirthYears([]);
                   }}
                   style={{
                     fontSize: 12,
@@ -781,6 +800,14 @@ export default function ReportsPage() {
                 onAll={() => setSelectedGenders(options.genders)}
                 onNone={() => setSelectedGenders([])}
               />
+              <CheckboxGroup
+                label="Birth year"
+                options={options.birthYears}
+                selected={selectedBirthYears}
+                onToggle={(v) => setSelectedBirthYears((s) => toggle(s, v))}
+                onAll={() => setSelectedBirthYears(options.birthYears)}
+                onNone={() => setSelectedBirthYears([])}
+              />
               <AgeRangeFilter
                 minBound={ageBounds[0]}
                 maxBound={ageBounds[1]}
@@ -816,6 +843,11 @@ export default function ReportsPage() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {[
+                {
+                  label: "Students CSV",
+                  file: "filtered_students_custom.csv",
+                  csv: filteredSummary.studentCsv,
+                },
                 {
                   label: "Issues CSV",
                   file: "filtered_issues.csv",

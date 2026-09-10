@@ -3,16 +3,31 @@
  * Reshapes StudentRecord[] (parseStixXml, lib/validator.ts) → Student records → filtered/summarized datasets
  */
 
-import type { Student, ExportResult, SchoolCount, GradeCount } from "./types";
+import type { Student, ExportResult, SchoolCount, GradeCount, StudentRecord } from "./types";
 import { parseStixXml } from "./validator";
 
+export function birthYearFromDate(birthDate: string): number | null {
+  const match = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(`${birthDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? year
+    : null;
+}
+
+export function studentFromRecord(record: StudentRecord): Student {
+  return {
+    ...record.fields,
+    BirthYear: birthYearFromDate(record.fields.BirthDate ?? ""),
+  } as unknown as Student;
+}
+
 export function parseXml(xmlText: string): Student[] {
-  return parseStixXml(xmlText).map((record) => {
-    const fields = record.fields;
-    const birthDate = fields.BirthDate ?? "";
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(birthDate) ? new Date(`${birthDate}T00:00:00Z`) : null;
-    return { ...fields, BirthYear: date && !Number.isNaN(date.getTime()) ? date.getUTCFullYear() : null } as unknown as Student;
-  });
+  return parseStixXml(xmlText).map(studentFromRecord);
 }
 
 export function filterStudents(students: Student[]): Student[] {
