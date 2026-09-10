@@ -8,7 +8,7 @@ import {
   ArrowRight, AlertTriangle, MapPin, School,
   Download, Users, BarChart3,
   ShieldX, Search, Filter, Wrench, RefreshCw,
-  ClipboardCheck, SlidersHorizontal, GitCompareArrows,
+  SlidersHorizontal, GitCompareArrows,
   Lock, X, FileCode, ChevronDown,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
