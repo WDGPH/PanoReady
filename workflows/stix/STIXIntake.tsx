@@ -1,29 +1,89 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, ChevronRight, FileText, Loader2 } from "lucide-react";
 import { compareSTIXFiles } from "@/lib/compare";
 import { importWorkbook, xlsmMetadata, CANONICAL_FIELDS } from "@/lib/excel";
 import type { XlsmMetadata, ColumnOverrides, CanonicalField } from "@/lib/excel";
 import { parseSTIXXml } from "@/lib/validator";
-import type { ImportPreview, RulesProfile, STIXComparison, StudentRecord, Workflow } from "@/lib/types";
-import { defaultRules, getActiveRules } from "@/lib/rulesets";
-import RulesetSelector from "@/components/RulesetSelector";
+import type { ImportPreview, STIXComparison, StudentRecord, Workflow } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 
 export interface ValidateWorkflowInput {
   xml: string;
   records: StudentRecord[];
   fileName: string;
-  validationRules: RulesProfile;
 }
 
 // ─── Workflows config ────────────────────────────────────────────────────────
 
 const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
-  { id: "validate", label: "Validate & Fix",  description: "Check required fields, code values, formats, and duplicates. Apply safe fixes, then download the result." },
+  { id: "validate", label: "Validate & Fix",  description: "Find STIX issues, review automatic corrections, and download your corrected file." },
   { id: "compare",  label: "Compare Files",   description: "Compare two files and inspect record, field, and school-level changes." },
 ];
+
+const FILE_ACCEPT = ".xml,.xls,.xlsm,text/xml,application/xml,application/vnd.ms-excel,application/vnd.ms-excel.sheet.macroEnabled.12";
+
+function FileDropZone({
+  id,
+  label,
+  emptyLabel,
+  file,
+  inputRef,
+  dragging,
+  onSelect,
+  onDrop,
+  onDraggingChange,
+}: {
+  id: string;
+  label?: string;
+  emptyLabel: string;
+  file: File | null;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  dragging: boolean;
+  onSelect: (target: HTMLInputElement) => void;
+  onDrop: (event: React.DragEvent) => void;
+  onDraggingChange: (dragging: boolean) => void;
+}) {
+  const helpId = `${id}-help`;
+
+  return (
+    <section className="file-field">
+      {label && <h2>{label}</h2>}
+      <input
+        id={id}
+        ref={inputRef}
+        type="file"
+        accept={FILE_ACCEPT}
+        aria-describedby={helpId}
+        onChange={(event) => onSelect(event.currentTarget)}
+        onInput={(event) => onSelect(event.currentTarget)}
+        hidden
+      />
+      <div
+        className={`file-dropzone${dragging ? " dragging" : ""}`}
+        onDrop={onDrop}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onDraggingChange(true);
+        }}
+        onDragLeave={() => onDraggingChange(false)}
+      >
+        <FileText className="file-dropzone-icon" size={34} strokeWidth={1.4} aria-hidden="true" />
+        <div className="file-dropzone-copy">
+          <p>{file?.name ?? emptyLabel}</p>
+          <span id={helpId}>
+            {file ? `${(file.size / 1024).toFixed(1)} KB · drop another file to change` : "or click Browse"}
+          </span>
+        </div>
+        <button type="button" className="file-browse" onClick={() => inputRef.current?.click()}>
+          Browse
+        </button>
+      </div>
+    </section>
+  );
+}
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 
@@ -44,11 +104,6 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const [xlsmPreview, setXlsmPreview] = useState<ImportPreview | null>(null);
   const [columnOverrides, setColumnOverrides] = useState<ColumnOverrides>({});
   const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
-  const [activeRules, setActiveRules] = useState<RulesProfile>(defaultRules);
-
-  useEffect(() => {
-    setActiveRules(getActiveRules());
-  }, []);
 
   const handleFile = useCallback((f: File) => {
     setError(null);
@@ -224,7 +279,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
       // workflow === "validate"
       // Parse records first; errors throw and are caught below.
       const parsed = parseSTIXXml(xmlText);
-      onValidate({ xml: xmlText, records: parsed, fileName: selectedFile.name, validationRules: activeRules });
+      onValidate({ xml: xmlText, records: parsed, fileName: selectedFile.name });
     } catch (err) {
       setError(`Processing failed: ${err instanceof Error ? err.message : String(err)}`);
       setProcessing(false);
@@ -234,88 +289,75 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const wLabel = workflow === "validate" ? "Validate & Fix" : "Compare Files";
 
   return (
-    <main style={{ flex: 1, display: "flex", justifyContent: "center", padding: "72px 24px 100px" }}>
-      <div className="rail-page" style={{ width: "100%", maxWidth: 620 }}>
-        <div className="rail" />
-
-        {/* Statement — the one decision on this page that isn't a workflow choice */}
-        <section className="beat">
-          <p className="eyebrow" style={{ marginBottom: 22 }}>Local file checks</p>
-          <h1 style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 500, fontSize: "clamp(34px,5.5vw,58px)", lineHeight: 1.08, letterSpacing: "-0.01em", margin: 0, maxWidth: 480, color: "var(--ink)" }}>
-            Check the file before submission.
-          </h1>
-        </section>
-
-        {/* Workflow — the tick on the spine registers the choice, nothing else needs to */}
-        <section className="beat">
-          <h2 className="beat-title">Workflow</h2>
+    <main className="intake-main">
+      <div className="intake-shell">
+        <header className="landing-intro" id="intro">
           <div>
+            <h1>Better data in.<br />Fewer problems later.</h1>
+          </div>
+          <p className="landing-lede">A workspace for preparing data for Panorama. Check school-enrolment files, review automatic corrections, and compare changes before import.</p>
+        </header>
+        <section id="tools" aria-label="Use the tool">
+        <h2 className="landing-tool-label">Use the tool</h2>
+        <header className="workflow-context">
+          <div className="workflow-tabs" role="group" aria-label="Workflow">
             {WORKFLOWS.map((w) => (
               <button
                 key={w.id}
-                onClick={() => setWorkflow(w.id)}
-                className={`wf-row${workflow === w.id ? " selected" : ""}`}
+                type="button"
+                aria-pressed={workflow === w.id}
+                onClick={() => {
+                  setWorkflow(w.id);
+                  setError(null);
+                }}
+                className={`workflow-tab${workflow === w.id ? " selected" : ""}`}
               >
-                <span className="wf-title">{w.label}</span>
-                <span className="wf-desc">{w.description}</span>
+                {w.label}
               </button>
             ))}
           </div>
-        </section>
+          <p>{WORKFLOWS.find((candidate) => candidate.id === workflow)?.description}</p>
+        </header>
 
-        {/* Ruleset — validate workflow only */}
-        {workflow === "validate" && (
-          <section className="beat">
-            <h2 className="beat-title">Ruleset</h2>
-            <RulesetSelector onRulesChange={setActiveRules} />
-          </section>
-        )}
-
-        {/* File — a niche the file belongs in, not a placeholder. One target:
-            click it to browse, or drag a file onto it. */}
-        <section className="beat">
-          <h2 className="beat-title">{workflow === "compare" ? "Previous file" : "File"}</h2>
-          <input
+        <div className={`file-fields${workflow === "compare" ? " compare" : ""}`}>
+          <FileDropZone
             id="xml-upload"
-            ref={inputRef}
-            type="file"
-            accept=".xml,.xlsm,text/xml,application/xml,application/vnd.ms-excel.sheet.macroEnabled.12"
-            aria-describedby="xml-upload-help"
-            onChange={(e) => handleNativeFileSelect(e.currentTarget)}
-            onInput={(e) => handleNativeFileSelect(e.currentTarget)}
-            style={{ display: "none" }}
-          />
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
+            label={workflow === "compare" ? "Previous file" : undefined}
+            emptyLabel="Drop an XML, XLS, or XLSM file here"
+            file={file}
+            inputRef={inputRef}
+            dragging={dragging}
+            onSelect={handleNativeFileSelect}
             onDrop={onDrop}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            className={`niche${dragging ? " dragging" : ""}`}
-          >
-            {file ? (
-              <>
-                <CheckCircle2 size={20} style={{ color: "var(--color-text-muted)", margin: "0 auto 16px" }} />
-                <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>{file.name}</p>
-                <p id="xml-upload-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {(file.size / 1024).toFixed(1)} KB · click, or drop another file, to change
-                </p>
-              </>
-            ) : (
-              <>
-                <span style={{ display: "block", fontSize: 20, color: "var(--color-text-muted)", marginBottom: 16 }}>↑</span>
-                <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>Drop your XML file here</p>
-                <p id="xml-upload-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  or click to browse your device
-                </p>
-              </>
-            )}
-          </button>
-        </section>
+            onDraggingChange={setDragging}
+          />
+
+          {workflow === "compare" && (
+            <FileDropZone
+              id="xml-upload-current"
+              label="Current file"
+              emptyLabel="Drop an XML, XLS, or XLSM file here"
+              file={currentFile}
+              inputRef={currentInputRef}
+              dragging={currentDragging}
+              onSelect={handleCurrentFileSelect}
+              onDrop={onCurrentDrop}
+              onDraggingChange={setCurrentDragging}
+            />
+          )}
+        </div>
+
+
+        <p className="intake-assurance">Files stay in your browser. You review changes before applying them.</p>
+
+        {(xlsmMeta || xlsmPreview || (workflow === "compare" && currentXlsmMeta)) && (
+          <details className="advanced-options">
+            <summary><ChevronRight size={16} aria-hidden="true" /> Workbook import settings</summary>
+            <div className="advanced-options-content">
 
         {xlsmMeta && (
-          <section className="beat">
-          <h2 className="beat-title">File details</h2>
+          <section className="advanced-section">
+          <h2>{workflow === "compare" ? "Previous file details" : "File details"}</h2>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
               Review or update these values before the workbook is converted to STIX XML.
             </p>
@@ -342,8 +384,8 @@ export default function STIXIntake({ onValidate, onCompare }: {
         )}
 
         {xlsmPreview && (
-          <section className="beat">
-            <h2 className="beat-title">Import preview</h2>
+          <section className="advanced-section">
+            <h2>Import preview</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 12 }}>
               <StatCard label="Worksheet" value={xlsmPreview.worksheet} />
               <StatCard label="Student rows" value={xlsmPreview.canonicalStudentCount} />
@@ -396,51 +438,9 @@ export default function STIXIntake({ onValidate, onCompare }: {
           </section>
         )}
 
-        {workflow === "compare" && (
-          <>
-          <section className="beat">
-            <h2 className="beat-title">Current file</h2>
-            <input
-              id="xml-upload-current"
-              ref={currentInputRef}
-              type="file"
-              accept=".xml,.xlsm,text/xml,application/xml,application/vnd.ms-excel.sheet.macroEnabled.12"
-              aria-describedby="xml-upload-current-help"
-              onChange={(e) => handleCurrentFileSelect(e.currentTarget)}
-              onInput={(e) => handleCurrentFileSelect(e.currentTarget)}
-              style={{ display: "none" }}
-            />
-            <button
-              type="button"
-              onClick={() => currentInputRef.current?.click()}
-              onDrop={onCurrentDrop}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentDragging(true); }}
-              onDragLeave={() => setCurrentDragging(false)}
-              className={`niche${currentDragging ? " dragging" : ""}`}
-            >
-              {currentFile ? (
-                <>
-                  <CheckCircle2 size={20} style={{ color: "var(--color-text-muted)", margin: "0 auto 16px" }} />
-                  <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>{currentFile.name}</p>
-                  <p id="xml-upload-current-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {(currentFile.size / 1024).toFixed(1)} KB · click, or drop another file, to change
-                  </p>
-                </>
-              ) : (
-                <>
-                  <span style={{ display: "block", fontSize: 20, color: "var(--color-text-muted)", marginBottom: 16 }}>↑</span>
-                  <p style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)", margin: "0 0 6px" }}>Drop the current XML file here</p>
-                  <p id="xml-upload-current-help" style={{ fontSize: 11, color: "var(--color-text-muted)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    or click to browse your device
-                  </p>
-                </>
-              )}
-            </button>
-          </section>
-
-          {currentXlsmMeta && (
-            <section className="beat">
-              <h2 className="beat-title">Current file details</h2>
+        {workflow === "compare" && currentXlsmMeta && (
+            <section className="advanced-section">
+              <h2>Current file details</h2>
               <p style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5, margin: "0 0 12px" }}>
                 Review or update these values before the current workbook is converted for comparison.
               </p>
@@ -464,29 +464,30 @@ export default function STIXIntake({ onValidate, onCompare }: {
                 ))}
               </div>
             </section>
-          )}
-          </>
+        )}
+
+            </div>
+          </details>
         )}
 
         {error && (
-          <section className="beat">
+          <section className="intake-error">
             <div style={{ borderLeft: "2px solid var(--color-error-text)", padding: "8px 0 8px 14px", display: "flex", alignItems: "center", gap: 9, color: "var(--color-error-text)", fontSize: 13 }}>
               <AlertCircle size={15} /> {error}
             </div>
           </section>
         )}
 
-        {/* Commit — the only other place verde appears: the keystone above the final act */}
-        <section className="beat">
-          <div className="keystone-rule" />
+        <section className="intake-action">
           <button onClick={run} disabled={processing} className="cta">
-            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : wLabel}
+            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : <>{wLabel}<ArrowRight size={16} /></>}
           </button>
         </section>
 
-        <p className="colophon" style={{ fontSize: 11 }}>
+        </section>
+        <footer className="intake-footer">
           Built by Wellington-Dufferin-Guelph Public Health · MIT License
-        </p>
+        </footer>
       </div>
     </main>
   );

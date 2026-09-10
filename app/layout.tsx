@@ -22,9 +22,9 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PanoReady | School Enrollment Data Cleaner",
+  title: "PanoReady | Panorama Import Toolbox",
   description:
-    "Clean, validate, and export STIX XML school enrollment files. All processing happens in your browser — data never leaves your device.",
+    "Tools for preparing data for Panorama. Validate school-enrolment files, review automatic corrections, and compare changes in your browser.",
 };
 
 export default function RootLayout({

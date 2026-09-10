@@ -247,12 +247,13 @@ export default function DownloadView({
   );
 
   return (
-    <main style={{ flex: 1, maxWidth: 780, width: "100%", margin: "0 auto", padding: "56px 24px 100px" }}>
+    <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
       <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 22, padding: "5px 9px", gap: 5, fontSize: 13 }}>
         <ArrowLeft size={13} /> Process another file
       </button>
 
       {/* Gate banner */}
+      <h1 style={{ fontSize: 22, margin: "0 0 24px" }}>Your corrected file</h1>
       <div style={{
         borderLeft: `2px solid ${gate === "READY" ? "var(--verde)" : "var(--color-error-text)"}`,
         padding: "6px 0 6px 22px",
@@ -272,7 +273,7 @@ export default function DownloadView({
           <div style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
             {gate === "READY"
               ? `No blocking errors · ${warningCount > 0 ? `${warningCount} warning${warningCount !== 1 ? "s" : ""} for review` : "All clear"}`
-              : needsReview ? "Canonical checks passed; official XSD validation is still required before submission."
+              : needsReview ? "STIX/Panorama checks passed; the remaining warnings require review before submission."
               : `${errorCount} blocking error${errorCount !== 1 ? "s" : ""} must be resolved before submission`}
           </div>
           <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 4 }}>

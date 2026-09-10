@@ -505,8 +505,9 @@ export default function ReportsPage() {
   return (
     <div
       style={{
-        padding: "24px 32px",
-        maxWidth: 1100,
+        padding: "24px var(--page-gutter)",
+        width: "100%",
+        maxWidth: "var(--page-width)",
         margin: "0 auto",
         color: "var(--color-text-primary)",
         fontFamily: "var(--font-sans)",

@@ -2,11 +2,11 @@
   --color-black: oklch(0% 0 0);
   --color-overlay: oklch(18% 0.01 80 / 0.55);
   --color-grid: oklch(100% 0 0 / 0.025);
-  --color-focus-ring: oklch(39% 0.08 155);
+  --color-focus-ring: var(--verde);
   --color-accent-amber: oklch(67% 0.14 75);
   --color-shadow: oklch(18% 0.01 80 / 0.14);
   --color-shadow-soft: oklch(18% 0.01 80 / 0.06);
-  --color-shadow-accent: oklch(39% 0.08 155 / 0.12);
+  --color-shadow-accent: oklch(39% 0.065 var(--olive-hue) / 0.12);
   --color-shadow-white: oklch(100% 0 0 / 0.5);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);

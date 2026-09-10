@@ -207,22 +207,21 @@ test("validateXml suggests deterministic fixes for aliasable, oversized, and ref
   assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
 });
 
-test("canonical XML Gender only accepts M/F/Unk/Other, matching the real 4-value schema enum", () => {
+test("canonical XML Gender accepts the configured four output values", () => {
   const genderXml = (gender: string) => xml().replace("<Gender>F</Gender>", `<Gender>${gender}</Gender>`);
   for (const gender of ["M", "F", "Unk", "Other"]) {
     const result = validateXml(genderXml(gender));
     assert.ok(!result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be accepted`);
   }
-  // X and N are valid choices in the template's data-entry dropdown, but the official
-  // export macro maps both to "Other" before writing XML — a compliant file should never
-  // contain a literal Gender of X or N, so the validator must still reject them.
+  // X and N are workbook-input aliases that normalize to Other. Canonical output
+  // must use one of the four configured values, so the validator rejects literals.
   for (const gender of ["X", "N", "Bogus"]) {
     const result = validateXml(genderXml(gender));
     assert.ok(result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be rejected`);
   }
 });
 
-test("Excel import maps Gender x/n to Other, matching the official export macro", () => {
+test("Excel import maps Gender x/n aliases to Other", () => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["First Name", "Last Name", "DOB", "Gender"],

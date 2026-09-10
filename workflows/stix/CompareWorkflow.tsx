@@ -120,7 +120,7 @@ export default function CompareWorkflow({ comparison, onStartOver }: { compariso
   };
 
   return (
-    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: "none", width: "100%", margin: 0, padding: 0 }}>
+    <main className="compare-results-main compare-dashboard" style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "24px var(--page-gutter)" }}>
       <button onClick={onStartOver} className="btn btn-ghost compare-back" style={{ marginBottom: 8, padding: "4px 8px", gap: 5, fontSize: 12 }}>
         <ArrowLeft size={13} /> Compare another pair
       </button>

@@ -19,7 +19,7 @@ export default function PanoReady() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <NavBar showPrivacy={false} />
+      <NavBar />
       {activeWorkflow.kind === "home" && (
         <STIXIntake
           onCompare={(comparison) => setActiveWorkflow({ kind: "compare", comparison })}
