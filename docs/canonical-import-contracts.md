@@ -2,9 +2,9 @@
 
 ## Status
 
-This is the PanoReady canonical contract, version `1.0.0`. The canonical workbook adapter, namespace-aware XML parser, layered validation, import diagnostics, deterministic serialization, and count reconciliation are implemented in the browser runtime. It is based on the inspected official STIX workbook, its VBA source, hidden XML mappings, controlled-value tables, and validation rules.
+This is the PanoReady canonical contract, version `1.0.0`. The canonical workbook adapter, namespace-aware XML parser, layered validation, import diagnostics, deterministic serialization, and count reconciliation are implemented in the browser runtime. The contract implements STIX/Panorama import requirements and adds defensive data-quality and reconciliation checks.
 
-It is not a replacement for the official `studentuploaddata.xsd`. The supplied official workbook references that filename but does not embed the schema or perform XSD validation. The current runtime can return `READY` when its implemented checks find no errors or review warnings, while still recording `xsdValidated: false`; this proposed contract recommends requiring authoritative XSD and accepted-file checks for a stronger readiness guarantee.
+The current runtime can return `READY` when its implemented checks find no errors or review warnings, while still recording `xsdValidated: false` because it does not run a separate schema-validation layer. PanoReady's contract covers required structure, controlled values, formats, reconciliation, and additional quality checks; compatibility must remain protected through synthetic accepted/rejected cases, round-trip tests, and submission testing.
 
 The machine-readable companions are:
 
@@ -31,7 +31,7 @@ Source bytes
   -> deterministic normalization
   -> validation and identity review
   -> STIX XML serialization
-  -> namespace/structure/XSD validation
+  -> namespace/structure/schema validation
   -> count and field reconciliation
   -> downloadable XML and audit report
 ```
@@ -81,7 +81,7 @@ CanonicalUpload
 - `batchId`, `schoolId`, and `recordId` MUST be opaque local identifiers. They MUST NOT be derived by exposing student data in logs or URLs.
 - A batch MUST contain at least one school.
 - A school MAY contain zero students while still being structurally valid, but an empty school MUST produce a diagnostic.
-- A student MAY have zero, one, or two guardians, matching the official template's two guardian groups.
+- A student MAY have zero, one, or two guardians under the STIX/Panorama import contract.
 - Missing source values MUST be represented as `null`, not invented defaults or placeholder text.
 - Raw source values MUST remain available through provenance until the session is discarded.
 - Unknown populated source columns MUST produce diagnostics and remain available for analyst review.
@@ -122,9 +122,9 @@ For an export-ready upload:
 - Contact Phone MUST be present and valid.
 - Contact Email MUST be present and syntactically valid.
 - Full Upload MUST be `YES` or `NO`.
-- A board number, when supplied, MUST meet the official template format until the XSD establishes a different contract.
+- A board number, when supplied, MUST meet the active STIX/Panorama profile format.
 - Every school MUST have a School Number containing no more than 100 characters.
-- School Name and board information MAY be omitted only when official policy permits it.
+- School Name and board information MAY be omitted only when the active submission policy permits it.
 
 The JSON Schema allows null metadata so an incomplete import can exist as a draft. The readiness validator MUST enforce the rules above before export.
 
@@ -137,12 +137,12 @@ For an export-ready student:
 - Birthdate MUST be a real ISO date in `YYYY-MM-DD` form and MUST NOT be in the future.
 - Gender MUST be present and canonical.
 - OEN MAY be absent. When present, it MUST contain exactly nine digits.
-- Grade MAY be absent under the official template contract, but a source or organization profile MAY require it.
+- Grade MAY be absent under the built-in contract, but a source or organization profile MAY require it.
 - Controlled fields MUST use values in the active validation profile.
 
-The final canonical Gender values are `F`, `M`, `Unk`, and `Other`. Raw `X` and `N` values are retained in provenance and normalize to `Other`, matching the inspected XML-generation macro.
+The final canonical Gender values are `F`, `M`, `Unk`, and `Other`. Raw `X` and `N` workbook-input aliases are retained in provenance and normalize to `Other`.
 
-The official template accepts names up to 100 characters in some VBA/Excel rules, while the existing PanoReady rules use smaller limits for some fields. Final limits MUST be reconciled with the XSD and submission-system behavior before this contract is declared authoritative.
+Field lengths MUST follow the active PanoReady ruleset and remain covered by submission compatibility tests.
 
 ### Name contract
 
@@ -164,7 +164,7 @@ A guardian contains:
 - Relationship; and
 - optional typed Phone.
 
-A guardian object SHOULD be created only when at least one guardian source field is populated. The inspected macro emits empty Guardian containers, while PanoReady currently omits them. The final serializer behavior MUST be decided using the official XSD.
+A guardian object SHOULD be created only when at least one guardian source field is populated. PanoReady omits empty Guardian containers and MUST cover that serializer behaviour with submission compatibility tests.
 
 Guardian relationships MUST be checked against the active relationship list when present.
 
@@ -185,7 +185,7 @@ The address contains:
 
 Address fields MUST remain nested under `Address`. They MUST NOT be treated as direct Student elements.
 
-Unit is limited to five characters by the workbook. Street Number is described as limited to six characters in workbook notes and existing PanoReady rules, although no direct Excel validation was found for it.
+The built-in PanoReady rules limit Unit to five characters and Street Number to six characters. Custom profiles MAY apply a different policy where the destination permits it.
 
 Province, street type, and street direction MUST be checked against their active controlled-value lists when present.
 
@@ -197,7 +197,7 @@ A phone contains:
 - optional extension; and
 - optional canonical type.
 
-The canonical number uses `999-999-9999`. Area-code and exchange first digits cannot be 0 or 1 under the workbook contract. An extension contains one through five digits and is serialized with lowercase `x` when producing the template-compatible XML text value.
+The canonical number uses `999-999-9999`. Area-code and exchange first digits cannot be 0 or 1 under the built-in contract. An extension contains one through five digits and is serialized with lowercase `x` in STIX XML text.
 
 The phone type, when present, MUST be one of:
 
@@ -366,7 +366,7 @@ The importer MUST NOT use a missing marker row as permission to interpret instru
 
 ## Controlled-value contract
 
-The initial official compatibility profile uses the ten controlled-value sets found in the workbook:
+The built-in STIX/Panorama compatibility profile uses ten controlled-value sets:
 
 - Grade
 - Gender
@@ -493,7 +493,7 @@ The serializer MUST:
 
 The serializer MAY use any namespace prefix, including the default namespace. Prefix choice MUST NOT affect validation or comparison.
 
-Before release, the desired element order and empty-container behavior MUST be verified against the official XSD. The hidden workbook mappings provide the initial ordering reference but are not sufficient proof of all schema rules.
+Element order and empty-container behaviour MUST remain covered by serializer, round-trip, and submission compatibility tests.
 
 ## Validation contract
 
@@ -519,9 +519,9 @@ Checks duplicate identifiers, conflicting identities, ambiguous candidate matche
 
 Parses the generated output again and checks namespace, structure, values, and preservation.
 
-### XSD validation
+### Schema validation
 
-Validates final XML against the official `studentuploaddata.xsd`. This MUST occur locally in the browser unless the project's privacy architecture is explicitly changed and approved.
+When a separate schema-validation layer is enabled, it MUST validate final XML locally in the browser unless the project's privacy architecture is explicitly changed and approved.
 
 ## Reconciliation contract
 
@@ -536,7 +536,7 @@ An output cannot be `READY` unless:
 - no populated source column was silently ignored;
 - there are no unresolved blocker or error diagnostics;
 - there are no unresolved identity ambiguities affecting inclusion; and
-- final XSD validation succeeds.
+- every validation layer enabled for the release succeeds.
 
 ## Readiness states
 
@@ -548,7 +548,7 @@ An output cannot be `READY` unless:
 
 `READY_WITH_WARNINGS` means all export requirements pass but open warnings remain.
 
-`READY` means all required validations, identity decisions, XML checks, XSD validation, and reconciliation checks pass without open warnings.
+`READY` means all validation layers implemented by the release, identity decisions, XML checks, and reconciliation checks pass without open warnings.
 
 Status MUST be derived from current diagnostics. It MUST NOT be directly editable by a user or source profile.
 
@@ -577,13 +577,12 @@ Every import records the exact adapter, canonical schema, validation profile, an
 
 Before these contracts become production guarantees:
 
-1. Obtain and version the official `studentuploaddata.xsd`.
-2. Confirm maximum lengths and conditional requirements against the XSD.
-3. Run the row-7 table-boundary case in supported desktop Excel.
-4. Generate synthetic XML using the official macro and compare canonical XML trees.
-5. Confirm whether empty Guardian and AliasName containers are permitted or required.
-6. Confirm the intended output policy for `X`, `N`, `Unk`, and `Other` gender values.
-7. Collect anonymized source examples from public schools, private schools, boards, and daycares.
-8. Create source profiles from those examples.
-9. Build golden, mutation, namespace, identity, and round-trip test suites.
-10. Require XSD and reconciliation success before enabling `READY`.
+1. Maintain maximum-length and conditional-requirement compatibility tests.
+2. Run the row-7 table-boundary case in supported desktop Excel.
+3. Generate synthetic STIX XML and compare canonical XML trees.
+4. Confirm whether empty Guardian and AliasName containers are permitted or required through submission testing.
+5. Confirm the intended output policy for `X`, `N`, `Unk`, and `Other` gender values.
+6. Collect anonymized source examples from public schools, private schools, boards, daycares, and other supported organizations.
+7. Create source profiles from those examples.
+8. Build golden, mutation, namespace, identity, and round-trip test suites.
+9. Require all enabled validation layers and reconciliation checks to succeed before returning `READY`.

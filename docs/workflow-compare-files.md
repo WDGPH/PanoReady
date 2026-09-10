@@ -22,4 +22,4 @@ The change rate is `(added + removed + changed) / previous student count`, expre
 
 ZIP passwords must contain at least eight characters and are not saved. Keep the password separate from the archive and use an archive tool that supports AES ZIP encryption. Source files, comparison results, and downloads contain record data.
 
-The implementation is `compareStixFiles()` in `lib/compare.ts`.
+The implementation is `compareSTIXFiles()` in `lib/compare.ts`.

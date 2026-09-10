@@ -71,6 +71,8 @@ validation:
     anchors: warn
     unrecognized_links: warn
 
-# Local workbook analysis may exist in developer checkouts; never publish it.
+# Private reference material may exist in developer checkouts; never publish it.
 exclude_docs: |
   /official-template-internals.md
+  /private/
+  /internal/
