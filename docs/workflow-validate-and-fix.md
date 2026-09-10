@@ -5,7 +5,7 @@ The Validate & Fix workflow imports STIX XML or a supported workbook, optionally
 ## When to Use
 
 Use this workflow when you need to:
-- Confirm a file meets all submission requirements before uploading to the ministry system.
+- Check a file against the implemented STIX/Panorama submission requirements before upload.
 - Identify and fix specific field errors (missing values, invalid grades, malformed dates, etc.).
 - Produce an auditable record of every change made to the file.
 
@@ -259,7 +259,7 @@ The full set of rules checked during this workflow is documented in [Validation 
 Upload XML
     │
     ▼
-parseStixXml(xmlText)         ← lib/validator.ts
+parseSTIXXml(xmlText)         ← lib/validator.ts
     │
     ▼
 StudentRecord[]               ← in-memory records for cleaning

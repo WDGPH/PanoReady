@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Describe STIX/Panorama compatibility without disclosing private reference provenance, remove SIS-vendor references, reserve third-party ownership, and ignore common reference-asset formats.
 - Rewrite workflow and reference documentation against the current implementation; document validation and export limits.
 - Add deployment and release instructions, strict documentation link checks, and protection against publishing local workbook notes.
 - Add tests for canonical data, field definitions, validation, rulesets, and address, postal-code, and phone repair.

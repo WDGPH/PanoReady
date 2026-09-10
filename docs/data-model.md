@@ -58,7 +58,7 @@ type ValidationResult = {
 | `schoolCount` | Number of `ns1:School` elements found |
 | `studentCount` | Total number of student records found |
 | `gate` | Readiness state. The current validator returns `BLOCKED` for errors, `REVIEW_REQUIRED` for review warnings, and `READY` otherwise. The union also reserves `READY_WITH_WARNINGS` and `PENDING`. |
-| `xsdValidated` | Whether authoritative XSD validation was completed; currently `false` |
+| `xsdValidated` | Whether a separate XSD-validation layer ran; currently `false` |
 
 ---
 
@@ -267,11 +267,11 @@ interface GradeCount {
 
 ## Compare Files types
 
-`StixComparison` is the result of `compareStixFiles()`. It stores source filenames and the current XML, student and school totals, matched/unchanged/added/removed/changed/moved counts, the calculated change rate and signal, and these detail collections:
+`STIXComparison` is the result of `compareSTIXFiles()`. It stores source filenames and the current XML, student and school totals, matched/unchanged/added/removed/changed/moved counts, the calculated change rate and signal, and these detail collections:
 
 - `recordChanges`: added, removed, and changed records with per-field before/after values;
 - `fieldChanges`: aggregate counts by compared field;
 - `schoolChanges`: previous/current and change counts by school; and
 - `schoolTransfers`: matched students whose school name changed.
 
-Review decisions and proposed corrections are transient UI state in `CompareView`; they are not part of `StixComparison`. Proposed corrections are applied to an exported copy of `currentXml`.
+Review decisions and proposed corrections are transient UI state in `CompareWorkflow`; they are not part of `STIXComparison`. Proposed corrections are applied to an exported copy of `currentXml`.
