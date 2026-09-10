@@ -1,13 +1,13 @@
 /**
  * Browser-native port of pull_info.py
- * Reshapes StudentRecord[] (parseStixXml, lib/validator.ts) → Student records → filtered/summarized datasets
+ * Reshapes StudentRecord[] (parseSTIXXml, lib/validator.ts) → Student records → filtered/summarized datasets
  */
 
 import type { Student, ExportResult, SchoolCount, GradeCount } from "./types";
-import { parseStixXml } from "./validator";
+import { parseSTIXXml } from "./validator";
 
 export function parseXml(xmlText: string): Student[] {
-  return parseStixXml(xmlText).map((record) => {
+  return parseSTIXXml(xmlText).map((record) => {
     const fields = record.fields;
     const birthDate = fields.BirthDate ?? "";
     const date = /^\d{4}-\d{2}-\d{2}$/.test(birthDate) ? new Date(`${birthDate}T00:00:00Z`) : null;

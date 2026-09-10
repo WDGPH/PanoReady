@@ -334,6 +334,6 @@ export function xlsmMetadata(data: ArrayBuffer, fileName: string): XlsmMetadata 
   return metadata;
 }
 
-export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): string {
+export function xlsmToSTIXXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): string {
   return importWorkbook(data, fileName, metadataOverrides, columnOverrides).xml;
 }
