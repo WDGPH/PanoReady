@@ -1,60 +1,80 @@
 "use client";
-import { useMemo } from "react";
-import { ArrowRight, Download } from "lucide-react";
+import WorkflowHeading from "@/components/WorkflowHeading";
+import WorkflowNavigation from "@/components/WorkflowNavigation";
+import PagedTable from "@/components/PagedTable";
+import { type ReactNode, useMemo } from "react";
+import { Download } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import { parseCanonicalXml } from "@/lib/canonical";
 import type { ValidateSession } from "@/lib/types";
-import { issueTypeLabel, percentage, severityLabel, summarizeValidation } from "./overview";
-import type { ReviewFilter } from "./overview";
+import { issueTypeLabel, percentage, summarizeValidation } from "./overview";
+import { SeverityLabel, SeveritySummary, severityHelp } from "./ValidationBadges";
+import type { ReviewFilter, ReviewExclusion } from "./overview";
 
-export default function IssuesView({ session, onFix, onSkipToDownload }: {
+export default function IssuesView({ advancedOptions, onBack, session, onFix, onSkipToDownload, exclusions, onExclusionsChange }: {
+  onBack: () => void;
+  advancedOptions?: ReactNode;
   session: ValidateSession;
   onFix: (filter?: ReviewFilter) => void;
   onSkipToDownload: () => void;
+  exclusions: ReviewExclusion[];
+  onExclusionsChange: (exclusions: ReviewExclusion[]) => void;
 }) {
-  const { initialResult } = session;
-  const summary = useMemo(() => summarizeValidation(initialResult, parseCanonicalXml(session.originalXml).schools), [initialResult, session.originalXml]);
+  const initialResult = session.revalidatedResult ?? session.initialResult;
+  const xml = session.finalXml ?? session.originalXml;
+  const summary = useMemo(() => summarizeValidation(initialResult, parseCanonicalXml(xml).schools), [initialResult, xml]);
   const canSkip = initialResult.gate === "READY" || initialResult.gate === "REVIEW_REQUIRED";
+  const excluded = (candidate: ReviewExclusion) => exclusions.some(entry => JSON.stringify(entry) === JSON.stringify(candidate));
+  const toggle = (candidate: ReviewExclusion) => onExclusionsChange(excluded(candidate)
+    ? exclusions.filter(entry => JSON.stringify(entry) !== JSON.stringify(candidate)) : [...exclusions, candidate]);
+  const exclusionControl = (candidate: ReviewExclusion, label: string) => <button type="button" className="btn btn-ghost" aria-label={`${excluded(candidate) ? "Restore" : "Exclude from review"}: ${label}`} onClick={() => toggle(candidate)}>{excluded(candidate) ? "Excluded · Restore" : "Exclude from review"}</button>;
   return (
     <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20, marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Import readiness</h1>
-          <p className="cleaning-description">{session.fileName} · {initialResult.schoolCount} schools · {summary.students.toLocaleString()} students</p>
-        </div>
-        <button onClick={() => onFix()} className="btn btn-primary">Review &amp; fix <ArrowRight size={14} /></button>
-      </div>
+      <WorkflowNavigation onBack={onBack} onNext={() => onFix()} nextLabel="Automatic fixes" nextDescription="Continue to automatic fixes" />
+      <WorkflowHeading title="Import readiness" advancedOptions={advancedOptions} />
       <div className="summary-stats summary-stats--four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 28, marginBottom: 24 }}>
-        <button className="stat-filter" onClick={() => onFix({ severity: "error" })}><StatCard label="Blocking errors" value={summary.errors} accent="red" /></button>
-        <StatCard label="Warnings" value={summary.warnings} accent="yellow" />
+        <button className="stat-filter" title={severityHelp.error} onClick={() => onFix({ severity: "error" })}><StatCard label="Blocking errors" value={summary.errors} accent="red" /></button>
+        <div tabIndex={0} title={severityHelp.warning} aria-label={`Warnings: ${summary.warnings}. ${severityHelp.warning}`}><StatCard label="Warnings" value={summary.warnings} accent="yellow" /></div>
         <StatCard label="Affected students" value={summary.affected} sub={`of ${summary.students.toLocaleString()} students (${percentage(summary.affected, summary.students)})`} />
         <StatCard label="Auto-fixable issues" value={summary.automatic} sub={`of ${summary.total.toLocaleString()} issues (${percentage(summary.automatic, summary.total)})`} />
       </div>
-      <section className="fix-group" aria-label="By issue type">
+      <section className="fix-group" style={{ borderTop: 0 }} aria-label="By issue type">
+        {exclusions.length > 0 && <details className="review-exclusions">
+          <summary>Review exclusions: {exclusions.filter(entry => "ruleId" in entry).length} issue types · {exclusions.filter(entry => "schoolNumber" in entry).length} schools</summary>
+          <p>Excluded issues stay in validation totals, and errors still block submission. Students remain in the output; their excluded issues won’t appear in correction review.</p>
+          <ul>{exclusions.map((entry) => <li key={JSON.stringify(entry)}>{exclusionControl(entry, "ruleId" in entry ? issueTypeLabel(entry.ruleId, entry.field) : summary.schools.find(row => row.schoolNumber === entry.schoolNumber)?.name || entry.schoolNumber || "File / unassigned")} <span>{"ruleId" in entry ? issueTypeLabel(entry.ruleId, entry.field) : `School ${entry.schoolNumber || "File / unassigned"}`}</span></li>)}</ul>
+          <button type="button" className="btn btn-secondary" onClick={() => onExclusionsChange([])}>Clear all exclusions</button>
+        </details>}
         <h2>By issue type</h2>
-        {summary.types.length ? <div className="overview-table"><table className="data-table">
-          <thead><tr><th>Issue type</th><th>Severity</th><th>Issues</th><th>Affected students</th><th>Auto-fixable issues</th></tr></thead>
+        {summary.types.length ? <div className="overview-table"><PagedTable className="data-table">
+          <thead><tr><th>Issue type</th><th>Severity</th><th>Issues</th><th>Affected students</th><th>Auto-fixable issues</th><th data-sortable={false}>Review</th></tr></thead>
           <tbody>{summary.types.map(row => <tr key={JSON.stringify([row.ruleId, row.field])}>
             <td><button className="overview-link" onClick={() => onFix({ ruleId: row.ruleId, field: row.field })}>{issueTypeLabel(row.ruleId, row.field)}</button></td>
-            <td>{severityLabel(row)}</td><td>{row.total}</td><td>{row.affected}</td><td>{row.automatic} / {row.total} ({percentage(row.automatic, row.total)})</td>
+            <td data-sort-value={row.errors ? 0 : row.warnings ? 1 : 2}><SeveritySummary counts={row} /></td><td>{row.total}</td><td>{row.affected}</td><td>{row.automatic} / {row.total} ({percentage(row.automatic, row.total)})</td>
+            <td>{exclusionControl({ ruleId: row.ruleId, field: row.field }, issueTypeLabel(row.ruleId, row.field))}</td>
           </tr>)}</tbody>
-        </table></div> : <p className="cleaning-description">No issues found.</p>}
+          <tfoot><tr>
+            <th scope="row">Total</th><td><SeveritySummary counts={summary} /></td>
+            <td>{summary.total}</td><td>{summary.affected}</td><td>{summary.automatic} / {summary.total} ({percentage(summary.automatic, summary.total)})</td>
+            <td />
+          </tr></tfoot>
+        </PagedTable></div> : <p className="cleaning-description">No issues found.</p>}
       </section>
       <section className="fix-group" aria-label="By school">
         <h2>By school</h2>
         <div className="overview-table">
-          <table className="data-table">
-            <thead><tr><th>School</th><th>Students checked</th><th>Students with issues</th><th>Blocking errors</th><th>Warnings</th><th>Auto-fixable issues</th></tr></thead>
+          <PagedTable className="data-table">
+            <thead><tr><th>School</th><th>Students checked</th><th>Students with issues</th><th data-sort-value="Severity"><SeverityLabel severity="error" label="Blocking errors" /></th><th data-sort-value="Severity"><SeverityLabel severity="warning" label="Warnings" /></th><th>Auto-fixable issues</th><th data-sortable={false}>Review</th></tr></thead>
             <tbody>{summary.schools.map(row => <tr key={row.schoolNumber}>
               <td><button className="overview-link" disabled={!row.total} onClick={() => onFix({ schoolNumber: row.schoolNumber })}>{row.schoolNumber ? `${row.name || "School"} · ${row.schoolNumber}` : "File / unassigned"}</button></td>
               <td>{row.students.toLocaleString()}</td>
               <td>{row.affected.toLocaleString()} ({percentage(row.affected, row.students)})</td>
               <td>{row.errors}</td><td>{row.warnings}</td><td>{row.automatic} / {row.total} ({percentage(row.automatic, row.total)})</td>
+              <td>{row.total > 0 && exclusionControl({ schoolNumber: row.schoolNumber }, `${row.name || "School"} · ${row.schoolNumber || "File / unassigned"}`)}</td>
             </tr>)}</tbody>
-          </table>
+          </PagedTable>
         </div>
       </section>
-      <p className="cleaning-description">Students are counted once per row; a student may have multiple issue types. File-level issues do not count as affected students.</p>
       {canSkip && <div style={{ display: "flex", justifyContent: "flex-end" }}><button onClick={onSkipToDownload} className="btn btn-secondary"><Download size={14} /> Continue without fixes</button></div>}
     </main>
   );

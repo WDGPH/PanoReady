@@ -1,6 +1,42 @@
 @import "tailwindcss";
 @import "../tokens.css";
 
+.fix-controls { min-width: 0; padding: 0; margin: 0; border: 0; }
+.fix-controls input[type="checkbox"] { appearance: none; width: 19px; height: 19px; flex-shrink: 0; display: inline-grid; place-content: center; border: 1px solid var(--verde); border-radius: 4px; background: var(--color-surface-1); cursor: pointer; vertical-align: middle; }
+.fix-controls input[type="checkbox"]:checked { background: var(--verde); }
+.fix-controls input[type="checkbox"]:checked::after { content: ""; width: 9px; height: 5px; border-left: 2px solid var(--marble); border-bottom: 2px solid var(--marble); transform: rotate(-45deg) translateY(-1px); }
+.fix-controls input[type="checkbox"]:focus-visible { outline: 2px solid var(--verde); outline-offset: 3px; }
+.fix-controls input[type="checkbox"]:disabled { opacity: .45; cursor: not-allowed; }
+.autofix-page-actions { padding: 12px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.autofix-feedback { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: oklch(18% .018 80 / .4); backdrop-filter: blur(3px); }
+.autofix-feedback-card { text-align: center; background: var(--marble); border: 1px solid var(--color-border); border-radius: 12px; padding: 40px; width: min(440px, 100%); box-shadow: 0 16px 60px #0003; color: var(--verde); }
+.autofix-feedback-card > svg { margin: 0 auto 18px; }
+.autofix-feedback-card h2 { font-size: 28px; margin: 0 0 12px; }
+.autofix-feedback-card p { color: var(--color-text-secondary); font-size: 14px; }
+.autofix-wand { animation: wand-swish .7s ease-in-out infinite alternate; }
+.autofix-feedback-card.is-done > svg { animation: fix-pop .55s cubic-bezier(.2,.8,.2,1.4); }
+.autofix-feedback-card.is-done .fix-operation-track span { width: 100%; animation: none; transform: none; transition: width .3s ease; }
+@keyframes wand-swish { from { transform: rotate(-18deg) scale(.9); } to { transform: rotate(12deg) scale(1.1); } }
+@keyframes fix-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .autofix-wand, .autofix-feedback-card.is-done > svg { animation: none; } .autofix-feedback-card.is-done .fix-operation-track span { transition: none; } }
+
+.fix-view-tabs { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.fix-view-tabs [aria-current] { color: var(--verde); border-bottom: 2px solid var(--verde); border-radius: 0; }
+.fix-operation { padding: 48px 24px; text-align: center; color: var(--color-text-secondary); }
+.fix-operation-track { width: 240px; max-width: 100%; height: 4px; margin: 20px auto; overflow: hidden; background: var(--color-border); border-radius: 4px; }
+.fix-operation-track span { display: block; width: 0; height: 100%; background: var(--verde); transition: width .2s ease; }
+.fix-complete { animation: fix-complete .4s ease-out; }
+
+@keyframes fix-complete { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .fix-operation-track span, .fix-complete { animation: none; transition: none; } }
+
+.table-sort { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; }
+.table-sort:hover { color: var(--color-text-primary); }
+.table-sort:focus-visible { outline: 2px solid var(--verde); outline-offset: 4px; }
+.table-paging { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; font-size: 12px; }
+.table-paging > span:first-child { margin-right: auto; }
+.table-paging .btn { font-size: 12px; padding: 6px 10px; }
+
 /* Hallmark · macrostructure: Workbench · tone: utilitarian · anchor hue: sage */
 
 /*
@@ -26,7 +62,7 @@
   --olive-hue: 125;
   --verde: oklch(39% 0.065 var(--olive-hue));
   --verde-light: oklch(49% 0.075 var(--olive-hue));
-  --color-masthead: oklch(36% 0.045 var(--olive-hue));
+  --color-masthead: oklch(29% 0.04 var(--olive-hue));
   --gold: oklch(55% 0.105 75);
 
   /* Brand green (mapped to verde) */
@@ -845,9 +881,11 @@ h1, h2, h3 {
   width: 100%;
   max-width: var(--page-width);
   margin: 0 auto;
-  padding: 42px var(--page-gutter) 64px;
+  padding: 42px var(--page-gutter) 24px;
 }
 .intake-shell {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-width: 0;
 }
@@ -905,7 +943,7 @@ h1, h2, h3 {
   font-weight: 500;
 }
 .file-dropzone {
-  min-height: 120px;
+  min-height: 156px;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -1070,7 +1108,8 @@ h1, h2, h3 {
   padding-top: 28px;
 }
 .intake-footer {
-  margin-top: 42px;
+  margin-top: auto;
+  padding-top: 64px;
   color: var(--color-text-muted);
   font-family: var(--font-mono), var(--font-mono-fallback);
   font-size: 11px;
@@ -1105,7 +1144,7 @@ h1, h2, h3 {
 }
 
 @media (max-width: 640px) {
-  .intake-main { padding: 28px var(--page-gutter) 48px; }
+  .intake-main { padding: 28px var(--page-gutter) 24px; }
   .brand-lockup { align-items: flex-start; flex-direction: column; gap: 2px; }
   .workflow-context { display: block; }
   .workflow-tabs { gap: 8px; }
@@ -1146,24 +1185,19 @@ h1, h2, h3 {
 .landing-intro { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 40px; align-items: end; padding: 12px 0 40px; }
 .landing-intro h1 { margin: 0; font-size: clamp(2.6rem, 4.7vw, 4rem); line-height: 1.08; font-weight: 500; letter-spacing: -.025em; }
 .landing-lede { margin: 0 0 4px; color: var(--color-text-secondary); font-size: 16px; line-height: 1.65; max-width: 400px; }
-.landing-tool-label { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding-top: 24px; border-top: 1px solid var(--color-border); font-size: 20px; font-weight: 500; }
-.intake-assurance { color: var(--color-text-secondary); font-size: 12px; margin: 12px 0 0; line-height: 1.5; }
 
 @media (max-width: 700px) {
   .landing-intro { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 0 0 28px; }
   .landing-lede { font-size: 14px; max-width: none; }
-  .landing-tool-label { flex-wrap: wrap; gap: 6px; }
 }
 /* Validate & Fix: stable stages, with a compact overview on small screens. */
 .workflow-progress { width: 100%; max-width: var(--page-width); margin: 24px auto 0; padding: 0 var(--page-gutter); }
 .workflow-progress-list { display: flex; list-style: none; padding: 0; margin: 0; gap: 16px; }
 .workflow-progress-list li { flex: 1; display: flex; gap: 10px; padding: 12px 0; border-top: 2px solid var(--color-border); font-size: 13px; color: var(--color-text-secondary); }
 .workflow-progress-list li[aria-current] { border-color: var(--color-brand-400); color: var(--color-text-primary); font-weight: 600; }
-.workflow-progress-list small { display: block; font-size: 11px; font-weight: 400; margin-top: 4px; }
 .workflow-progress-number { font-variant-numeric: tabular-nums; }
 .workflow-step-link { display: flex; gap: 10px; width: 100%; text-align: left; color: inherit; font: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 .workflow-step-link:hover { color: var(--color-brand-400); }
-.workflow-step-link:hover > span:last-child { text-decoration: underline; }
 .workflow-step-link:focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 5px; }
 .workflow-progress-mobile { display: none; }
 .preparation-header { width: 100%; max-width: var(--page-width); margin: 32px auto 0; padding: 0 var(--page-gutter); }
@@ -1195,9 +1229,27 @@ h1, h2, h3 {
 .stat-filter:focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 5px; }
 .fix-group { margin: 24px 0; padding-top: 20px; border-top: 1px solid var(--color-border); }
 .fix-group > h2 { margin: 0 0 12px; font-size: 18px; }
-.guardian-removal { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 16px 0; }
 .overview-table { overflow-x: auto; border: 1px solid var(--color-border); background: var(--color-surface-1); border-radius: 4px; }
 .overview-table table { width: 100%; }
-.overview-link { background: none; border: 0; padding: 0; color: var(--color-text-primary); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.overview-link { background: none; border: 0; padding: 0; color: var(--color-text-primary); font: inherit; text-align: left; cursor: pointer; text-decoration: none; }
 .overview-link:disabled { cursor: default; text-decoration: none; }
 .review-filter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; font-size: 13px; }
+
+
+.workflow-navigation { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; text-align: left; }
+.fix-operation > .workflow-navigation { max-width: var(--page-width); margin-left: auto; margin-right: auto; }
+.table-header-filter { display: block; margin-top: 8px; width: 150px; min-width: 150px; padding: 6px 8px; font-size: 12px; font-weight: 400; letter-spacing: normal; text-transform: none; }
+
+.overview-link:hover:not(:disabled) { color: var(--color-brand-400); }
+.overview-link:focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 4px; }
+
+.fix-group--review { border-top: 0; padding-top: 0; }
+
+.workflow-heading { margin-bottom: 24px; }
+.workflow-heading-row { display: flex; align-items: baseline; justify-content: flex-start; flex-wrap: wrap; gap: 12px 24px; }
+.workflow-heading-row h1 { font-size: 22px; font-weight: 700; margin: 0; }
+.workflow-advanced-toggle { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 0; background: none; color: var(--color-text-secondary); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
+.workflow-advanced-toggle:hover { color: var(--color-brand-400); }
+.workflow-advanced-toggle:focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 4px; }
+.workflow-advanced-panel { margin-top: 16px; }
+.workflow-advanced-panel .cleaning-pane { padding: 0; }

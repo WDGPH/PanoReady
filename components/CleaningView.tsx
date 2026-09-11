@@ -32,8 +32,6 @@ export interface CleaningViewProps {
   records: StudentRecord[];
   initialProfile: CleaningProfile | null;
   onApply: (cleaned: StudentRecord[], summary: CleaningSummaryEntry[], profile: CleaningProfile) => void;
-  onSkip: () => void;
-  onBack: () => void;
   onSaveToRuleset: (profile: CleaningProfile, name?: string) => boolean;
   onProfileChange: (profile: CleaningProfile) => void;
   isBuiltin: boolean;
@@ -45,8 +43,6 @@ export default function CleaningView({
   records,
   initialProfile,
   onApply,
-  onSkip,
-  onBack,
   onSaveToRuleset,
   onProfileChange,
   isBuiltin,
@@ -166,9 +162,9 @@ export default function CleaningView({
 
   if (!hasFields) {
     return (
-      <main className="cleaning-pane">
+      <section className="cleaning-pane">
         <h2>Cleaning mappings <span className="optional-label">(optional)</span></h2>
-        <p className="cleaning-description">Replace values before validation.</p>
+        <p className="cleaning-description">Replace values, then recheck file quality.</p>
         <div className="cleaning-empty">
           <span>No mappings configured.</span>
           <button style={btnSecondary} onClick={() => setShowFieldPicker(true)}>
@@ -179,14 +175,11 @@ export default function CleaningView({
           <FieldPicker fields={availableToAdd} onPick={addField} onClose={() => setShowFieldPicker(false)} />
         )}
         <div className="preparation-actions">
-          <button className="btn btn-ghost preparation-exit" onClick={onBack}>Open another file</button>
           {saveMsg && <span role="status">{saveMsg}</span>}
           {!isBuiltin && <button style={btnSecondary} onClick={handleSave}>Save mappings to profile</button>}
-          <button className="btn btn-primary" style={{ gap: 6 }} onClick={onSkip}>
-            Continue to validation <ArrowRight size={15} />
-          </button>
+
         </div>
-      </main>
+      </section>
     );
   }
 
@@ -199,9 +192,9 @@ export default function CleaningView({
   const predefinedMappings = fieldMappings.filter((m) => !inFile.has(m.raw));
 
   return (
-    <main className="cleaning-pane">
+    <section className="cleaning-pane">
       <h2>Cleaning mappings <span className="optional-label">(optional)</span></h2>
-      <p className="cleaning-description">Replace values before validation.</p>
+      <p className="cleaning-description">Replace values, then recheck file quality.</p>
       <details className="cleaning-help">
         <summary>Matching details</summary>
         <p>Whole-value matching; case-insensitive unless “Match case” is selected. First match wins. Regex is not supported.</p>
@@ -369,7 +362,6 @@ export default function CleaningView({
 
       {/* Bottom bar */}
       <div className="preparation-actions">
-        <button className="btn btn-ghost preparation-exit" onClick={onBack}>Open another file</button>
         {saveMsg && <span style={{ fontSize: 12, color: "var(--color-brand-400)" }}>{saveMsg}</span>}
         {isBuiltin && <label style={{ fontSize: 12 }}>New profile name
           <input style={inputStyle} value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="My STIX profile" />
@@ -377,11 +369,11 @@ export default function CleaningView({
         <button style={btnSecondary} onClick={handleSave}>
           <Save size={14} /> {isBuiltin ? "Save as new profile" : "Save mappings to profile"}
         </button>
-        <button className="btn btn-primary" style={{ gap: 6 }} onClick={enabled && normalizeProfile(workingProfile).enabledFields.length > 0 ? handleApply : onSkip}>
-          {enabled && normalizeProfile(workingProfile).enabledFields.length > 0 ? "Preview cleaning changes" : "Continue to validation"} <ArrowRight size={15} />
+        <button className="btn btn-primary" style={{ gap: 6 }} disabled={!enabled || normalizeProfile(workingProfile).enabledFields.length === 0} onClick={handleApply}>
+          Preview cleaning changes <ArrowRight size={15} />
         </button>
       </div>
-    </main>
+    </section>
   );
 }
 

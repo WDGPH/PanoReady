@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ValidationIssue, ValidationResult } from "../lib/types";
-import { matchesReviewFilter, percentage, summarizeValidation, issueTypeLabel, severityLabel } from "../workflows/stix/validation/overview";
+import { matchesReviewFilter, percentage, summarizeValidation, issueTypeLabel, severityLabel, isExcludedFromReview } from "../workflows/stix/validation/overview";
 
 const finding = (id: string, recordId?: string): ValidationIssue => ({ id, recordId, ruleId: "FIELD_LENGTH", field: "Unit", message: "PRIVATE source value", severity: "error", autoFixable: true });
 const result: ValidationResult = {
@@ -14,6 +14,17 @@ const result: ValidationResult = {
 };
 
 describe("validation overview", () => {
+  it("excludes matching schools or issue types without changing validation results", () => {
+    const before = JSON.stringify(result);
+    expect(isExcludedFromReview(result.issues[0], [{ schoolNumber: "001" }], "001")).toBe(true);
+    expect(isExcludedFromReview(result.issues[0], [{ schoolNumber: "002" }], "001")).toBe(false);
+    expect(isExcludedFromReview(result.issues[0], [{ ruleId: "FIELD_LENGTH", field: "Unit" }])).toBe(true);
+    expect(isExcludedFromReview(result.issues[0], [{ ruleId: "FIELD_LENGTH", field: "City" }])).toBe(false);
+    expect(isExcludedFromReview(result.issues[0], [])).toBe(false);
+    expect(isExcludedFromReview(result.issues[3], [{ schoolNumber: "" }])).toBe(true);
+    expect(JSON.stringify(result)).toBe(before);
+    expect(summarizeValidation(result).errors).toBe(3);
+  });
   it("labels uniform severity and counts mixed severities within an issue type", () => {
     const mixed = summarizeValidation(result).types.find(row => row.ruleId === "FIELD_LENGTH")!;
     expect(severityLabel(mixed)).toBe("2 errors · 1 warning");
