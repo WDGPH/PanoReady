@@ -25,7 +25,7 @@ Validation settings and optional cleaning mappings are configured through rulese
 
 ## Open-source project
 
-PanoReady is maintained by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/) and released under the [MIT License](https://github.com/WDGPH/PanoReady/blob/main/LICENSE). Contributions are welcome; see the [project policies](project-policies.md) and [development guide](development.md).
+PanoReady is maintained by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/) and its original code and documentation are released under the [MIT License](https://github.com/WDGPH/PanoReady/blob/main/LICENSE). Panorama, STIX, and related third-party systems and materials remain the property of their respective owners. References identify intended compatibility only and do not imply affiliation or endorsement. Contributions are welcome; see the [project policies](project-policies.md) and [development guide](development.md).
 
 !!! warning "Protect sensitive information"
     Do not attach real student records or other sensitive information to GitHub issues or pull requests. Follow your organization's policies when handling source files and generated downloads.

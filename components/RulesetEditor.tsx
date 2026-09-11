@@ -345,7 +345,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
     { id: "lengths",     label: "Field Lengths" },
     { id: "format",      label: "Format Rules" },
     { id: "duplication", label: "Duplicate Detection" },
-    { id: "cleaning",    label: "Cleaning" },
+    { id: "cleaning",    label: "Cleaning mappings" },
   ];
 
   return (
@@ -378,7 +378,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
             <Dialog.Title style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-              {isNew ? "New Ruleset" : `Edit: ${initial.name}`}
+              {isNew ? "New Profile" : `Edit: ${initial.name}`}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button type="button" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--color-text-muted)", display: "flex" }}>
@@ -420,7 +420,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="My Board Ruleset"
+                    placeholder="My Board Profile"
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}
                   />
                 </div>
@@ -430,7 +430,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    placeholder="Optional note about this ruleset"
+                    placeholder="Optional note about this profile"
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical", fontFamily: "inherit" }}
                   />
                 </div>
@@ -447,7 +447,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                       ))}
                     </select>
                     <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 5 }}>
-                      Start with a deep copy of the selected ruleset&apos;s settings.
+                      Start with a deep copy of the selected profile&apos;s validation rules and cleaning mappings.
                     </div>
                   </div>
                 )}
@@ -664,11 +664,13 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
 
             {/* ── Cleaning ── */}
             {activeTab === "cleaning" && (
+              <div>
+              <p style={{ fontSize: 13 }}>Cleaning runs before validation or autofix. Replace whole field values; matching ignores case unless “Match case” is enabled. The first matching mapping wins. Regex is not supported.</p>
               <CleaningTabPanel
                 profile={cleaning}
-                rules={rules}
                 onChange={setCleaning}
               />
+              </div>
             )}
 
           </div>
@@ -690,7 +692,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                 border: "none",
               }}
             >
-              Save Ruleset
+              Save Profile
             </button>
           </div>
         </Dialog.Content>
@@ -703,11 +705,9 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
 
 function CleaningTabPanel({
   profile,
-  rules,
   onChange,
 }: {
   profile: CleaningProfile;
-  rules: RulesProfile;
   onChange: (p: CleaningProfile) => void;
 }) {
   const [selectedField, setSelectedField] = useState<string>(profile.enabledFields[0] ?? "");
@@ -715,7 +715,7 @@ function CleaningTabPanel({
   const [newRaw, setNewRaw] = useState("");
   const [newCanon, setNewCanon] = useState("");
 
-  const pickable = getCleanableFields(rules);
+  const pickable = getCleanableFields();
   const available = pickable.filter((f) => !profile.enabledFields.includes(f));
 
   function addField(field: string) {
@@ -804,10 +804,8 @@ function CleaningTabPanel({
       <div style={{ width: 160, flexShrink: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Fields</div>
         {profile.enabledFields.map((f) => (
-          <button
+          <div
             key={f}
-            type="button"
-            onClick={() => setSelectedField(f)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "6px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer",
@@ -817,15 +815,16 @@ function CleaningTabPanel({
               fontWeight: selectedField === f ? 600 : 400,
             }}
           >
-            <span>{f}</span>
+            <button type="button" onClick={() => setSelectedField(f)} style={{ border: 0, background: "none", color: "inherit", flex: 1, textAlign: "left", cursor: "pointer" }}>{f}</button>
             <button
               type="button"
+              aria-label={`Remove ${f}`}
               onClick={(e) => { e.stopPropagation(); removeField(f); }}
               style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-text-muted)", display: "flex" }}
             >
               <X size={11} />
             </button>
-          </button>
+          </div>
         ))}
         <div style={{ position: "relative" }}>
           {available.length > 0 && (

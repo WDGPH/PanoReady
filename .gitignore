@@ -47,5 +47,21 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Private workbook inspection notes
+# Private or third-party reference material
+#
+# PanoReady's public repository must contain only redistributable project
+# sources and synthetic fixtures. Keep operational inputs, vendor/ministry
+# reference assets, and local inspection notes outside the tracked tree.
+/private-reference/
+/reference-assets/
+/local-reference/
+/docs/private/
+/docs/internal/
 /docs/official-template-internals.md
+*.xls
+*.xlsx
+*.xlsm
+*.xsd
+*.doc
+*.docx
+*.pdf

@@ -65,10 +65,10 @@ export default function AddressRepairCard({
 }) {
   const changedCount = ADDRESS_REPAIR_FIELDS.filter((field) => (draft[field] ?? "") !== (record.fields[field] ?? "")).length;
   const tone = proposal.confidence === "safe"
-    ? { border: "var(--color-success-border)", bg: "var(--color-success-bg)", text: "var(--color-success-text)", badge: "SAFE SUGGESTION", Icon: ShieldCheck }
+    ? { border: "var(--color-success-border)", bg: "var(--color-success-bg)", text: "var(--color-success-text)", Icon: ShieldCheck }
     : proposal.confidence === "manual"
-      ? { border: "var(--color-info-border)", bg: "var(--color-info-bg)", text: "var(--color-info-text)", badge: "MANUAL REVIEW", Icon: PenLine }
-      : { border: "var(--color-warning-border)", bg: "var(--color-warning-bg)", text: "var(--color-warning-text)", badge: "REVIEW CONFLICT", Icon: TriangleAlert };
+      ? { border: "var(--color-info-border)", bg: "var(--color-info-bg)", text: "var(--color-info-text)", Icon: PenLine }
+      : { border: "var(--color-warning-border)", bg: "var(--color-warning-bg)", text: "var(--color-warning-text)", Icon: TriangleAlert };
 
   return (
     <article style={{
@@ -83,9 +83,6 @@ export default function AddressRepairCard({
             <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 7 }}>
               <tone.Icon size={16} style={{ color: tone.text }} />
               <strong style={{ fontSize: 14 }}>{proposal.title}</strong>
-              <span style={{ border: "1px solid var(--color-border)", borderRadius: 99, padding: "2px 7px", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", color: tone.text, background: "var(--color-surface-1)" }}>
-                {tone.badge}
-              </span>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "var(--color-text-muted)", fontSize: 11, marginBottom: 8 }}>
               <span>{studentName || "Student record"}</span>

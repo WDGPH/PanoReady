@@ -214,7 +214,6 @@ currently assigns the postal code or that it belongs to the supplied address.
 - [Canada Post — Addressing guidelines: Postal codes](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/postal-codes.page)
 - [Canada Post — Addressing guidelines: Important information](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/important-information.page)
 - [Statistics Canada — Postal Code Conversion File Reference Guide](https://www150.statcan.gc.ca/n1/pub/92-154-g/92-154-g2017001-eng.htm)
-- [PowerSchool Ontario — Student Public Health Unit (STIX) Data Extract](https://ps-compliance.powerschool-docs.com/pssis-on/latest/student-public-health-unit-stix-data-extract)
 
 ---
 

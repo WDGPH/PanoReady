@@ -6,11 +6,11 @@
 
 ## 1. Executive summary
 
-PanoReady is a browser-based utility for preparing Ontario school-enrollment data for Panorama/STIX workflows. It accepts STIX XML and Excel/XLSM source workbooks, maps inputs into a canonical student model, validates data against local rules, applies only deterministic fixes, and generates cleaned XML, issue reports, spreadsheets, and comparisons.
+PanoReady is a browser-based utility for preparing Ontario school-enrollment data for Panorama/STIX workflows. It accepts STIX XML and Excel/XLSM source workbooks, maps inputs into a canonical student model, validates data against local rules, applies only deterministic fixes, and generates cleaned XML, issue reports, spreadsheets, and comparisons. Its built-in contract implements STIX/Panorama import requirements and adds defensive data-quality and reconciliation checks.
 
 The application has no backend, accounts, upload endpoint, or server-side data store. Parsing, normalization, validation, XML serialization, and file generation run in the user’s browser. This is the primary privacy boundary: source records remain on the user’s device unless the user chooses to download or share an output.
 
-The authoritative `studentuploaddata.xsd` is not available in the supplied workbook or from an authoritative public source. The current runtime records `xsdValidated: false`; its gate reflects implemented findings rather than authoritative schema conformance.
+The current runtime records `xsdValidated: false` because it does not run a separate schema-validation layer. Its gate reflects all validation and reconciliation checks implemented by the current release; destination-system acceptance remains an external operational step.
 
 ## 2. Goals and non-goals
 
@@ -46,7 +46,7 @@ The repository describes operational users who prepare school enrollment files b
 User browser
 ┌──────────────────────────────────────────────────────────────┐
 │ Next.js / React UI                                            │
-│  Home + workflow views + issue/fix/review components           │
+│  STIX intake + validate/fix and comparison workflows           │
 │             │                                                │
 │             ▼                                                │
 │ Intake adapters                                               │
@@ -80,7 +80,7 @@ There is no application API or remote persistence layer in the current design. I
 1. The user selects an `.xls`/`.xlsx`/`.xlsm` workbook.
 2. The importer discovers worksheets and headers using canonical aliases rather than fixed names or positions.
 3. It reports mapped, duplicate, unmapped, hidden-sheet, formula, merged-cell, and ambiguous-date diagnostics.
-4. Controlled values are resolved through the workbook’s ten lookup tables.
+4. Controlled values are resolved through supported workbook lookup tables and the active PanoReady ruleset.
 5. Values are normalized into canonical students, guardians, addresses, phones, schools, and metadata.
 6. Provenance retains the raw value and source worksheet/cell location.
 7. The canonical upload is validated and can be serialized to STIX XML after review.
@@ -101,7 +101,10 @@ Macro execution and formula execution are disabled. Local resource limits includ
 
 | Component | Responsibility |
 |---|---|
-| `app/page.tsx` | Client workflow shell, upload handling, navigation, review/fix views, and download actions |
+| `app/page.tsx` | Small client composition point that selects the active workflow and discards its transient data when returning home |
+| `workflows/stix/STIXIntake.tsx` | STIX XML/workbook selection, browser-only intake metadata, and workflow launch |
+| `workflows/stix/ValidateAndFixWorkflow.tsx` | Locally owned cleaning, issue review, fixes, revalidation, and download state |
+| `workflows/stix/CompareWorkflow.tsx` | Locally owned comparison review, correction, filtering, and export state |
 | `lib/excel.ts` | Workbook metadata discovery, canonical header mapping, lookup extraction, normalization, and import preview |
 | `lib/canonical.ts` | Namespace-tolerant STIX parsing into canonical metadata, schools, students, guardians, addresses, phones, and provenance |
 | `lib/validator.ts` | XML/canonical validation, issue generation, gate calculation, fix application, and CSV reports |
@@ -112,6 +115,8 @@ Macro execution and formula execution are disabled. Local resource limits includ
 | `lib/rulesets.ts` | Built-in/custom ruleset validation and browser persistence |
 | `config/rules.stix.default.json` | Default required fields, controlled values, formats, aliases, phone policy, and duplicate settings |
 | `schemas/*.schema.json` | Canonical upload and source-profile contracts |
+
+Future PHIX bulk-immunization work belongs under `workflows/phix/`. No shared STIX/PHIX workflow or document abstraction exists yet; common code should be extracted only after both concrete workflows demonstrate the same responsibility.
 
 ## 7. Data contracts
 
@@ -160,7 +165,7 @@ Failures should be readable and local: invalid XML, unexpected root/namespace, u
 | Structure-preserving XML edits | Retains fields the app does not understand | DOM path matching must remain carefully tested |
 | Deterministic-only auto-fixes | Prevents silent data corruption | More manual review for ambiguous cases |
 | Local custom rulesets | Supports board/PHU variation without a backend | Ruleset sharing and governance are user-managed |
-| Explicit XSD status separate from the gate | Makes the missing authoritative check visible without blocking local validation work | Operators must understand that `READY` currently means only the implemented checks passed |
+| Separate schema-validation status | Keeps each validation layer explicit | Operators must understand which checks are enabled in a release |
 
 ## 12. Testing and verification
 
@@ -172,11 +177,11 @@ Recommended release checks:
 2. Add golden-file tests for accepted and rejected STIX/XML and workbook inputs.
 3. Verify source → canonical → serialized → reparsed counts reconcile.
 4. Exercise upload errors, filters, safe bulk fixes, manual corrections, revalidation, gate transitions, downloads, and comparison flows.
-5. When supplied, add authoritative XSD validation and accepted-file compatibility tests and define how failures affect the gate.
+5. Maintain accepted/rejected compatibility tests and define how every enabled validation layer affects the gate.
 
 ## 13. Risks and open decisions
 
-- Obtain the authoritative `studentuploaddata.xsd` and representative accepted files from WDGPH.
+- Maintain representative synthetic accepted and rejected cases for submission compatibility testing.
 - Confirm the exact operational roles, supported browser matrix, expected maximum workbook/XML sizes, and retention expectations.
 - Decide whether a future Web Worker implementation is needed for large files.
 - Define governance for custom ruleset distribution and versioning.
@@ -184,4 +189,4 @@ Recommended release checks:
 
 ## 14. Definition of done
 
-PanoReady is complete for the current browser-only scope when a user can locally intake a supported workbook or STIX XML file, inspect diagnostics, apply safe fixes and explicit manual corrections, revalidate, and download corrected XML plus transparent reports without any source data leaving the browser. Authoritative XSD conformance remains outside the current readiness guarantee.
+PanoReady is complete for the current browser-only scope when a user can locally intake a supported workbook or STIX XML file, inspect diagnostics, apply safe fixes and explicit manual corrections, revalidate, and download corrected XML plus transparent reports without any source data leaving the browser. Compatibility remains protected through implemented validation, reconciliation, round-trip, and submission tests.

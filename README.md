@@ -18,6 +18,10 @@ Built by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/)
 
 PanoReady accepts STIX XML and Excel macro-enabled workbook (`.xlsm`) inputs. Validated and compared XML can optionally be downloaded in an AES-256 password-protected ZIP archive.
 
+Validate & Fix shows six stages: **Prepare & clean → Assess quality → Automatic fixes → Manual fixes → Recheck → Download**. After import, optional cleaning mappings replace known whole-field values before validation or autofix. Matching ignores case unless “Match case” is enabled; the first matching mapping wins. Cleaning does not support regex.
+
+Select a saved profile inside preparation: profiles contain validation rules and optional cleaning mappings. Automatic fixes start unselected. Apply individual selections, the current sorted page, or all matching fixes across pages; each action updates and rechecks the file. Manual fixes shows unresolved issues, including unaccepted automatic suggestions. Skipping cleaning leaves validation and autofix available.
+
 ## Quick start
 
 Requirements: [Node.js](https://nodejs.org/) 22 or 24 (24 is the default in `.nvmrc`) and npm.
@@ -78,4 +82,6 @@ See [CHANGELOG.md](CHANGELOG.md) for unreleased changes.
 
 ## License
 
-PanoReady is available under the [MIT License](LICENSE).
+PanoReady's original code and documentation are available under the [MIT License](LICENSE). Panorama, STIX, and related third-party systems, standards, names, specifications, schemas, templates, and documentation remain the property of their respective owners. References identify intended compatibility only and do not imply affiliation or endorsement.
+
+On Import readiness, exclude schools or issue types from correction review for the current file. Exclusions are reversible and do not change validation totals, blocking errors, or exported records.

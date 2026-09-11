@@ -102,7 +102,7 @@ export interface ComparisonSchoolTransfer {
 
 export type ComparisonSignal = "stable" | "moderate" | "high";
 
-export interface StixComparison {
+export interface STIXComparison {
   previousFileName: string;
   currentFileName: string;
   currentXml: string;
@@ -286,6 +286,8 @@ export type ImportPreview = {
 };
 
 export type ValidateSession = {
+  /** Number of audit entries already reflected in finalXml. */
+  appliedFixCount?: number;
   fileName: string;
   originalXml: string;
   initialResult: ValidationResult;

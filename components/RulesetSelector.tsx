@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, FileUp, AlertCircle, Pencil, Plus, Copy } from "lucide-react";
-import type { CustomRuleset, RulesProfile } from "@/lib/types";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Download, FileUp, AlertCircle, Pencil, Plus, Copy, X } from "lucide-react";
+import type { CleaningProfile, CustomRuleset, RulesProfile } from "@/lib/types";
 import {
   BUILTIN_ID,
   defaultRules,
@@ -17,7 +18,10 @@ import { downloadText } from "@/lib/utils";
 import RulesetEditor from "./RulesetEditor";
 
 interface RulesetSelectorProps {
-  onRulesChange: (rules: RulesProfile) => void;
+  onRulesChange: (rules: RulesProfile, cleaning: CleaningProfile | null, id: string) => void;
+  compact?: boolean;
+  notifyOnMount?: boolean;
+  initialId?: string;
 }
 
 /** Extract a field name from a validator error message of the form `'fieldName' …` */
@@ -26,7 +30,7 @@ function parseErrorField(msg: string): string | null {
   return m ? m[1] : null;
 }
 
-export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps) {
+export default function RulesetSelector({ onRulesChange, compact = false, notifyOnMount = true, initialId }: RulesetSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeId, setActiveId]           = useState<string>(BUILTIN_ID);
   const [rulesets, setRulesets]           = useState<CustomRuleset[]>([]);
@@ -34,15 +38,16 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
   const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
   const [editorOpen, setEditorOpen]       = useState(false);
   const [editingRuleset, setEditingRuleset] = useState<CustomRuleset | undefined>(undefined);
+  const [managerOpen, setManagerOpen]     = useState(false);
 
   // Initialise from localStorage on mount (safe — this is a client component)
   useEffect(() => {
-    const id  = getActiveRulesetId();
+    const id  = initialId ?? getActiveRulesetId();
     const all = listCustomRulesets();
     setActiveId(id);
     setRulesets(all);
     const active = id === BUILTIN_ID ? defaultRules : (all.find((r) => r.id === id)?.rules ?? defaultRules);
-    onRulesChange(active);
+    if (notifyOnMount) onRulesChange(active, all.find((r) => r.id === id)?.cleaning ?? null, id);
     // onRulesChange intentionally excluded — we only want to sync once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -51,7 +56,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
     setActiveId(id);
     setActiveRulesetId(id);
     const rules = id === BUILTIN_ID ? defaultRules : (all.find((r) => r.id === id)?.rules ?? defaultRules);
-    onRulesChange(rules);
+    onRulesChange(rules, all.find((r) => r.id === id)?.cleaning ?? null, id);
   }
 
   function refreshAndSelect(id: string) {
@@ -143,6 +148,7 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
       ...(source.description ? { description: source.description } : {}),
       createdAt: new Date().toISOString(),
       rules: JSON.parse(JSON.stringify(source.rules)) as RulesProfile,
+      ...(source.cleaning ? { cleaning: structuredClone(source.cleaning) } : {}),
     };
     saveCustomRuleset(copy);
     refreshAndSelect(copy.id);
@@ -194,10 +200,14 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
     flexShrink: 0,
   };
 
-  return (
+  const activeName = activeId === BUILTIN_ID
+    ? "STIX Default"
+    : rulesets.find((ruleset) => ruleset.id === activeId)?.name ?? "STIX Default";
+
+  const managementControls = (
     <div>
       <div style={{ display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap" }}>
-        <select value={activeId} onChange={handleSelect} style={selectStyle}>
+        <select aria-label="Saved profile" value={activeId} onChange={handleSelect} style={selectStyle}>
           <option value={BUILTIN_ID}>STIX Default (built-in)</option>
           {rulesets.map((rs) => (
             <option key={rs.id} value={rs.id}>{rs.name}</option>
@@ -343,6 +353,36 @@ export default function RulesetSelector({ onRulesChange }: RulesetSelectorProps)
           onClose={() => setEditorOpen(false)}
         />
       )}
+    </div>
+  );
+
+  if (!compact) return managementControls;
+
+  return (
+    <div className="ruleset-compact">
+      <span className="ruleset-compact-label">Profile:</span>
+      <strong>{activeName}</strong>
+      <span aria-hidden="true">·</span>
+      <button type="button" className="ruleset-change" onClick={() => setManagerOpen(true)}>
+        Change
+      </button>
+
+      <Dialog.Root open={managerOpen} onOpenChange={setManagerOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="ruleset-dialog-overlay" />
+          <Dialog.Content className="ruleset-dialog" aria-describedby={undefined}>
+            <div className="ruleset-dialog-header">
+              <Dialog.Title>Cleaning and validation profile</Dialog.Title>
+              <Dialog.Close asChild>
+                <button type="button" className="ruleset-dialog-close" aria-label="Close profiles">
+                  <X size={18} />
+                </button>
+              </Dialog.Close>
+            </div>
+            <div className="ruleset-dialog-body"><p>Switching profiles replaces both validation rules and cleaning mappings, including unsaved mappings for this file.</p>{managementControls}</div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

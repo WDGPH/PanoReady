@@ -149,15 +149,14 @@ function diagnostic(id: string, severity: "error" | "warning" | "info", message:
 
 function canonicalValue(field: CanonicalField | "FullUpload", raw: string, lookups: Record<string, Lookup>, diagnostics: ValidationIssue[], location: string): string {
   if (!raw) return "";
-  // The official template's Gender dropdown offers X/N for data entry, but the official
-  // export macro maps both to "Other" before writing XML, since the schema's genderType
-  // enum only has M/F/Unk/Other. Match that exactly rather than exporting X/N literally.
+  // X/N are supported workbook-input aliases. Canonical STIX output uses Other,
+  // while the active output rule accepts M/F/Unk/Other.
   if (field === "Gender" && ["x", "n"].includes(raw.trim().toLowerCase())) return "Other";
   const group = GROUP_BY_FIELD[field];
   if (!group) return raw.trim();
   const value = lookups[normalizeLabel(group)]?.get(normalizeLabel(raw));
   if (value) return field === "Gender" && ["X", "N"].includes(value.toUpperCase()) ? "Other" : value;
-  diagnostics.push(diagnostic(`import-controlled-${location}-${field}`, "error", `${field} value "${raw}" is not in the official controlled-value list.`, "IMPORT_CONTROLLED_VALUE", location, field));
+  diagnostics.push(diagnostic(`import-controlled-${location}-${field}`, "error", `${field} value "${raw}" is not in the active controlled-value list.`, "IMPORT_CONTROLLED_VALUE", location, field));
   return raw.trim();
 }
 
@@ -334,6 +333,6 @@ export function xlsmMetadata(data: ArrayBuffer, fileName: string): XlsmMetadata 
   return metadata;
 }
 
-export function xlsmToStixXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): string {
+export function xlsmToSTIXXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): string {
   return importWorkbook(data, fileName, metadataOverrides, columnOverrides).xml;
 }

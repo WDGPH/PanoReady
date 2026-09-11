@@ -46,7 +46,7 @@ import { SCHOOL_FIELDS } from "./fields";
  * Note: schools with zero <ns1:Student> elements produce no records here;
  * the empty-school warning is handled by validateXml internally.
  */
-export function parseStixXml(xmlText: string): StudentRecord[] {
+export function parseSTIXXml(xmlText: string): StudentRecord[] {
   const upload = parseCanonicalXml(xmlText);
   if (upload.schools.length === 0) throw new Error("No <School> elements found.");
   return upload.schools.flatMap((school, schoolIndex) => school.students.map((student, studentIndex) => ({
