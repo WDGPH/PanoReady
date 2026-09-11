@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, X, ArrowLeft, ArrowRight, Save, Wand2 } from "lucide-react";
-import type { StudentRecord, RulesProfile, CleaningProfile, CleaningMapping, CleaningSummaryEntry } from "@/lib/types";
+import { Plus, X, ArrowRight, Save } from "lucide-react";
+import type { StudentRecord, CleaningProfile, CleaningMapping, CleaningSummaryEntry } from "@/lib/types";
 import { applyCleaningProfile, discoverFieldValues, getCleanableFields } from "@/lib/cleaning";
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -26,46 +26,44 @@ const btnSecondary: React.CSSProperties = {
   background: "var(--color-surface-2)", color: "var(--color-text-secondary)",
 };
 
-const btnPrimary: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-  cursor: "pointer", border: "none",
-  background: "var(--color-brand-400)", color: "var(--color-black)",
-};
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface CleaningViewProps {
   records: StudentRecord[];
-  activeRules: RulesProfile;
   initialProfile: CleaningProfile | null;
   onApply: (cleaned: StudentRecord[], summary: CleaningSummaryEntry[], profile: CleaningProfile) => void;
-  onSkip: () => void;
-  onBack: () => void;
-  onSaveToRuleset: (profile: CleaningProfile) => boolean;
+  onSaveToRuleset: (profile: CleaningProfile, name?: string) => boolean;
+  onProfileChange: (profile: CleaningProfile) => void;
+  isBuiltin: boolean;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CleaningView({
   records,
-  activeRules,
   initialProfile,
   onApply,
-  onSkip,
-  onBack,
   onSaveToRuleset,
+  onProfileChange,
+  isBuiltin,
 }: CleaningViewProps) {
-  const [workingProfile, setWorkingProfile] = useState<CleaningProfile>(
+  const [workingProfile, updateWorkingProfile] = useState<CleaningProfile>(
     initialProfile ?? { enabledFields: [], mappings: {} }
   );
+  function setWorkingProfile(update: (current: CleaningProfile) => CleaningProfile) {
+    const next = update(workingProfile);
+    updateWorkingProfile(next);
+    onProfileChange(next);
+  }
+  const [enabled, setEnabled] = useState(true);
+  const [profileName, setProfileName] = useState("");
   const [selectedField, setSelectedField] = useState<string>(
     initialProfile?.enabledFields[0] ?? ""
   );
   const [showFieldPicker, setShowFieldPicker] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
-  const pickableFields = useMemo(() => getCleanableFields(activeRules), [activeRules]);
+  const pickableFields = useMemo(() => getCleanableFields(), []);
 
   // Fields not yet added
   const availableToAdd = pickableFields.filter(
@@ -137,9 +135,9 @@ export default function CleaningView({
 
   function handleSave() {
     const profile = normalizeProfile(workingProfile);
-    const saved = onSaveToRuleset(profile);
+    const saved = onSaveToRuleset(profile, profileName.trim());
     if (saved) {
-      setSaveMsg("Saved to ruleset");
+      setSaveMsg("Saved to profile");
       setTimeout(() => setSaveMsg(null), 2000);
     }
   }
@@ -164,30 +162,24 @@ export default function CleaningView({
 
   if (!hasFields) {
     return (
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "56px 24px" }}>
-        <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
-          <Wand2 size={40} style={{ color: "var(--color-text-muted)", marginBottom: 16 }} />
-          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Cleaning step</h2>
-          <p style={{ color: "var(--color-text-secondary)", fontSize: 14, lineHeight: 1.7, marginBottom: 28 }}>
-            No cleaning mappings are defined. Add field mappings to replace inconsistent
-            values before validation, or skip directly to validation.
-          </p>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button style={btnSecondary} onClick={onBack}>
-              <ArrowLeft size={14} /> Open another file
-            </button>
-            <button style={btnSecondary} onClick={() => setShowFieldPicker(true)}>
-              <Plus size={14} /> Add cleaning rules
-            </button>
-            <button style={btnPrimary} onClick={onSkip}>
-              Skip to validation <ArrowRight size={15} />
-            </button>
-          </div>
-          {showFieldPicker && availableToAdd.length > 0 && (
-            <FieldPicker fields={availableToAdd} onPick={addField} onClose={() => setShowFieldPicker(false)} />
-          )}
+      <section className="cleaning-pane">
+        <h2>Cleaning mappings <span className="optional-label">(optional)</span></h2>
+        <p className="cleaning-description">Replace values, then recheck file quality.</p>
+        <div className="cleaning-empty">
+          <span>No mappings configured.</span>
+          <button style={btnSecondary} onClick={() => setShowFieldPicker(true)}>
+            <Plus size={14} /> Add mapping
+          </button>
         </div>
-      </main>
+        {showFieldPicker && availableToAdd.length > 0 && (
+          <FieldPicker fields={availableToAdd} onPick={addField} onClose={() => setShowFieldPicker(false)} />
+        )}
+        <div className="preparation-actions">
+          {saveMsg && <span role="status">{saveMsg}</span>}
+          {!isBuiltin && <button style={btnSecondary} onClick={handleSave}>Save mappings to profile</button>}
+
+        </div>
+      </section>
     );
   }
 
@@ -200,32 +192,27 @@ export default function CleaningView({
   const predefinedMappings = fieldMappings.filter((m) => !inFile.has(m.raw));
 
   return (
-    <main style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 960, margin: "0 auto", width: "100%", padding: "32px 24px 80px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Cleaning step</h2>
-          <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: "4px 0 0" }}>
-            Define raw→canonical replacements per field before validation.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={btnSecondary} onClick={onBack}>
-            <ArrowLeft size={14} /> Open another file
-          </button>
-          <button style={btnSecondary} onClick={onSkip}>
-            Skip to validation <ArrowRight size={14} />
-          </button>
-        </div>
-      </div>
+    <section className="cleaning-pane">
+      <h2>Cleaning mappings <span className="optional-label">(optional)</span></h2>
+      <p className="cleaning-description">Replace values, then recheck file quality.</p>
+      <details className="cleaning-help">
+        <summary>Matching details</summary>
+        <p>Whole-value matching; case-insensitive unless “Match case” is selected. First match wins. Regex is not supported.</p>
+        <p>Example: SchoolName “St. Marys” → “St. Mary’s”.</p>
+      </details>
 
-      <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
+      <label style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+        Apply mappings
+      </label>
+      {!enabled && <p>Mappings will be skipped.</p>}
+      <div className="cleaning-editor" style={{ display: "flex", gap: 20, minHeight: 0 }}>
         {/* Left: field list */}
         <div style={{ width: 180, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Fields</div>
           {workingProfile.enabledFields.map((f) => (
-            <button
+            <div
               key={f}
-              onClick={() => setSelectedField(f)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "7px 10px", borderRadius: 7, fontSize: 13, cursor: "pointer",
@@ -235,7 +222,7 @@ export default function CleaningView({
                 fontWeight: selectedField === f ? 600 : 400,
               }}
             >
-              <span>{f}</span>
+              <button type="button" onClick={() => setSelectedField(f)} style={{ background: "none", border: 0, color: "inherit", cursor: "pointer", textAlign: "left", flex: 1 }}>{f}</button>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); removeField(f); }}
@@ -244,7 +231,7 @@ export default function CleaningView({
               >
                 <X size={12} />
               </button>
-            </button>
+            </div>
           ))}
           {availableToAdd.length > 0 && (
             <button style={{ ...btnSecondary, justifyContent: "center", fontSize: 12, padding: "6px 10px" }} onClick={() => setShowFieldPicker(true)}>
@@ -300,6 +287,7 @@ export default function CleaningView({
                             value={existing?.canonical ?? ""}
                             onChange={(e) => setCanonical(selectedField, value, e.target.value)}
                             placeholder="No change"
+                            aria-label={`Replace ${selectedField} value ${value}`}
                             style={inputStyle}
                           />
                         </td>
@@ -373,16 +361,19 @@ export default function CleaningView({
       </div>
 
       {/* Bottom bar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--color-border)" }}>
+      <div className="preparation-actions">
         {saveMsg && <span style={{ fontSize: 12, color: "var(--color-brand-400)" }}>{saveMsg}</span>}
+        {isBuiltin && <label style={{ fontSize: 12 }}>New profile name
+          <input style={inputStyle} value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="My STIX profile" />
+        </label>}
         <button style={btnSecondary} onClick={handleSave}>
-          <Save size={14} /> Save to ruleset
+          <Save size={14} /> {isBuiltin ? "Save as new profile" : "Save mappings to profile"}
         </button>
-        <button style={btnPrimary} onClick={handleApply}>
-          Apply &amp; Continue <ArrowRight size={15} />
+        <button className="btn btn-primary" style={{ gap: 6 }} disabled={!enabled || normalizeProfile(workingProfile).enabledFields.length === 0} onClick={handleApply}>
+          Preview cleaning changes <ArrowRight size={15} />
         </button>
       </div>
-    </main>
+    </section>
   );
 }
 

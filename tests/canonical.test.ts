@@ -3,7 +3,7 @@ import { test } from "vitest";
 import * as XLSX from "xlsx";
 import { flattenCanonicalStudent, parseCanonicalXml, serializeCanonicalXml } from "../lib/canonical";
 import { importWorkbook } from "../lib/excel";
-import { applyValidationFixes, parseStixXml, validateXml } from "../lib/validator";
+import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
 import { standardizeUnit } from "../lib/cleaner";
 
 const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-1234</ContactPhone><ContactEmail>analyst@example.ca</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
@@ -207,22 +207,21 @@ test("validateXml suggests deterministic fixes for aliasable, oversized, and ref
   assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
 });
 
-test("canonical XML Gender only accepts M/F/Unk/Other, matching the real 4-value schema enum", () => {
+test("canonical XML Gender accepts the configured four output values", () => {
   const genderXml = (gender: string) => xml().replace("<Gender>F</Gender>", `<Gender>${gender}</Gender>`);
   for (const gender of ["M", "F", "Unk", "Other"]) {
     const result = validateXml(genderXml(gender));
     assert.ok(!result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be accepted`);
   }
-  // X and N are valid choices in the template's data-entry dropdown, but the official
-  // export macro maps both to "Other" before writing XML — a compliant file should never
-  // contain a literal Gender of X or N, so the validator must still reject them.
+  // X and N are workbook-input aliases that normalize to Other. Canonical output
+  // must use one of the four configured values, so the validator rejects literals.
   for (const gender of ["X", "N", "Bogus"]) {
     const result = validateXml(genderXml(gender));
     assert.ok(result.issues.some((i) => i.ruleId === "GENDER_ALLOWED_VALUE"), `Gender "${gender}" should be rejected`);
   }
 });
 
-test("Excel import maps Gender x/n to Other, matching the official export macro", () => {
+test("Excel import maps Gender x/n aliases to Other", () => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["First Name", "Last Name", "DOB", "Gender"],
@@ -312,8 +311,8 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
 });
 
 test("fixes operate through the canonical model for default-namespace XML", () => {
-  const records = parseStixXml(xml());
+  const records = parseSTIXXml(xml());
   assert.equal(records[0].fields.FirstName, "Ada");
   const fixed = applyValidationFixes(xml(), [{ issueId: "manual", recordId: "school0:student0", field: "FirstName", oldValue: "Ada", newValue: "Augusta", ruleId: "MANUAL", appliedAt: 1 }]);
-  assert.equal(parseStixXml(fixed)[0].fields.FirstName, "Augusta");
+  assert.equal(parseSTIXXml(fixed)[0].fields.FirstName, "Augusta");
 });
