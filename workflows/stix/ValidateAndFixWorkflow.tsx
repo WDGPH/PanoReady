@@ -11,52 +11,37 @@ import DownloadView from "./validation/DownloadView";
 import FixView from "./validation/FixView";
 import IssuesView from "./validation/IssuesView";
 import RevalidateView from "./validation/RevalidateView";
+import AssessmentView from "./validation/AssessmentView";
 
 import RulesetSelector from "@/components/RulesetSelector";
 import WorkflowProgress from "./validation/WorkflowProgress";
-import type { ReviewFilter } from "./validation/overview";
+import type { ReviewFilter, ReviewExclusion } from "./validation/overview";
 
 type ValidateWorkflowState =
-  | { step: "clean"; input: ValidateWorkflowInput }
-  | { step: "clean-summary"; input: ValidateWorkflowInput; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
-  | { step: "issues" | "fix" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
+  | { step: "assessing"; xml: string; fileName: string; rules: RulesProfile }
+  | { step: "clean-summary"; input: ValidateWorkflowInput; session: ValidateSession; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
+  | { step: "issues" | "fix" | "manual" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
 
 export default function ValidateAndFixWorkflow({ input, onExit }: { input: ValidateWorkflowInput; onExit: () => void }) {
-  const [state, setState] = useState<ValidateWorkflowState>({ step: "clean", input });
+  const [applying, setApplying] = useState(false);
 
   const [profile, setProfile] = useState<{ id: string; rules: RulesProfile; cleaning: CleaningProfile | null; revision: number }>(() => {
     const saved = listCustomRulesets().find((candidate) => candidate.id === getActiveRulesetId());
     return { id: saved?.id ?? BUILTIN_ID, rules: saved?.rules ?? defaultRules, cleaning: saved?.cleaning ?? null, revision: 0 };
   });
   const [draftCleaning, setDraftCleaning] = useState<CleaningProfile | null>(profile.cleaning);
-  const [cleaningSkipped, setCleaningSkipped] = useState(false);
+  const [state, setState] = useState<ValidateWorkflowState>({ step: "assessing", xml: input.xml, fileName: input.fileName, rules: profile.rules });
+  const [exclusions, setExclusions] = useState<ReviewExclusion[]>([]);
   const [selectorRevision, setSelectorRevision] = useState(0);
 
-  const runValidation = (xml: string, fileName: string, validationRules = profile.rules) => {
-    const result = validateXml(xml, validationRules);
-    setState({ step: "issues", session: { fileName, originalXml: xml, initialResult: result, fixes: [], validationRules } });
-  };
-
-  const renderStep = () => {
-    if (state.step === "clean") return (
-      <>
-      <header className="preparation-header">
-        <h1>Prepare your file</h1>
-        <p>{input.fileName}</p>
-          <RulesetSelector key={selectorRevision} compact initialId={profile.id} notifyOnMount={false} onRulesChange={(rules, cleaning, id) => {
-            setProfile((current) => ({ id, rules, cleaning, revision: current.revision + 1 }));
-            setDraftCleaning(cleaning);
-          }} />
-      </header>
+  const cleaningOptions = (session: ValidateSession) => (
       <CleaningView
         key={profile.revision}
-        records={state.input.records}
+        records={(session.revalidatedResult ?? session.initialResult).records}
         initialProfile={draftCleaning}
         onProfileChange={setDraftCleaning}
         isBuiltin={profile.id === BUILTIN_ID}
-        onApply={(cleanedRecords, summary) => { setCleaningSkipped(false); setState({ step: "clean-summary", input: state.input, cleanedRecords, summary }); }}
-        onSkip={() => { setCleaningSkipped(true); runValidation(state.input.xml, state.input.fileName); }}
-        onBack={onExit}
+        onApply={(cleanedRecords, summary) => { setState({ step: "clean-summary", session, input: { ...input, xml: session.finalXml ?? session.originalXml, records: (session.revalidatedResult ?? session.initialResult).records }, cleanedRecords, summary }); }}
         onSaveToRuleset={(cleaning, name) => {
           const ruleset = listCustomRulesets().find((candidate) => candidate.id === profile.id);
           const updated = ruleset ? { ...ruleset, rules: profile.rules } : {
@@ -71,17 +56,18 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
           return true;
         }}
       />
-      </>
-    );
+  );
+  const renderStep = () => {
+    if (state.step === "assessing") return <AssessmentView xml={state.xml} rules={state.rules} onBack={onExit} onComplete={(result) => setState({ step: "issues", session: { fileName: state.fileName, originalXml: state.xml, initialResult: result, fixes: [], validationRules: state.rules } })} />;
 
     if (state.step === "clean-summary") return (
       <CleaningSummaryView
         summary={state.summary}
-        onBack={() => setState({ step: "clean", input: state.input })}
+        onBack={() => setState({ step: "fix", session: state.session })}
         onContinue={() => {
           const fixes: AppliedFix[] = [];
           const fixed = new Set<string>();
-          let fixIndex = 0;
+          let fixIndex = state.session.fixes.length;
           for (const entry of state.summary) {
             if (entry.count === 0) continue;
             for (let index = 0; index < state.input.records.length; index++) {
@@ -95,35 +81,42 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
             }
           }
           const xml = fixes.length ? applyValidationFixes(state.input.xml, fixes) : state.input.xml;
-          runValidation(xml, state.input.fileName, profile.rules);
+          const allFixes = [...state.session.fixes, ...fixes];
+          setState({ step: "fix", session: { ...state.session, finalXml: xml, fixes: allFixes, appliedFixCount: allFixes.length, revalidatedResult: validateXml(xml, state.session.validationRules) } });
         }}
       />
     );
 
     const session = state.session;
-    if (state.step === "issues") return <IssuesView session={session} onFix={(filter) => setState({ step: "fix", session, filter })} onSkipToDownload={() => setState({ step: "download", session })} />;
-    if (state.step === "fix") return <FixView key={JSON.stringify(state.filter ?? {})} session={session} filter={state.filter} onClearFilter={() => setState({ step: "fix", session })} onApply={(fixes) => setState({ step: "revalidate", session: { ...session, fixes } })} />;
-    if (state.step === "revalidate") return <RevalidateView session={session} onContinue={(updated) => setState({ step: "download", session: updated })} />;
-    return <DownloadView session={session} onStartOver={onExit} />;
+    if (state.step === "issues") return <IssuesView onBack={onExit} advancedOptions={<RulesetSelector key={selectorRevision} compact initialId={profile.id} notifyOnMount={false} onRulesChange={(rules, cleaning, id) => {
+      setProfile((current) => ({ id, rules, cleaning, revision: current.revision + 1 }));
+      setDraftCleaning(cleaning);
+      setExclusions([]);
+      setState({ step: "issues", session: { ...session, validationRules: rules, revalidatedResult: validateXml(session.finalXml ?? session.originalXml, rules) } });
+    }} />} session={session} exclusions={exclusions} onExclusionsChange={setExclusions} onFix={(filter) => setState({ step: "fix", session, filter })} onSkipToDownload={() => setState({ step: "download", session })} />;
+    if (state.step === "fix" || state.step === "manual") return <FixView onBack={() => setState({ step: state.step === "fix" ? "issues" : "fix", session })} advancedOptions={state.step === "fix" ? cleaningOptions(session) : undefined} key={JSON.stringify([state.step, state.filter ?? {}, exclusions])} view={state.step === "fix" ? "automatic" : "manual"} exclusions={exclusions} session={session} filter={state.filter} onBusyChange={setApplying} onContinue={() => setState({ step: "manual", session, filter: state.filter })} onAutoApply={(batch) => {
+      const fixes = [...session.fixes, ...batch];
+      const finalXml = applyValidationFixes(session.finalXml ?? session.originalXml, batch);
+      const revalidatedResult = validateXml(finalXml, session.validationRules);
+      setState({ ...state, session: { ...session, fixes, finalXml, revalidatedResult, appliedFixCount: fixes.length } });
+    }} onClearFilter={() => setState({ step: state.step, session })} onApply={(fixes) => setState({ step: "revalidate", session: { ...session, fixes } })} />;
+    if (state.step === "revalidate") return <RevalidateView onBack={() => setState({ step: "manual", session })} session={session} onReturnToFixes={(updated, step) => { setState({ step, session: updated }); window.scrollTo({ top: 0 }); }} onContinue={(updated) => setState({ step: "download", session: updated })} />;
+    return <DownloadView onReturnToFixes={(step) => { setState({ step, session }); window.scrollTo({ top: 0 }); }} session={session} onStartOver={onExit} />;
   };
 
-  const stage = state.step === "clean" || state.step === "clean-summary" ? 1 : state.step === "issues" ? 2 : state.step === "fix" ? 3 : state.step === "revalidate" ? 4 : 5;
-  const canNavigate = (target: number) => target < stage && (target !== 4 || ("session" in state && Boolean(state.session.revalidatedResult)));
+  const stage = state.step === "issues" || state.step === "assessing" ? 1 : state.step === "fix" || state.step === "clean-summary" ? 2 : state.step === "manual" ? 3 : state.step === "revalidate" ? 4 : 5;
+  const canNavigate = (target: number) => state.step !== "assessing" && !applying && target < stage && (target !== 4 || ("session" in state && Boolean(state.session.revalidatedResult)));
   const navigate = (target: number) => {
-    if (!canNavigate(target)) return;
-    if (target === 1) {
-      setState({ step: "clean", input });
-    } else if ("session" in state) {
-      const session = { ...state.session, finalXml: undefined, revalidatedResult: undefined };
-      if (target === 2) setState({ step: "issues", session: { ...session, fixes: [] } });
-      if (target === 3) setState({ step: "fix", session });
-      if (target === 4) setState({ step: "revalidate", session: state.session });
-    }
+    if (!canNavigate(target) || !("session" in state)) return;
+    const session = state.session;
+    if (target === 1) setState({ step: "issues", session });
+    if (target === 2) setState({ step: "fix", session });
+    if (target === 3) setState({ step: "manual", session });
+    if (target === 4) setState({ step: "revalidate", session });
     window.scrollTo({ top: 0 });
   };
-  const noFixes = "session" in state && state.session.fixes.length === 0;
   return <>
-    <WorkflowProgress canNavigate={canNavigate} onNavigate={navigate} stage={stage} cleaningSkipped={cleaningSkipped} noFixes={noFixes} hasIssues={"session" in state && state.session.initialResult.issues.length > 0} />
+    <WorkflowProgress canNavigate={canNavigate} onNavigate={navigate} stage={stage} />
     {renderStep()}
   </>;
 }

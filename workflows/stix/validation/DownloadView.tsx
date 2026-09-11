@@ -1,4 +1,5 @@
 "use client";
+import WorkflowNavigation from "@/components/WorkflowNavigation";
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
@@ -6,12 +7,10 @@ import * as XLSX from "xlsx";
 import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Download, FileCode, FileText, Lock, School, ShieldX, SlidersHorizontal, Users } from "lucide-react";
 import { prettyPrintXml } from "@/lib/cleaner";
 import { birthYearFromDate, processExport, studentFromRecord } from "@/lib/pullInfo";
-import { BUILTIN_ID, getActiveRulesetId, listCustomRulesets } from "@/lib/rulesets";
 import { downloadBlob, downloadText, toCsv } from "@/lib/utils";
 import { generateAgeGroupReportCsv, generateIssueReportCsv, generateSchoolSummaryCsv } from "@/lib/validator";
 import type { ValidateSession } from "@/lib/types";
 import StatCard from "@/components/StatCard";
-import { GateBadge } from "./ValidationBadges";
 
 // ─── Report filter helpers ─────────────────────────────────────────────────────
 
@@ -117,7 +116,9 @@ function AgeRangeFilter({
 export default function DownloadView({
   session,
   onStartOver,
+  onReturnToFixes,
 }: {
+  onReturnToFixes: (view: "fix" | "manual") => void;
   session: ValidateSession;
   onStartOver: () => void;
 }) {
@@ -248,12 +249,13 @@ export default function DownloadView({
 
   return (
     <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
-      <button onClick={onStartOver} className="btn btn-ghost" style={{ marginBottom: 22, padding: "5px 9px", gap: 5, fontSize: 13 }}>
-        <ArrowLeft size={13} /> Process another file
-      </button>
+      <WorkflowNavigation onBack={() => onReturnToFixes("manual")} backActions={<div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+        <button type="button" onClick={() => onReturnToFixes("fix")} className="btn btn-secondary"><ArrowLeft size={16} /> Return to automatic fixes</button>
+        <button type="button" onClick={() => onReturnToFixes("manual")} className="btn btn-secondary"><ArrowLeft size={16} /> Return to manual fixes</button>
+      </div>} onNext={onStartOver} nextLabel="Process another file" />
 
       {/* Gate banner */}
-      <h1 style={{ fontSize: 22, margin: "0 0 24px" }}>Your corrected file</h1>
+      <h1 style={{ fontSize: 22, margin: "0 0 24px" }}>Output</h1>
       <div style={{
         borderLeft: `2px solid ${gate === "READY" ? "var(--verde)" : "var(--color-error-text)"}`,
         padding: "6px 0 6px 22px",
@@ -268,22 +270,12 @@ export default function DownloadView({
             <span style={{ fontWeight: 700, fontSize: 16, color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }}>
               {gate === "READY" ? "File is READY" : needsReview ? "File requires review" : "File is BLOCKED"}
             </span>
-            <GateBadge gate={gate} />
           </div>
           <div style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
             {gate === "READY"
               ? `No blocking errors · ${warningCount > 0 ? `${warningCount} warning${warningCount !== 1 ? "s" : ""} for review` : "All clear"}`
               : needsReview ? "STIX/Panorama checks passed; the remaining warnings require review before submission."
-              : `${errorCount} blocking error${errorCount !== 1 ? "s" : ""} must be resolved before submission`}
-          </div>
-          <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 4 }}>
-            {(() => {
-              const id   = getActiveRulesetId();
-              const name = id === BUILTIN_ID
-                ? "Built-in (WDG)"
-                : (listCustomRulesets().find((r) => r.id === id)?.name ?? "Built-in (WDG)");
-              return `Validated against: ${name}`;
-            })()}
+              : `${errorCount} error${errorCount !== 1 ? "s" : ""} must be resolved before submission`}
           </div>
         </div>
       </div>

@@ -286,6 +286,8 @@ export type ImportPreview = {
 };
 
 export type ValidateSession = {
+  /** Number of audit entries already reflected in finalXml. */
+  appliedFixCount?: number;
   fileName: string;
   originalXml: string;
   initialResult: ValidationResult;

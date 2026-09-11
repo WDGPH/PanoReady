@@ -1,4 +1,5 @@
 "use client";
+import PagedTable from "@/components/PagedTable";
 
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -184,10 +185,10 @@ export default function CompareWorkflow({ comparison, onStartOver }: { compariso
           <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No student moves between schools were detected.</p>
         ) : (
           <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
-            <table className="data-table">
+            <PagedTable className="data-table">
               <thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead>
               <tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody>
-            </table>
+            </PagedTable>
           </div>
         )}
         </div>
@@ -215,31 +216,31 @@ export default function CompareWorkflow({ comparison, onStartOver }: { compariso
             <button onClick={downloadChanges} className="btn btn-secondary" style={{ gap: 5, fontSize: 12, padding: "6px 12px" }}><Download size={12} /> CSV</button>
           </div>
           <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
-            <table className="data-table">
+            <PagedTable className="data-table">
               <thead><tr><th>School</th><th>Previous</th><th>Current</th><th>Added</th><th>Removed</th><th>Changed</th></tr></thead>
           <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => { selectSchool(school.schoolName); setViewMode("records"); }} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{school.schoolName}</td><td>{school.previousCount}</td><td>{school.currentCount}</td><td>{school.added}</td><td>{school.removed}</td><td>{school.changed}</td></tr>)}</tbody>
-            </table>
+            </PagedTable>
           </div>
         </section>
       ) : viewMode === "fields" ? (
         <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
           <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Field changes</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Fields changed among matched student records, ordered by frequency.</p></div>
-          <div className="compare-table-scroll"><table className="data-table"><thead><tr><th>Field</th><th>Changed records</th></tr></thead><tbody>{comparison.fieldChanges.map((field) => <tr key={field.field}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{field.label}</td><td>{field.count}</td></tr>)}</tbody></table></div>
+          <div className="compare-table-scroll"><PagedTable className="data-table"><thead><tr><th>Field</th><th>Changed records</th></tr></thead><tbody>{comparison.fieldChanges.map((field) => <tr key={field.field}><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{field.label}</td><td>{field.count}</td></tr>)}</tbody></PagedTable></div>
         </section>
       ) : viewMode === "transfers" ? (
         <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
           <div style={{ marginBottom: 14 }}><h2 style={{ fontSize: 16, margin: "0 0 3px" }}>Student transfers</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Students matched across both files whose school changed.</p></div>
-          <div className="compare-table-scroll"><table className="data-table"><thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead><tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody></table></div>
+          <div className="compare-table-scroll"><PagedTable className="data-table"><thead><tr><th>From school</th><th>To school</th><th>Students</th><th>Matched students</th></tr></thead><tbody>{comparison.schoolTransfers.map((transfer) => <tr key={`${transfer.fromSchool}-${transfer.toSchool}`}><td style={{ color: "var(--color-text-primary)" }}>{transfer.fromSchool}</td><td style={{ color: "var(--color-text-primary)" }}>{transfer.toSchool}</td><td>{transfer.count}</td><td>{transfer.students.join(", ")}</td></tr>)}</tbody></PagedTable></div>
         </section>
       ) : (
         <div className="compare-record-layout">
         <section className="card compare-school-panel" style={{ padding: "16px" }}>
           <div style={{ marginBottom: 12 }}><h2 style={{ fontSize: 15, margin: "0 0 3px" }}>Schools</h2><p style={{ color: "var(--color-text-muted)", fontSize: 11, margin: 0 }}>Select a school to focus the records.</p></div>
           <div className="compare-table-scroll" style={{ overflowX: "auto" }}>
-            <table className="data-table">
+            <PagedTable className="data-table">
               <thead><tr><th>School</th></tr></thead>
               <tbody>{comparison.schoolChanges.map((school) => <tr key={school.schoolName} onClick={() => selectSchool(school.schoolName)} style={{ cursor: "pointer" }}><td style={{ color: "var(--color-text-primary)", fontWeight: selectedSchool === school.schoolName ? 700 : 500 }}>{school.schoolName}</td></tr>)}</tbody>
-            </table>
+            </PagedTable>
           </div>
         </section>
         <section className="card compare-detail-card" style={{ padding: "18px 20px" }}>
@@ -281,7 +282,7 @@ export default function CompareWorkflow({ comparison, onStartOver }: { compariso
           )}
           {exportError && <div role="alert" style={{ color: "var(--color-error-text)", fontSize: 11.5, marginBottom: 10 }}>{exportError}</div>}
           <div className="compare-review-summary"><span>{reviewedCount} confirmed</span><span>{needsFixCount} needs fix</span><span>{visibleRecords.filter((record) => record.kind === "changed").length} changed records</span></div>
-          {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div className="compare-table-scroll" style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th><th>Review</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={`${record.kind}-${record.key}`} onClick={() => setSelectedRecordKey(record.key)} style={{ cursor: "pointer", background: selectedRecordKey === record.key ? "var(--color-surface-2)" : undefined }}><td><span className={`change-badge change-badge--${record.kind}`}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? <div className="field-tag-list">{record.changedFields.map((field) => <span key={field} className="field-tag">{field}</span>)}</div> : <span style={{ color: "var(--color-text-muted)" }}>—</span>}</td><td style={{ color: "var(--color-teal-400)", fontSize: 11 }}>Inspect →</td></tr>)}</tbody></table></div>}
+          {visibleRecords.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13, margin: 0 }}>No record-level differences were detected{selectedSchool === "all" ? "." : " for this school."}</p> : <div className="compare-table-scroll" style={{ overflowX: "auto" }}><PagedTable className="data-table"><thead><tr><th>Change</th><th>Student</th><th>School</th><th>Changed fields</th><th data-sortable={false}>Review</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={`${record.kind}-${record.key}`} onClick={() => setSelectedRecordKey(record.key)} style={{ cursor: "pointer", background: selectedRecordKey === record.key ? "var(--color-surface-2)" : undefined }}><td><span className={`change-badge change-badge--${record.kind}`}>{record.kind}</span></td><td style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{record.studentName}</td><td>{record.schoolName}</td><td>{record.changedFields.length ? <div className="field-tag-list">{record.changedFields.map((field) => <span key={field} className="field-tag">{field}</span>)}</div> : <span style={{ color: "var(--color-text-muted)" }}>—</span>}</td><td style={{ color: "var(--color-teal-400)", fontSize: 11 }}>Inspect →</td></tr>)}</tbody></PagedTable></div>}
         </section>
         {selectedRecord ? (
           <aside className="card compare-school-summary compare-record-review">

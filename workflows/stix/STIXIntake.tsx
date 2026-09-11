@@ -297,8 +297,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
           </div>
           <p className="landing-lede">A workspace for preparing data for Panorama. Check school-enrolment files, review automatic corrections, and compare changes before import.</p>
         </header>
-        <section id="tools" aria-label="Use the tool">
-        <h2 className="landing-tool-label">Use the tool</h2>
+        <section id="tools" aria-label="File tools">
         <header className="workflow-context">
           <div className="workflow-tabs" role="group" aria-label="Workflow">
             {WORKFLOWS.map((w) => (
@@ -348,7 +347,6 @@ export default function STIXIntake({ onValidate, onCompare }: {
         </div>
 
 
-        <p className="intake-assurance">Files stay in your browser. You review changes before applying them.</p>
 
         {(xlsmMeta || xlsmPreview || (workflow === "compare" && currentXlsmMeta)) && (
           <details className="advanced-options">

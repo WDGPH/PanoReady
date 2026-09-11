@@ -1,6 +1,7 @@
 "use client";
+import WorkflowNavigation from "@/components/WorkflowNavigation";
 
-import { ArrowLeft, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
 import type { CleaningSummaryEntry } from "@/lib/types";
 
 export interface CleaningSummaryViewProps {
@@ -20,6 +21,7 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
   return (
     <main style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: "var(--page-width)", margin: "0 auto", width: "100%", padding: "32px var(--page-gutter) 80px" }}>
 
+      <WorkflowNavigation onBack={onBack} onNext={onContinue} nextLabel="Apply cleaning and validate" nextDescription="Apply cleaning and recheck" />
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 6px" }}>
@@ -95,31 +97,6 @@ export default function CleaningSummaryView({ summary, onBack, onContinue }: Cle
         <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>No mappings were defined.</p>
       )}
 
-      {/* Footer buttons */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--color-border)" }}>
-        <button
-          onClick={onBack}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "9px 16px", borderRadius: 7, fontSize: 13, fontWeight: 500,
-            cursor: "pointer", border: "1px solid var(--color-border)",
-            background: "var(--color-surface-2)", color: "var(--color-text-secondary)",
-          }}
-        >
-          <ArrowLeft size={14} /> Back to cleaning
-        </button>
-        <button
-          onClick={onContinue}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-            cursor: "pointer", border: "none",
-            background: "var(--color-brand-400)", color: "var(--color-black)",
-          }}
-        >
-          Apply cleaning and validate <ArrowRight size={15} />
-        </button>
-      </div>
     </main>
   );
 }
