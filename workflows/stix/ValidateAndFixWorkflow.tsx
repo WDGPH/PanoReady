@@ -14,6 +14,7 @@ import IssuesView from "./validation/IssuesView";
 import RevalidateView from "./validation/RevalidateView";
 import AssessmentView from "./validation/AssessmentView";
 import ActionHistory from "./validation/ActionHistory";
+import SaveProgress from "@/components/SaveProgress";
 import styles from "./ValidateAndFixWorkflow.module.css";
 
 import RulesetSelector from "@/components/RulesetSelector";
@@ -135,7 +136,9 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
     {historyError && <p role="alert">{historyError}</p>}
     <div className={styles.layout}>
       {renderStep()}
-      {"session" in state && <ActionHistory history={state.session.history ?? []} disabled={applying || pendingChanges || state.step === "clean-summary"} onUndo={() => {
+      {"session" in state && <ActionHistory
+        saveProgress={<SaveProgress fileName={state.session.fileName} xml={state.session.finalXml ?? state.session.originalXml} disabled={applying || pendingChanges} />}
+        history={state.session.history ?? []} disabled={applying || pendingChanges || state.step === "clean-summary"} onUndo={() => {
         try {
           const session = undoLastReviewAction(state.session);
           const action = state.session.history?.findLast((entry) => entry.status === "applied");

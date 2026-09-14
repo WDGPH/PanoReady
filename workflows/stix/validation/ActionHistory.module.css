@@ -17,6 +17,9 @@
   gap: 4px;
 }
 
+.save { margin-bottom: 16px; }
+.save button { font-size: 11px; padding: 8px 10px; }
+
 .action {
   background: none;
   border: 0;
