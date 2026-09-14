@@ -23,6 +23,8 @@
     "lint": "eslint",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "test": "vitest run",
+    "e2e:build": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\" && GITHUB_PAGES=true npm run build",
+    "e2e": "playwright test",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -43,6 +45,7 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
