@@ -444,3 +444,9 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 ## XML structure acceptance
 
 STIX XML is checked before values enter the working model. Every element must use the `http://ontario.ca` namespace and the supported STIX hierarchy. Unknown elements or attributes, duplicate singleton elements, more than two guardians, mixed container text, multiple roots, and DTD/entity declarations are rejected. Namespace aliases, comments, standard XML entities, phone `type` attributes and root `xsi:schemaLocation` are supported. Missing values in known fields remain validation findings. These are local structure checks, not certified XSD validation.
+
+## Workbook birth-date interpretation
+
+Intake shows evidence across all imported student birth dates, with the first five populated values as a preview. Choose day/month/year or month/day/year to resolve ambiguous text; each file in Compare Files has its own choice. Opposing unambiguous day-first and month-first values block conversion even if an order is selected. Choices reset when the file changes and are not stored with workbook metadata.
+
+Typed Excel date cells use their stored numeric value, date format and workbook 1900/1904 date system, not their displayed text. Excel serial 60 in the 1900 system, fractional days, numeric cells without a date format, formulas and invalid calendar dates are rejected. Year-first and uniquely interpretable text dates can normalize without a choice. Output uses YYYY-MM-DD. Unresolved ambiguous, invalid or conflicting dates block intake; correct the source or choose a consistent interpretation before continuing. Other workbook mapping behavior is unchanged.
