@@ -149,7 +149,7 @@ AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT
 
 ---
 
-### Rule: `birthdate-format`
+### Rule: `BIRTHDATE_FORMAT`
 
 **Severity:** error
 **Field:** `BirthDate`
@@ -158,7 +158,39 @@ The `BirthDate` field must be in `YYYY-MM-DD` format and represent a parseable c
 
 **Pass condition:** Value matches `YYYY-MM-DD` and the date is valid (e.g. month 1–12, day within month).
 
-**Auto-fix:** Yes, for common alternate formats. The validator attempts to parse dates in formats such as `DD/MM/YYYY`, `MM/DD/YYYY`, and `YYYY/MM/DD`, and suggests the normalized `YYYY-MM-DD` form when it can resolve the date unambiguously.
+**Auto-fix:** Only for real, unambiguous numeric dates no later than today.
+XML validation suggests `YYYY-MM-DD`; workbook import uses the same calendar
+rules to normalize birth-date text before validation.
+
+| Input | Result |
+|---|---|
+| `2015/4/13` or `2015-4-13` | `2015-04-13` |
+| `13/04/2015` or `04-13-2015` | `2015-04-13` |
+| `04/04/2015` | `2015-04-04` (both orders agree) |
+| `03/04/2015` | Review required; day/month order is ambiguous |
+| `2015-02-29` or `31/04/2015` | Review required; impossible calendar date |
+
+Use a four-digit year and consistent slash or hyphen separators. Month names,
+two-digit years, numeric serial text, and timestamps require source confirmation;
+PanoReady does not use locale guessing or timezone conversion. Workbook dates
+are evaluated as formatted cell text, so export them as `YYYY-MM-DD` to avoid
+ambiguous displays. Invalid or ambiguous values are preserved for review.
+Future birth dates still fail validation and receive no automatic suggestion.
+
+Metadata `CreateDate` continues to require a real `YYYY-MM-DD` date no later
+than today; it is not automatically rewritten. Age reports and filters consume
+only confirmed, valid ISO birth dates. Unresolved dates have unknown age and
+do not contribute to age-group counts.
+
+### OEN identity findings
+
+`OEN_DUPLICATE` blocks same-school duplicates; `OEN_DUAL_ENROLLMENT` warns
+about cross-school occurrences. Neither finding offers a replacement OEN input.
+Review the records in the source system and upload a corrected file if needed.
+A cross-school occurrence does not hide later same-school duplicates. Correction
+of a malformed OEN (`OEN_FORMAT`) remains available. A separate duplicate
+resolution workflow is outside the current scope.
+
 
 ---
 
@@ -408,3 +440,13 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 | `whitespace` | Yes | Trimmed value |
 | `duplicate-oen` | No | — |
 | `duplicate-name-dob-school` | No | — |
+
+## XML structure acceptance
+
+STIX XML is checked before values enter the working model. Every element must use the `http://ontario.ca` namespace and the supported STIX hierarchy. Unknown elements or attributes, duplicate singleton elements, more than two guardians, mixed container text, multiple roots, and DTD/entity declarations are rejected. Namespace aliases, comments, standard XML entities, phone `type` attributes and root `xsi:schemaLocation` are supported. Missing values in known fields remain validation findings. These are local structure checks, not certified XSD validation.
+
+## Workbook birth-date interpretation
+
+Intake shows evidence across all imported student birth dates, with the first five populated values as a preview. Choose day/month/year or month/day/year to resolve ambiguous text; each file in Compare Files has its own choice. Opposing unambiguous day-first and month-first values block conversion even if an order is selected. Choices reset when the file changes and are not stored with workbook metadata.
+
+Typed Excel date cells use their stored numeric value, date format and workbook 1900/1904 date system, not their displayed text. Excel serial 60 in the 1900 system, fractional days, numeric cells without a date format, formulas and invalid calendar dates are rejected. Year-first and uniquely interpretable text dates can normalize without a choice. Output uses YYYY-MM-DD. Unresolved ambiguous, invalid or conflicting dates block intake; correct the source or choose a consistent interpretation before continuing. Other workbook mapping behavior is unchanged.

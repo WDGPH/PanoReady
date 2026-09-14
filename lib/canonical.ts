@@ -1,3 +1,4 @@
+import { assertSupportedXmlStructure } from "./xmlStructure";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import type { ValidationIssue } from "./types";
 
@@ -98,34 +99,12 @@ function name(value: unknown): CanonicalName {
   return { first: text(n.First), middle: text(n.Middle), last: text(n.Last) };
 }
 
-function rootNamespace(xml: string): string | null {
-  const withoutProlog = xml.replace(/^\s*<\?xml[\s\S]*?\?>/i, "").replace(/^\s*<!--([\s\S]*?)-->/, "").trimStart();
-  const match = withoutProlog.match(/^<([A-Za-z_][\w.-]*:)?SchoolUpload\b([^>]*)>/i);
-  if (!match) return null;
-  const prefix = match[1]?.slice(0, -1) ?? "";
-  const attrs = match[2];
-  const declaration = prefix
-    ? new RegExp(`\\bxmlns:${prefix}\\s*=\\s*["']([^"']+)["']`, "i")
-    : /\bxmlns\s*=\s*["']([^"']+)["']/i;
-  return attrs.match(declaration)?.[1] ?? "";
-}
-
-function inspectKeys(target: XmlNode, allowed: string[], path: string, diagnostics: ValidationIssue[]) {
-  for (const [key, value] of Object.entries(target)) {
-    if (key.startsWith("@_") || key === "#text") continue;
-    if (!allowed.includes(key)) diagnostics.push({ id: `xml-unknown-${path}-${key}`, severity: "warning", ruleId: "XML_UNKNOWN_ELEMENT", layer: "XML", message: `Unknown element ${path}/${key} is preserved only in the original XML and requires review.`, xmlPath: `${path}/${key}`, autoFixable: false });
-    else if (Array.isArray(value) && !["School", "Student", "Guardian"].includes(key)) diagnostics.push({ id: `xml-duplicate-${path}-${key}`, severity: "error", ruleId: "XML_DUPLICATE_ELEMENT", layer: "XML", message: `Duplicate singleton element ${path}/${key} is not allowed.`, xmlPath: `${path}/${key}`, autoFixable: false });
-  }
-}
-
 export function parseCanonicalXml(xml: string): CanonicalUpload {
   if (xml.length > 50_000_000) throw new Error("XML exceeds the 50 MB local processing limit.");
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error("DOCTYPE and entity declarations are not supported.");
   const wellFormed = XMLValidator.validate(xml);
   if (wellFormed !== true) throw new Error(`XML parse error: ${wellFormed.err.msg}`);
-  const namespace = rootNamespace(xml);
-  if (namespace === null) throw new Error("Root element <SchoolUpload> not found.");
-  if (namespace !== ONTARIO_NAMESPACE) throw new Error(`Unexpected SchoolUpload namespace "${namespace || "(none)"}".`);
+  assertSupportedXmlStructure(xml);
 
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -134,7 +113,7 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
     parseTagValue: false,
     parseAttributeValue: false,
     removeNSPrefix: true,
-    processEntities: false,
+    processEntities: true,
     isArray: (tagName) => tagName === "School" || tagName === "Student" || tagName === "Guardian",
   });
   const parsed = parser.parse(xml) as XmlNode;
@@ -142,26 +121,14 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
   const metadataNode = node(root.Metadata);
   const board = node(metadataNode.SchoolBoard);
   const diagnostics: ValidationIssue[] = [];
-  inspectKeys(root, ["Metadata", "School"], "SchoolUpload", diagnostics);
-  inspectKeys(metadataNode, ["CreateDate", "CreateTime", "CreatedBy", "ContactPhone", "ContactEmail", "FullUpload", "SchoolBoard"], "SchoolUpload/Metadata", diagnostics);
-  inspectKeys(board, ["BoardNumber", "Name"], "SchoolUpload/Metadata/SchoolBoard", diagnostics);
   const schools = array(root.School as XmlNode | XmlNode[]).map((rawSchool, schoolIndex): CanonicalSchool => {
     const school = node(rawSchool);
-    inspectKeys(school, ["SchoolNumber", "Name", "Students"], `SchoolUpload/School[${schoolIndex}]`, diagnostics);
     const studentsContainer = node(school.Students);
-    inspectKeys(studentsContainer, ["Student"], `SchoolUpload/School[${schoolIndex}]/Students`, diagnostics);
     const students = array(studentsContainer.Student as XmlNode | XmlNode[]).map((rawStudent, studentIndex): CanonicalStudent => {
       const student = node(rawStudent);
       const addressNode = node(student.Address);
-      const studentPath = `SchoolUpload/School[${schoolIndex}]/Students/Student[${studentIndex}]`;
-      inspectKeys(student, ["OEN", "Grade", "Class", "Name", "AliasName", "Gender", "BirthDate", "Language", "CountryOfOrigin", "Guardian", "Address", "Phone"], studentPath, diagnostics);
-      inspectKeys(node(student.Name), ["First", "Middle", "Last"], `${studentPath}/Name`, diagnostics);
-      inspectKeys(node(student.AliasName), ["First", "Middle", "Last"], `${studentPath}/AliasName`, diagnostics);
-      inspectKeys(addressNode, ["Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "StreetType", "StreetDirection", "RuralRoute", "PoBoxNumber", "City", "Province", "PostalCode"], `${studentPath}/Address`, diagnostics);
       const guardians = array(student.Guardian as XmlNode | XmlNode[]).slice(0, 2).map((rawGuardian): CanonicalGuardian => {
         const guardian = node(rawGuardian);
-        inspectKeys(guardian, ["Name", "Relationship", "Phone"], `${studentPath}/Guardian`, diagnostics);
-        inspectKeys(node(guardian.Name), ["First", "Middle", "Last"], `${studentPath}/Guardian/Name`, diagnostics);
         return { name: name(guardian.Name), relationship: text(guardian.Relationship), phone: phone(guardian.Phone) };
       });
       const alias = name(student.AliasName);

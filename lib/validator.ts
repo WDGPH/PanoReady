@@ -1,3 +1,4 @@
+import { ageOnDate, analyzeCalendarDate, validRealDate } from "./calendarDate";
 /**
  * STIX XML validator — Phase 1 of PLAN.md
  *
@@ -5,6 +6,7 @@
  * Also provides helpers for applying fixes back to XML and exporting reports.
  */
 
+import { isOenIdentityFinding } from "./identityRules";
 import { standardizeUnit } from "./cleaner";
 import { normalizeCanadianPostalCode } from "./postalCode";
 import {
@@ -61,13 +63,6 @@ function issue(
   value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
 ) {
   issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, autoFixable: value.autoFixable ?? false, ...value });
-}
-
-function validRealDate(value: string): boolean {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return false;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
 
 type CanonicalPhoneFinding = {
@@ -219,7 +214,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
     if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
   }
 
-  const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  const seenOens = new Map<string, { studentName: string; schoolId: string; schoolNumber: string; schoolName: string }[]>();
   const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
   const allowedByField: Record<string, string[]> = {
     Grade: rules.allowedGradeValues, Gender: rules.allowedGenderValues, Province: rules.allowedProvinceValues,
@@ -298,22 +293,30 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         }
       }
       if (fields.BirthDate) {
-        if (!validRealDate(fields.BirthDate)) {
-          const parsed = new Date(fields.BirthDate);
-          const canNormalize = !isNaN(parsed.getTime());
-          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.`, suggestedFix: canNormalize ? parsed.toISOString().slice(0, 10) : undefined, autoFixable: canNormalize });
-        } else if (fields.BirthDate > new Date().toISOString().slice(0, 10)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
+        const date = analyzeCalendarDate(fields.BirthDate);
+        const today = new Date().toISOString().slice(0, 10);
+        if (date.status !== "valid") {
+          const suggestion = date.status === "normalizable" && date.value <= today ? date.value : undefined;
+          const guidance = date.status === "ambiguous"
+            ? " The day and month order is ambiguous; confirm the source date."
+            : " Confirm the source date if no correction is suggested.";
+          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.${guidance}`, suggestedFix: suggestion, autoFixable: suggestion !== undefined });
+        }
+        if ((date.status === "valid" || date.status === "normalizable") && date.value > today) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
       }
       if (fields.OEN) {
         if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
-        else if (rules.duplicateDetection.checkOen && seenOens.has(fields.OEN)) {
-          const prior = seenOens.get(fields.OEN)!;
-          if (prior.schoolNumber === school.schoolNumber) {
-            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}).` });
-          } else {
-            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment.` });
+        else if (rules.duplicateDetection.checkOen) {
+          const occurrences = seenOens.get(fields.OEN) ?? [];
+          const prior = occurrences.find((entry) => entry.schoolId === school.schoolId) ?? occurrences[0];
+          if (prior?.schoolId === school.schoolId) {
+            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}). Resolve the duplicate in the source system and upload a corrected file.` });
+          } else if (prior) {
+            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment in the source system.` });
           }
-        } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+          occurrences.push({ studentName, schoolId: school.schoolId, schoolNumber: school.schoolNumber, schoolName: school.name });
+          seenOens.set(fields.OEN, occurrences);
+        }
       }
       if (fields.PostalCode) {
         const finding = postalCodeFinding(fields.PostalCode, rules);
@@ -447,6 +450,7 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   const upload = parseCanonicalXml(xmlText);
   const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
   for (const fix of fixes) {
+    if (isOenIdentityFinding(fix.ruleId)) continue;
     if (fix.recordId === "metadata" && fix.field === "MetadataContactPhone") {
       upload.metadata.contactPhone = { number: fix.newValue, type: upload.metadata.contactPhone?.type ?? "" };
       continue;
@@ -564,32 +568,11 @@ export function generateAgeGroupReportCsv(records: StudentRecord[], buckets?: Ar
   const defaultBuckets: Array<[number, number | null]> = [[0,4],[5,9],[10,14],[15,19],[20,null]];
   const b = buckets ?? defaultBuckets;
   const counts = new Array(b.length).fill(0);
-  const now = new Date();
+  const today = new Date().toISOString().slice(0, 10);
   for (const r of records) {
     const bd = (r.fields.BirthDate || "").trim();
-    if (!bd) continue;
-    const m = bd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    let age: number | null = null;
-    if (m) {
-      const y = parseInt(m[1], 10);
-      const mo = parseInt(m[2], 10) - 1;
-      const d = parseInt(m[3], 10);
-      const dob = new Date(y, mo, d);
-      if (!isNaN(dob.getTime())) {
-        age = now.getFullYear() - dob.getFullYear();
-        const mDiff = now.getMonth() - dob.getMonth();
-        if (mDiff < 0 || (mDiff === 0 && now.getDate() < dob.getDate())) age--;
-      }
-    } else {
-      // try Date parse of other formats
-      const parsed = new Date(bd);
-      if (!isNaN(parsed.getTime())) {
-        age = now.getFullYear() - parsed.getFullYear();
-        const mDiff = now.getMonth() - parsed.getMonth();
-        if (mDiff < 0 || (mDiff === 0 && now.getDate() < parsed.getDate())) age--;
-      }
-    }
-    if (age === null || age < 0) continue;
+    const age = ageOnDate(bd, today);
+    if (age === null) continue;
     for (let i = 0; i < b.length; i++) {
       const [min, max] = b[i];
       if (age >= min && (max === null || age <= max)) {

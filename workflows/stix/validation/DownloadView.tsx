@@ -1,4 +1,5 @@
 "use client";
+import { ageOnDate } from "@/lib/calendarDate";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -15,17 +16,7 @@ import StatCard from "@/components/StatCard";
 // ─── Report filter helpers ─────────────────────────────────────────────────────
 
 function computeAge(birthDate: string): number | null {
-  if (!birthDate) return null;
-  const now = new Date();
-  const m = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const dob = m
-    ? new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]))
-    : new Date(birthDate);
-  if (isNaN(dob.getTime())) return null;
-  let age = now.getFullYear() - dob.getFullYear();
-  const md = now.getMonth() - dob.getMonth();
-  if (md < 0 || (md === 0 && now.getDate() < dob.getDate())) age--;
-  return age < 0 ? null : age;
+  return ageOnDate(birthDate, new Date().toISOString().slice(0, 10));
 }
 
 function toggleItem(arr: string[], val: string): string[] {

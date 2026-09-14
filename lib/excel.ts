@@ -1,3 +1,4 @@
+import { analyzeWorkbookDates, type DateConvention, type WorkbookDate, type WorkbookDateAnalysis } from "./workbookDates";
 import * as XLSX from "xlsx";
 import defaultRules from "../config/rules.stix.default.json";
 import {
@@ -52,6 +53,7 @@ export interface WorkbookImportResult {
   xml: string;
   metadata: XlsmMetadata;
   preview: ImportPreview;
+  dateAnalysis: WorkbookDateAnalysis;
 }
 
 function filenameSchoolName(fileName: string): string {
@@ -175,31 +177,21 @@ function normalizePhone(raw: string, diagnostics: ValidationIssue[], location: s
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
 }
 
-function normalizeDate(raw: string, diagnostics: ValidationIssue[], location: string): string {
-  const value = raw.trim();
-  if (!value) return "";
-  const iso = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
-  const numeric = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (numeric) {
-    const a = Number(numeric[1]); const b = Number(numeric[2]);
-    if (a <= 12 && b <= 12) {
-      diagnostics.push(diagnostic(`import-date-ambiguous-${location}`, "error", `BirthDate "${value}" is ambiguous; use YYYY-MM-DD.`, "IMPORT_DATE_AMBIGUOUS", location, "BirthDate"));
-      return value;
-    }
-    const month = a > 12 ? b : a; const day = a > 12 ? a : b;
-    return `${numeric[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-  return value;
+function normalizeDate(date: WorkbookDate, diagnostics: ValidationIssue[], location: string): string {
+  if (date.value !== undefined) return date.value;
+  diagnostics.push(diagnostic(`import-date-${location}`, "error",
+    `BirthDate "${date.raw}" is ${date.problem}; confirm the source date and use YYYY-MM-DD or a consistent day/month convention.`,
+    `IMPORT_DATE_${date.problem!.toUpperCase()}`, location, "BirthDate"));
+  return date.raw;
 }
 
-function makeStudent(values: Record<string, string>, index: number, worksheet: string, rowNumber: number, lookups: Record<string, Lookup>, diagnostics: ValidationIssue[]): CanonicalStudent {
+function makeStudent(values: Record<string, string>, index: number, worksheet: string, rowNumber: number, lookups: Record<string, Lookup>, diagnostics: ValidationIssue[], birthDate: WorkbookDate): CanonicalStudent {
   const provenance: CanonicalStudent["provenance"] = {};
   const get = (field: CanonicalField) => {
     const raw = values[field] ?? "";
     if (raw) provenance[field] = { raw, sourceLocation: `${worksheet}!${rowNumber}` };
     const location = `${worksheet}!${rowNumber}`;
-    if (field === "BirthDate") return normalizeDate(raw, diagnostics, location);
+    if (field === "BirthDate") return normalizeDate(birthDate, diagnostics, location);
     if (["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"].includes(field)) return normalizePhone(raw, diagnostics, location, field);
     if (field === "PostalCode") return raw.replace(/\s/g, "").toUpperCase().replace(/^(.{3})(.{3})$/, "$1 $2");
     return canonicalValue(field, raw, lookups, diagnostics, location);
@@ -224,9 +216,9 @@ function makeStudent(values: Record<string, string>, index: number, worksheet: s
   };
 }
 
-export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): WorkbookImportResult {
+export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides, dateConvention?: DateConvention): WorkbookImportResult {
   if (data.byteLength > 50_000_000) throw new Error("Workbook exceeds the 50 MB local processing limit.");
-  const workbook = XLSX.read(data, { type: "array", cellDates: false, raw: false });
+  const workbook = XLSX.read(data, { type: "array", cellDates: false, cellNF: true, raw: false });
   const source = findStudentSheet(workbook);
   const metadata = { ...findMetadata(workbook, fileName), ...metadataOverrides };
   const diagnostics: ValidationIssue[] = [];
@@ -294,10 +286,13 @@ export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOver
   });
   if (markerIndex < 0) diagnostics.push(diagnostic("import-marker-missing", "warning", "No data marker row was found; positive identity evidence was used to identify student rows.", "IMPORT_MARKER_MISSING", source.name));
   const lookups = controlledLookups(workbook);
+  const birthDateColumn = destinations.indexOf("BirthDate");
+  const dateCells = candidates.map(({ index }) => birthDateColumn < 0 ? undefined : sourceSheet[XLSX.utils.encode_cell({ r: index, c: birthDateColumn })]);
+  const { dates, analysis: dateAnalysis } = analyzeWorkbookDates(dateCells, Boolean(workbook.Workbook?.WBProps?.date1904), dateConvention);
   const students = candidates.map(({ row, index }, studentIndex) => {
     const values: Record<string, string> = {};
     destinations.forEach((field, column) => { if (field && !duplicateFields.has(field)) values[field] = display(row[column]); });
-    return makeStudent(values, studentIndex, source.name, index + 1, lookups, diagnostics);
+    return makeStudent(values, studentIndex, source.name, index + 1, lookups, diagnostics, dates[studentIndex]);
   });
   const upload = emptyCanonicalUpload(`${fileName}:${Date.now()}`);
   upload.metadata = {
@@ -319,7 +314,7 @@ export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOver
     const transformed = field === "BirthDate" ? student.birthDate : field === "Gender" ? student.gender : field === "PostalCode" ? student.address.postalCode : "";
     return transformed && transformed !== p.raw;
   }).length, 0);
-  return { upload, xml, metadata, preview: { worksheet: source.name, headerRow: source.headerIndex + 1, firstDataRow: scanStart + 1, sourceRowCount: candidates.length, canonicalStudentCount: students.length, columns, diagnostics, transformationCount, reconciled } };
+  return { upload, xml, metadata, dateAnalysis, preview: { worksheet: source.name, headerRow: source.headerIndex + 1, firstDataRow: scanStart + 1, sourceRowCount: candidates.length, canonicalStudentCount: students.length, columns, diagnostics, transformationCount, reconciled } };
 }
 
 export function xlsmMetadata(data: ArrayBuffer, fileName: string): XlsmMetadata {
