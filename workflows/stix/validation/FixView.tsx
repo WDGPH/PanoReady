@@ -2,13 +2,14 @@
 import WorkflowHeading from "@/components/WorkflowHeading";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import PagedTable from "@/components/PagedTable";
+import StudentEntry, { studentReference } from "@/components/StudentEntry";
 import { type ReactNode, useState } from "react";
 import { Wand2, CheckCircle2 } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 import { defaultRules } from "@/lib/rulesets";
 import type { AppliedFix, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
-import { guardianRelationshipContext, suggestedAddressDraft } from "./helpers";
+import { suggestedAddressDraft } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
 import { issueTypeLabel, matchesReviewFilter, isExcludedFromReview } from "./overview";
 import type { ReviewFilter, ReviewExclusion } from "./overview";
@@ -253,7 +254,8 @@ export default function FixView({
             <thead>
               <tr>
                 <th style={{ width: 178 }}>Severity</th>
-                <th>Student</th>
+                <th>Record</th>
+                <th>Issue</th>
                 <th>Field</th>
                 <th>Current Value</th>
                 <th data-sortable={false}>New Value</th>
@@ -269,23 +271,14 @@ export default function FixView({
                 const pendingVal = pending[issue.id] ?? "";
                 const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
 
-                const guardianContext = guardianRelationshipContext(issue, record);
+                const recordLabel = record ? studentReference(record) : "File / unassigned";
                 return (
                   <tr key={issue.id} data-row-id={issue.id} style={{ opacity: !issue.field ? 0.5 : 1 }}>
                     <td data-sort-value={issue.severity === "error" ? 0 : issue.severity === "warning" ? 1 : 2}><SeverityBadge severity={issue.severity} /></td>
-                    <td style={{ fontSize: 12 }}>
-                      <div style={{ fontWeight: 500 }}>{issue.studentName || "—"}</div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>{issue.message}</div>
-                      <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{issue.schoolNumber}</div>
-                      {guardianContext && (
-                        <div style={{ color: "var(--color-text-secondary)", fontSize: 11, marginTop: 5, lineHeight: 1.45 }}>
-                          <strong>{guardianContext.label}:</strong>{guardianContext.hasDetails
-                            ? <>{guardianContext.name ? ` ${guardianContext.name}` : ""}{guardianContext.name && guardianContext.phone ? <br /> : null}{guardianContext.phone}</>
-                            : " Empty in source XML"}
-                          {guardianContext.oen && <div>OEN: {guardianContext.oen}</div>}
-                        </div>
-                      )}
+                    <td data-sort-value={recordLabel} style={{ fontSize: 12 }}>
+                      {record ? <StudentEntry record={record} /> : recordLabel}
                     </td>
+                    <td style={{ fontSize: 12 }}>{issue.message}</td>
                     <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>
                     <td>
                       {currentValue ? (
@@ -302,7 +295,7 @@ export default function FixView({
                         </label>
                       ) : group.automatic || isEmptyGuardian ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <input type="checkbox" aria-label={`Select fix for ${issue.studentName || "student"}: ${issue.field}`} checked={pending[issue.id] !== undefined} disabled={suggestedValue === undefined} onChange={event => {
+                          <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={pending[issue.id] !== undefined} disabled={suggestedValue === undefined} onChange={event => {
                             if (event.target.checked) setPending(p => ({ ...p, [issue.id]: suggestedValue! }));
                             else setPending(p => Object.fromEntries(Object.entries(p).filter(([id]) => id !== issue.id)));
                           }} />
@@ -316,7 +309,7 @@ export default function FixView({
                               value={pendingVal}
                               onChange={e => setPending(p => ({ ...p, [issue.id]: e.target.value }))}
                               style={{ fontSize: 12, padding: "5px 8px" }}
-                              aria-label={`Relationship for ${issue.studentName || "student"}`}
+                              aria-label={`${issue.field} for ${recordLabel}`}
                             >
                               <option value="">Select relationship…</option>
                               {rules.allowedRelationshipValues.map(value => <option key={value} value={value}>{value}</option>)}
@@ -324,6 +317,7 @@ export default function FixView({
                           ) : (
                             <input
                               className="input"
+                              aria-label={`Correct ${issue.field} for ${recordLabel}`}
                               value={pendingVal}
                               onChange={e => setPending(p => ({ ...p, [issue.id]: e.target.value }))}
                               placeholder={issue.suggestedFix ?? "Enter corrected value…"}
