@@ -2,7 +2,7 @@
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { applyValidationFixes, validateXml } from "@/lib/validator";
+import { applyReviewChanges } from "@/lib/reviewHistory";
 import type { ValidateSession } from "@/lib/types";
 
 // ─── ValidateRevalidateView ───────────────────────────────────────────────────
@@ -13,52 +13,38 @@ export default function RevalidateView({
   onContinue,
   onReturnToFixes,
   onBack,
+  onComplete,
 }: {
   onBack: () => void;
+  onComplete: (result: ValidateSession) => void;
   session: ValidateSession;
   onContinue: (result: ValidateSession) => void;
   onReturnToFixes: (result: ValidateSession, view: "fix" | "manual") => void;
 }) {
-  const [result, setResult] = useState<ValidateSession | null>(null);
+  const result = session.revalidatedResult && session.appliedFixCount === session.fixes.length ? session : null;
   const [error, setError] = useState<string | null>(null);
 
-  const [progress, setProgress] = useState(0);
   useEffect(() => {
-    const started = performance.now();
-    let validationTimer: number;
-    let completionTimer: number;
-    // Paint each completed stage before starting the next synchronous operation.
+    // The parent owns committed results, so history and navigation see the same file.
+    if (result) return;
+    // Yield once so the browser can paint before synchronous XML processing.
     const timer = window.setTimeout(() => {
       try {
-        const fixedXml = applyValidationFixes(session.finalXml ?? session.originalXml, session.fixes.slice(session.appliedFixCount ?? 0));
-        setProgress(50);
-        validationTimer = window.setTimeout(() => {
-          try {
-            const revalidated = validateXml(fixedXml, session.validationRules);
-            setProgress(100);
-            completionTimer = window.setTimeout(() => setResult({
-              ...session,
-              revalidatedResult: revalidated,
-              finalXml: fixedXml,
-              appliedFixCount: session.fixes.length,
-            }), Math.max(200, 1000 - (performance.now() - started)));
-          } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "Unable to recheck corrections.");
-          }
-        }, 80);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Unable to apply corrections.");
+        const completed = applyReviewChanges(session, "Manual fixes");
+        onComplete(completed);
+      } catch {
+        setError("Unable to apply and recheck corrections.");
       }
     }, 80);
-    return () => { window.clearTimeout(timer); window.clearTimeout(validationTimer); window.clearTimeout(completionTimer); };
-  }, [session]);
+    return () => window.clearTimeout(timer);
+  }, [session, result, onComplete]);
 
   if (error) return <main className="fix-operation"><WorkflowNavigation onBack={onBack} nextLabel="Output" /><p role="alert">Corrections could not be completed: {error}</p><p>Return to Review &amp; fix to adjust your selections.</p></main>;
   if (!result) return <main className="fix-operation">
     <WorkflowNavigation onBack={onBack} nextLabel="Output" nextDescription="Recheck in progress" />
     <div role="status" aria-live="polite">
       <p>{session.fixes.length ? "Applying corrections and rechecking…" : "Rechecking your file…"}</p>
-      <div className="fix-operation-track" role="progressbar" aria-label="Corrections and recheck" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div>
+      <progress aria-label="Corrections and recheck" style={{ width: "100%" }} />
     </div>
   </main>;
 
