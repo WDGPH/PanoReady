@@ -86,7 +86,8 @@ export default function CleaningView({
 
   function removeField(field: string) {
     setWorkingProfile((p) => {
-      const { [field]: _removed, ...restMappings } = p.mappings;
+      const restMappings = { ...p.mappings };
+      delete restMappings[field];
       return {
         enabledFields: p.enabledFields.filter((f) => f !== field),
         mappings: restMappings,

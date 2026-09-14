@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import type { STIXComparison } from "@/lib/types";
 import CompareWorkflow from "@/workflows/stix/CompareWorkflow";
 import STIXIntake from "@/workflows/stix/STIXIntake";
 import type { ValidateWorkflowInput } from "@/workflows/stix/STIXIntake";
 import ValidateAndFixWorkflow from "@/workflows/stix/ValidateAndFixWorkflow";
+import { clearLegacyPanoReadyStorage } from "@/lib/rulesets";
 
 type ActiveWorkflow =
   | { kind: "home" }
@@ -16,6 +17,10 @@ type ActiveWorkflow =
 export default function PanoReady() {
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow>({ kind: "home" });
   const returnHome = () => setActiveWorkflow({ kind: "home" });
+
+  useEffect(() => {
+    clearLegacyPanoReadyStorage();
+  }, []);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>

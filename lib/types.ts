@@ -30,11 +30,13 @@ export interface Student {
   PostalCode: string;
   PhoneType: string;
   GuardianFirstName: string;
+  GuardianMiddleName: string;
   GuardianLastName: string;
   GuardianRelationship: string;
   GuardianPhoneNumber: string;
   GuardianPhoneType: string;
   Guardian2FirstName: string;
+  Guardian2MiddleName: string;
   Guardian2LastName: string;
   Guardian2Relationship: string;
   Guardian2PhoneNumber: string;
@@ -67,6 +69,7 @@ export interface ComparisonFieldChange {
 }
 
 export interface ComparisonSchoolChange {
+  schoolId: string;
   schoolName: string;
   previousCount: number;
   currentCount: number;
@@ -79,9 +82,11 @@ export type ComparisonRecordChangeKind = "added" | "removed" | "changed";
 
 export interface ComparisonRecordChange {
   key: string;
+  matchStatus?: "matched" | "unmatched" | "ambiguous";
   kind: ComparisonRecordChangeKind;
   studentName: string;
   schoolName: string;
+  schoolId?: string;
   changedFields: string[];
   fieldDiffs: ComparisonFieldDiff[];
 }
@@ -105,7 +110,9 @@ export type ComparisonSignal = "stable" | "moderate" | "high";
 export interface STIXComparison {
   previousFileName: string;
   currentFileName: string;
-  currentXml: string;
+  previousSourceSystem?: string;
+  currentSourceSystem?: string;
+  reviewer?: string;
   previousStudentCount: number;
   currentStudentCount: number;
   previousSchoolCount: number;
@@ -114,6 +121,7 @@ export interface STIXComparison {
   unchangedCount: number;
   addedCount: number;
   removedCount: number;
+  ambiguousCount: number;
   changedCount: number;
   movedCount: number;
   changeRate: number;
@@ -145,7 +153,7 @@ export interface RulesProfile {
   postalCodePattern: string;
   phoneConfig: {
     placeholderNumbers: string[];
-    canadianAreaCodeCheck?: "off" | "info" | "warning";
+    canadianAreaCodeCheck: "off" | "info" | "warning";
   };
   gradeAliases: Record<string, string>;
   genderAliases: Record<string, string>;
@@ -184,7 +192,7 @@ export interface CustomRuleset {
   warnings?: string[];
 }
 
-// ─── Validation types (Phase 1 PLAN) ─────────────────────────────────────────
+// ─── Validation types ────────────────────────────────────────────────────────
 
 export type ValidationSeverity = "error" | "warning" | "info";
 
@@ -194,7 +202,6 @@ export type DiagnosticLayer =
   | "PROFILE"
   | "IDENTITY"
   | "XML"
-  | "XSD"
   | "RECONCILIATION";
 
 export type RepairConfidence = "safe" | "review" | "manual";
@@ -218,6 +225,8 @@ export type ValidationIssue = {
   id: string;
   severity: ValidationSeverity;
   recordId?: string;
+  /** Stable session-local identity for a nested editable record. */
+  targetId?: string;
   schoolNumber?: string;
   studentName?: string;
   field?: string;
@@ -237,6 +246,8 @@ export type ValidationIssue = {
 export type AppliedFix = {
   issueId: string;
   recordId: string;
+  /** Stable nested target identity when the change affects a guardian. */
+  targetId?: string;
   field: string;
   oldValue: string;
   newValue: string;
@@ -246,13 +257,28 @@ export type AppliedFix = {
   repairId?: string;
 };
 
+export type ChangeOrigin = "automatic" | "manual" | "cleaning" | "setup";
+
+export type AppliedChangeGroup = {
+  id: string;
+  label: string;
+  origin: ChangeOrigin;
+  appliedAt: number;
+  changes: AppliedFix[];
+  /** Serialized nested values required to restore removals. */
+  undoSnapshots?: Record<string, string>;
+  /** Import findings retired by this action and restored if it is undone. */
+  undoDiagnostics?: ValidationIssue[];
+  status: "applied" | "undone" | "changed-again";
+};
+
 export type StudentRecord = {
   id: string;
   xmlPath: string;
   fields: Record<string, string>;
 };
 
-export type GateState = "READY" | "READY_WITH_WARNINGS" | "REVIEW_REQUIRED" | "BLOCKED" | "PENDING";
+export type GateState = "READY" | "REVIEW_REQUIRED" | "BLOCKED";
 
 export type ValidationResult = {
   issues: ValidationIssue[];
@@ -260,10 +286,9 @@ export type ValidationResult = {
   schoolCount: number;
   studentCount: number;
   gate: GateState;
-  xsdValidated?: boolean;
 };
 
-export type ImportMappingStatus = "MAPPED" | "AMBIGUOUS" | "DUPLICATE" | "UNMAPPED" | "IGNORED";
+export type ImportMappingStatus = "MAPPED" | "DUPLICATE" | "UNMAPPED";
 
 export type ImportColumnMapping = {
   column: number;
@@ -286,13 +311,34 @@ export type ImportPreview = {
 };
 
 export type ValidateSession = {
-  /** Number of audit entries already reflected in finalXml. */
-  appliedFixCount?: number;
   fileName: string;
-  originalXml: string;
-  initialResult: ValidationResult;
-  fixes: AppliedFix[];
+  /** The only editable authority for the current browser session. */
+  document: import("./canonical").CanonicalUpload;
+  initialIssueCount: number;
+  currentResult: ValidationResult;
+  history: AppliedChangeGroup[];
   validationRules?: RulesProfile;
-  revalidatedResult?: ValidationResult;
-  finalXml?: string;
+  inputFormat?: "STIX XML" | "XLSM workbook";
+  importTransformationCount?: number;
+  originalCreatedBy?: string;
+  dateAssumption?: string;
+  /** Calendar date used for deterministic age calculations in this session. */
+  referenceDate: string;
+  drafts: {
+    /** Keyed by stable record/nested target/field, not finding IDs. */
+    values: Record<string, {
+      value: string;
+      expected: { recordId: string; targetId?: string; field: string; oldValue: string };
+    }>;
+    /** One coordinated address draft per student record ID. */
+    addresses: Record<string, {
+      values: Record<string, string>;
+      expectedValues: Record<string, string>;
+      selected: boolean;
+    }>;
+  };
 };
+
+export function activeSessionFixes(session: ValidateSession): AppliedFix[] {
+  return session.history.filter((group) => group.status !== "undone").flatMap((group) => group.changes);
+}

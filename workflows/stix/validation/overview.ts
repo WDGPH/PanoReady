@@ -1,6 +1,6 @@
 import type { ValidationIssue, ValidationResult, ValidationSeverity } from "@/lib/types";
 
-export type ReviewFilter = { schoolNumber?: string; ruleId?: string; field?: string; severity?: ValidationSeverity };
+export type ReviewFilter = { schoolNumber?: string; ruleId?: string; field?: string; severity?: ValidationSeverity; scope?: "setup" };
 export type ReviewExclusion = { schoolNumber: string } | { ruleId: string; field: string };
 
 export function isExcludedFromReview(issue: ValidationIssue, exclusions: ReviewExclusion[], schoolNumber = issue.schoolNumber ?? "") {
@@ -9,6 +9,7 @@ export function isExcludedFromReview(issue: ValidationIssue, exclusions: ReviewE
 
 export function matchesReviewFilter(issue: ValidationIssue, filter: ReviewFilter, schoolNumber = issue.schoolNumber ?? "") {
   return (filter.schoolNumber === undefined || schoolNumber === filter.schoolNumber)
+    && (filter.scope !== "setup" || issue.recordId === "metadata" || issue.recordId?.startsWith("school") === true && !issue.recordId.includes(":student"))
     && (filter.ruleId === undefined || issue.ruleId === filter.ruleId)
     && (filter.field === undefined || (issue.field ?? "") === filter.field)
     && (filter.severity === undefined || issue.severity === filter.severity);

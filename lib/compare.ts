@@ -1,185 +1,181 @@
-import { parseXml } from "./pullInfo";
+import { studentFromRecord } from "./pullInfo";
+import { flattenCanonicalStudent, parseCanonicalXml, type CanonicalUpload } from "./canonical";
 import type { ComparisonFieldChange, ComparisonRecordChange, ComparisonSchoolChange, ComparisonSchoolTransfer, STIXComparison, Student } from "./types";
 
-const COMPARED_FIELDS: Array<{ key: keyof Student; label: string }> = [
-  { key: "SchoolName", label: "School" },
-  { key: "SchoolNumber", label: "School number" },
-  { key: "FirstName", label: "First name" },
-  { key: "MiddleName", label: "Middle name" },
-  { key: "LastName", label: "Last name" },
-  { key: "BirthDate", label: "Birth date" },
-  { key: "Grade", label: "Grade" },
-  { key: "Class", label: "Class" },
-  { key: "Gender", label: "Gender" },
-  { key: "Language", label: "Language" },
-  { key: "CountryOfOrigin", label: "Country of origin" },
-  { key: "Unit", label: "Unit" },
-  { key: "StreetNumber", label: "Street number" },
-  { key: "StreetNumberSuffix", label: "Street suffix" },
-  { key: "StreetName", label: "Street name" },
-  { key: "StreetType", label: "Street type" },
-  { key: "City", label: "City" },
-  { key: "Province", label: "Province" },
-  { key: "PostalCode", label: "Postal code" },
+export const COMPARED_FIELDS: Array<{ key: keyof Student; label: string }> = [
+  { key: "SchoolName", label: "School name" }, { key: "SchoolNumber", label: "School number" },
+  { key: "FirstName", label: "First name" }, { key: "MiddleName", label: "Middle name" }, { key: "LastName", label: "Last name" },
+  { key: "BirthDate", label: "Birth date" }, { key: "Grade", label: "Grade" }, { key: "Class", label: "Class" },
+  { key: "Gender", label: "Gender" }, { key: "Language", label: "Language" }, { key: "CountryOfOrigin", label: "Country of origin" },
+  { key: "Unit", label: "Unit" }, { key: "StreetNumber", label: "Street number" }, { key: "StreetNumberSuffix", label: "Street suffix" },
+  { key: "StreetName", label: "Street name" }, { key: "StreetType", label: "Street type" }, { key: "City", label: "City" },
+  { key: "Province", label: "Province" }, { key: "PostalCode", label: "Postal code" },
 ];
 
-function valueOf(student: Student, field: keyof Student): string {
-  return String(student[field] ?? "").trim().toLowerCase();
+type Entry = { student: Student; index: number; recordId: string; schoolId: string };
+const value = (student: Student, field: keyof Student) => String(student[field] ?? "").trim().toLowerCase();
+const name = (student: Student) => [student.FirstName, student.MiddleName, student.LastName].filter(Boolean).join(" ") || "Unnamed student";
+const oen = (entry: Entry) => value(entry.student, "OEN");
+const fallback = (entry: Entry) => {
+  if (oen(entry) || !value(entry.student, "SchoolNumber") || !value(entry.student, "FirstName") || !value(entry.student, "LastName") || !value(entry.student, "BirthDate")) return "";
+  return ["SchoolNumber", "FirstName", "MiddleName", "LastName", "BirthDate"].map((field) => value(entry.student, field as keyof Student)).join("|");
+};
+
+function entries(document: CanonicalUpload): Entry[] {
+  const result: Entry[] = [];
+  for (const school of document.schools) {
+    for (const student of school.students) {
+      result.push({
+        student: studentFromRecord({ id: student.recordId, xmlPath: "", fields: flattenCanonicalStudent(student, school) }),
+        index: result.length,
+        recordId: student.recordId,
+        schoolId: school.schoolId,
+      });
+    }
+  }
+  return result;
 }
 
-function recordKey(student: Student, index: number): string {
-  const oen = valueOf(student, "OEN");
-  if (oen) return `oen:${oen}`;
-  const fallback = ["SchoolNumber", "FirstName", "MiddleName", "LastName", "BirthDate"]
-    .map((field) => valueOf(student, field as keyof Student))
-    .join("|");
-  return fallback === "||||" ? `unidentified:${index}` : `fallback:${fallback}`;
+function groups(items: Entry[], key: (entry: Entry) => string): Map<string, Entry[]> {
+  const result = new Map<string, Entry[]>();
+  for (const item of items) {
+    const identity = key(item);
+    if (!identity || identity === "||||") continue;
+    const group = result.get(identity) ?? [];
+    group.push(item);
+    result.set(identity, group);
+  }
+  return result;
 }
 
-function indexStudents(students: Student[]): Map<string, Student> {
-  const indexed = new Map<string, Student>();
-  students.forEach((student, index) => {
-    const baseKey = recordKey(student, index);
-    let key = baseKey;
-    let duplicate = 2;
-    while (indexed.has(key)) key = `${baseKey}#${duplicate++}`;
-    indexed.set(key, student);
+function matchEntries(previous: Entry[], current: Entry[]) {
+  const matches = new Map<Entry, Entry>();
+  const usedPrevious = new Set<Entry>();
+  const ambiguousCurrent = new Set<Entry>();
+  const ambiguousPrevious = new Set<Entry>();
+  const byOenPrevious = groups(previous, oen);
+  const byOenCurrent = groups(current, oen);
+  for (const identity of new Set([...byOenPrevious.keys(), ...byOenCurrent.keys()])) {
+    const before = byOenPrevious.get(identity) ?? [];
+    const after = byOenCurrent.get(identity) ?? [];
+    if (before.length === 1 && after.length === 1) {
+      matches.set(after[0], before[0]);
+      usedPrevious.add(before[0]);
+    } else if (before.length && after.length) {
+      before.forEach((entry) => ambiguousPrevious.add(entry));
+      after.forEach((entry) => ambiguousCurrent.add(entry));
+    }
+  }
+  const remainingPrevious = previous.filter((entry) => !usedPrevious.has(entry) && !ambiguousPrevious.has(entry));
+  const remainingCurrent = current.filter((entry) => !matches.has(entry) && !ambiguousCurrent.has(entry));
+  const byFallbackPrevious = groups(remainingPrevious, fallback);
+  const byFallbackCurrent = groups(remainingCurrent, fallback);
+  for (const identity of new Set([...byFallbackPrevious.keys(), ...byFallbackCurrent.keys()])) {
+    const before = byFallbackPrevious.get(identity) ?? [];
+    const after = byFallbackCurrent.get(identity) ?? [];
+    if (before.length === 1 && after.length === 1) {
+      matches.set(after[0], before[0]);
+      usedPrevious.add(before[0]);
+    } else if (before.length && after.length) {
+      before.forEach((entry) => ambiguousPrevious.add(entry));
+      after.forEach((entry) => ambiguousCurrent.add(entry));
+    }
+  }
+  return { matches, usedPrevious, ambiguousCurrent, ambiguousPrevious };
+}
+
+function schoolCounts(document: CanonicalUpload, side: "previous" | "current"): Map<string, { schoolId: string; name: string; count: number }> {
+  const result = new Map<string, { schoolId: string; name: string; count: number }>();
+  document.schools.forEach((school, index) => {
+    const key = school.schoolNumber.trim() ? `number:${school.schoolNumber.trim().toLowerCase()}` : `${side}:missing:${index}`;
+    result.set(key, { schoolId: side === "current" ? school.schoolId : `previous:${school.schoolId}`, name: school.name.trim() || `Unknown school ${index + 1}`, count: school.students.length });
   });
-  return indexed;
-}
-
-function schoolCounts(students: Student[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  students.forEach((student) => {
-    const school = student.SchoolName.trim() || "Unknown school";
-    counts.set(school, (counts.get(school) ?? 0) + 1);
-  });
-  return counts;
-}
-
-function studentName(student: Student): string {
-  return [student.FirstName, student.MiddleName, student.LastName].filter(Boolean).join(" ") || "Unnamed student";
+  return result;
 }
 
 export function compareSTIXFiles(previousXml: string, currentXml: string, previousFileName: string, currentFileName: string): STIXComparison {
-  const previous = parseXml(previousXml);
-  const current = parseXml(currentXml);
-  const previousByKey = indexStudents(previous);
-  const currentByKey = indexStudents(current);
+  const previousDocument = parseCanonicalXml(previousXml);
+  const currentDocument = parseCanonicalXml(currentXml);
+  for (const [label, document] of [["previous", previousDocument], ["current", currentDocument]] as const) {
+    const numbers = document.schools.map((school) => school.schoolNumber.trim()).filter(Boolean);
+    if (new Set(numbers).size !== numbers.length) throw new Error(`The ${label} file has duplicate SchoolNumber containers; comparison scope would be ambiguous.`);
+  }
+  const previous = entries(previousDocument);
+  const current = entries(currentDocument);
+  const { matches, usedPrevious, ambiguousCurrent, ambiguousPrevious } = matchEntries(previous, current);
   const fieldCounts = new Map<string, number>();
-  let matchedCount = 0;
+  const recordChanges: ComparisonRecordChange[] = [];
+  const transfers = new Map<string, ComparisonSchoolTransfer>();
   let unchangedCount = 0;
   let changedCount = 0;
   let movedCount = 0;
-  const recordChanges: ComparisonRecordChange[] = [];
-  const transferMap = new Map<string, ComparisonSchoolTransfer>();
 
-  currentByKey.forEach((currentStudent, key) => {
-    const previousStudent = previousByKey.get(key);
-    if (!previousStudent) return;
-    matchedCount++;
-    let recordChanged = false;
-    COMPARED_FIELDS.forEach(({ key: field }) => {
-      if (valueOf(previousStudent, field) === valueOf(currentStudent, field)) return;
-      recordChanged = true;
-      fieldCounts.set(field, (fieldCounts.get(field) ?? 0) + 1);
+  for (const after of current) {
+    const before = matches.get(after);
+    if (!before) {
+      recordChanges.push({ key: after.recordId, schoolId: after.schoolId, kind: "added", matchStatus: ambiguousCurrent.has(after) ? "ambiguous" : "unmatched", studentName: name(after.student), schoolName: after.student.SchoolName || "Unknown school", changedFields: [], fieldDiffs: [] });
+      continue;
+    }
+    const diffs = COMPARED_FIELDS.filter(({ key }) => value(before.student, key) !== value(after.student, key));
+    if (!diffs.length) { unchangedCount++; continue; }
+    changedCount++;
+    for (const field of diffs) fieldCounts.set(String(field.key), (fieldCounts.get(String(field.key)) ?? 0) + 1);
+    const beforeSchool = before.student.SchoolNumber.trim().toLowerCase();
+    const afterSchool = after.student.SchoolNumber.trim().toLowerCase();
+    if (beforeSchool && afterSchool && beforeSchool !== afterSchool) {
+      movedCount++;
+      const transferKey = `${beforeSchool}\0${afterSchool}`;
+      const transfer = transfers.get(transferKey) ?? { fromSchool: before.student.SchoolName || before.student.SchoolNumber, toSchool: after.student.SchoolName || after.student.SchoolNumber, count: 0, students: [] };
+      transfer.count++;
+      transfer.students.push(name(after.student));
+      transfers.set(transferKey, transfer);
+    }
+    recordChanges.push({
+      key: after.recordId, schoolId: after.schoolId, kind: "changed", matchStatus: "matched",
+      studentName: name(after.student), schoolName: after.student.SchoolName || "Unknown school",
+      changedFields: diffs.map(({ label }) => label),
+      fieldDiffs: diffs.map(({ key, label }) => ({ field: String(key), label, previousValue: String(before.student[key] ?? "").trim(), currentValue: String(after.student[key] ?? "").trim() })),
     });
-    if (recordChanged) {
-      changedCount++;
-      const fromSchool = previousStudent.SchoolName || "Unknown school";
-      const toSchool = currentStudent.SchoolName || "Unknown school";
-      if (valueOf(previousStudent, "SchoolName") !== valueOf(currentStudent, "SchoolName")) {
-        movedCount++;
-        const transferKey = `${fromSchool}\u0000${toSchool}`;
-        const transfer = transferMap.get(transferKey) ?? { fromSchool, toSchool, count: 0, students: [] };
-        transfer.count++;
-        transfer.students.push(studentName(currentStudent));
-        transferMap.set(transferKey, transfer);
-      }
-      recordChanges.push({
-        key,
-        kind: "changed",
-        studentName: studentName(currentStudent),
-        schoolName: currentStudent.SchoolName || "Unknown school",
-        changedFields: COMPARED_FIELDS.filter(({ key: field }) => valueOf(previousStudent, field) !== valueOf(currentStudent, field)).map(({ label }) => label),
-        fieldDiffs: COMPARED_FIELDS.filter(({ key: field }) => valueOf(previousStudent, field) !== valueOf(currentStudent, field)).map(({ key: field, label }) => ({
-          field,
-          label,
-          previousValue: String(previousStudent[field] ?? "").trim(),
-          currentValue: String(currentStudent[field] ?? "").trim(),
-        })),
-      });
-    } else unchangedCount++;
-  });
+  }
+  for (const before of previous.filter((entry) => !usedPrevious.has(entry))) {
+    recordChanges.push({ key: `previous:${before.index}`, schoolId: `previous:${before.schoolId}`, kind: "removed", matchStatus: ambiguousPrevious.has(before) ? "ambiguous" : "unmatched", studentName: name(before.student), schoolName: before.student.SchoolName || "Unknown school", changedFields: [], fieldDiffs: [] });
+  }
 
-  const addedKeys = Array.from(currentByKey.keys()).filter((key) => !previousByKey.has(key));
-  const removedKeys = Array.from(previousByKey.keys()).filter((key) => !currentByKey.has(key));
-  addedKeys.forEach((key) => {
-    const student = currentByKey.get(key)!;
-    recordChanges.push({ key, kind: "added", studentName: studentName(student), schoolName: student.SchoolName || "Unknown school", changedFields: [], fieldDiffs: [] });
-  });
-  removedKeys.forEach((key) => {
-    const student = previousByKey.get(key)!;
-    recordChanges.push({ key, kind: "removed", studentName: studentName(student), schoolName: student.SchoolName || "Unknown school", changedFields: [], fieldDiffs: [] });
-  });
-  const addedCount = addedKeys.length;
-  const removedCount = removedKeys.length;
-  const changeRate = previous.length === 0 ? (current.length === 0 ? 0 : 100) : ((addedCount + removedCount + changedCount) / previous.length) * 100;
+  const addedCount = current.filter((entry) => !matches.has(entry) && !ambiguousCurrent.has(entry)).length;
+  const removedCount = previous.filter((entry) => !usedPrevious.has(entry) && !ambiguousPrevious.has(entry)).length;
+  const ambiguousCount = ambiguousCurrent.size + ambiguousPrevious.size;
+  const changeRate = previous.length ? ((addedCount + removedCount + changedCount) / previous.length) * 100 : current.length ? 100 : 0;
   const signal = changeRate <= 1 ? "stable" : changeRate <= 5 ? "moderate" : "high";
-  const recommendation = signal === "stable"
-    ? "Consider requesting files less frequently"
-    : signal === "moderate"
-      ? "Consider keeping the current request cadence"
-      : "Consider requesting files more frequently";
-  const recommendationDetail = signal === "stable"
-    ? "Very little changed between these snapshots. Confirm required reporting timelines before extending the interval."
-    : signal === "moderate"
-      ? "Some records changed, so the current cadence may be appropriate. Continue monitoring a few more snapshots before changing it."
-      : "A substantial portion of the file changed. More frequent requests may reduce operational surprises and stale records.";
-
-  const previousSchools = schoolCounts(previous);
-  const currentSchools = schoolCounts(current);
-  const schoolNames = new Set([...previousSchools.keys(), ...currentSchools.keys()]);
-  const schoolChanges: ComparisonSchoolChange[] = Array.from(schoolNames).map((schoolName) => {
-    const previousStudents = previous.filter((student) => (student.SchoolName.trim() || "Unknown school") === schoolName);
-    const currentStudents = current.filter((student) => (student.SchoolName.trim() || "Unknown school") === schoolName);
-    const previousKeys = new Set(previousStudents.map((student, index) => recordKey(student, index)));
-    const currentKeys = new Set(currentStudents.map((student, index) => recordKey(student, index)));
-    const added = currentStudents.filter((student, index) => !previousKeys.has(recordKey(student, index))).length;
-    const removed = previousStudents.filter((student, index) => !currentKeys.has(recordKey(student, index))).length;
-    const changed = currentStudents.filter((student, index) => {
-      const old = previousByKey.get(recordKey(student, index));
-      return old && COMPARED_FIELDS.some(({ key: field }) => valueOf(old, field) !== valueOf(student, field));
-    }).length;
-    return { schoolName, previousCount: previousSchools.get(schoolName) ?? 0, currentCount: currentSchools.get(schoolName) ?? 0, added, removed, changed };
-  }).sort((a, b) => (b.added + b.removed + b.changed) - (a.added + a.removed + a.changed));
-
-  const fieldChanges: ComparisonFieldChange[] = COMPARED_FIELDS
-    .map(({ key: field, label }) => ({ field, label, count: fieldCounts.get(field) ?? 0 }))
-    .filter((change) => change.count > 0)
-    .sort((a, b) => b.count - a.count);
-
+  const previousSchools = schoolCounts(previousDocument, "previous");
+  const currentSchools = schoolCounts(currentDocument, "current");
+  const schoolAliases = new Map<string, string>();
+  for (const [key, prior] of previousSchools) schoolAliases.set(prior.schoolId, currentSchools.get(key)?.schoolId ?? prior.schoolId);
+  for (const record of recordChanges) if (record.schoolId) record.schoolId = schoolAliases.get(record.schoolId) ?? record.schoolId;
+  const schoolKeys = new Set([...previousSchools.keys(), ...currentSchools.keys()]);
+  const schoolChanges: ComparisonSchoolChange[] = [...schoolKeys].map((key) => {
+    const prior = previousSchools.get(key);
+    const next = currentSchools.get(key);
+    return { schoolId: next?.schoolId ?? prior?.schoolId ?? key, schoolName: next?.name ?? prior?.name ?? "Unknown school", previousCount: prior?.count ?? 0, currentCount: next?.count ?? 0, added: 0, removed: 0, changed: 0 };
+  });
+  const schoolChangeById = new Map(schoolChanges.map((school) => [school.schoolId, school]));
+  for (const record of recordChanges) {
+    if (record.matchStatus === "ambiguous") continue;
+    const school = schoolChangeById.get(record.schoolId ?? "");
+    if (!school) continue;
+    if (record.kind === "added") school.added++;
+    else if (record.kind === "removed") school.removed++;
+    else school.changed++;
+  }
+  const fieldChanges: ComparisonFieldChange[] = COMPARED_FIELDS.map(({ key, label }) => ({ field: String(key), label, count: fieldCounts.get(String(key)) ?? 0 })).filter(({ count }) => count > 0).sort((a, b) => b.count - a.count);
   return {
-    previousFileName,
-    currentFileName,
-    currentXml,
-    previousStudentCount: previous.length,
-    currentStudentCount: current.length,
-    previousSchoolCount: previousSchools.size,
-    currentSchoolCount: currentSchools.size,
-    matchedCount,
-    unchangedCount,
-    addedCount,
-    removedCount,
-    changedCount,
-    movedCount,
-    changeRate,
-    fieldChanges,
-    recordChanges: recordChanges.sort((a, b) => a.schoolName.localeCompare(b.schoolName) || a.studentName.localeCompare(b.studentName)),
-    schoolTransfers: Array.from(transferMap.values()).sort((a, b) => b.count - a.count || a.fromSchool.localeCompare(b.fromSchool)),
-    schoolChanges,
+    previousFileName, currentFileName,
+    previousStudentCount: previous.length, currentStudentCount: current.length,
+    previousSchoolCount: previousSchools.size, currentSchoolCount: currentSchools.size,
+    matchedCount: matches.size, unchangedCount, addedCount, removedCount, ambiguousCount, changedCount, movedCount, changeRate,
+    fieldChanges, recordChanges: recordChanges.sort((a, b) => a.schoolName.localeCompare(b.schoolName) || a.studentName.localeCompare(b.studentName)),
+    schoolTransfers: [...transfers.values()], schoolChanges: schoolChanges.sort((a, b) => (b.added + b.removed + b.changed) - (a.added + a.removed + a.changed)),
     signal,
-    recommendation,
-    recommendationDetail,
+    recommendation: signal === "stable" ? "Consider requesting files less frequently" : signal === "moderate" ? "Consider keeping the current request cadence" : "Consider requesting files more frequently",
+    recommendationDetail: signal === "stable" ? "Very little changed between these snapshots. Confirm required reporting timelines before extending the interval." : signal === "moderate" ? "Some records changed, so the current cadence may be appropriate." : "A substantial portion of the file changed. More frequent requests may reduce stale records.",
   };
 }

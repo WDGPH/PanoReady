@@ -28,7 +28,8 @@ export function toCsv(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
   const headers = Object.keys(rows[0]);
   const escape = (v: unknown) => {
-    const s = String(v ?? "");
+    const raw = String(v ?? "");
+    const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
     return s.includes(",") || s.includes('"') || s.includes("\n")
       ? `"${s.replace(/"/g, '""')}"`
       : s;
@@ -38,32 +39,4 @@ export function toCsv(rows: Record<string, unknown>[]): string {
     ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
   ];
   return lines.join("\n");
-}
-
-/** Format a number with commas */
-export function fmt(n: number) {
-  return n.toLocaleString();
-}
-
-const SESSION_KEY = "twig_stix_session";
-
-export function saveSession(data: unknown) {
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
-  } catch {
-    // quota exceeded — silently ignore
-  }
-}
-
-export function loadSession<T>(): T | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function clearSession() {
-  sessionStorage.removeItem(SESSION_KEY);
 }

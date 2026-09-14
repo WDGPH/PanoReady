@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import defaultRulesJson from "../config/rules.stix.default.json";
 import { flattenCanonicalStudent, type CanonicalSchool, type CanonicalStudent } from "../lib/canonical";
-import { REQUIRED_FIELDS } from "../lib/fields";
+import { CANONICAL_FIELDS, fieldHierarchy, REQUIRED_FIELDS } from "../lib/fields";
 import type { RulesProfile } from "../lib/types";
 import { validateXml } from "../lib/validator";
 
@@ -69,4 +69,16 @@ describe("canonical required-field catalog", () => {
       finding.field === "SchoolNumber" && ["REQUIRED_FIELD", "SCHOOL_NUMBER_REQUIRED"].includes(finding.ruleId)
     )).toBe(false);
   });
+});
+
+it("locates nested names, guardian phones, attributes and school metadata in STIX", () => {
+  expect(fieldHierarchy("Guardian2PhoneType")).toBe("SchoolUpload/School/Students/Student/Guardian[2]/Phone/@type");
+  expect(fieldHierarchy("GuardianFirstName")).toBe("SchoolUpload/School/Students/Student/Guardian[1]/Name/First");
+  expect(fieldHierarchy("AliasLastName")).toBe("SchoolUpload/School/Students/Student/AliasName/Last");
+  expect(fieldHierarchy("StreetName")).toBe("SchoolUpload/School/Students/Student/Address/StreetName");
+  expect(fieldHierarchy("MetadataContactPhoneType")).toBe("SchoolUpload/Metadata/ContactPhone/@type");
+  expect(fieldHierarchy("BoardName")).toBe("SchoolUpload/Metadata/SchoolBoard/Name");
+  expect(fieldHierarchy("SchoolName")).toBe("SchoolUpload/School/Name");
+  expect(CANONICAL_FIELDS.every((field) => Boolean(fieldHierarchy(field)))).toBe(true);
+  expect(fieldHierarchy("Unknown")).toBeUndefined();
 });

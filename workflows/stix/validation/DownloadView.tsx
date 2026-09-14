@@ -1,32 +1,20 @@
 "use client";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
 import * as XLSX from "xlsx";
-import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Download, FileCode, FileText, Lock, School, ShieldX, SlidersHorizontal, Users } from "lucide-react";
-import { prettyPrintXml } from "@/lib/cleaner";
+import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Download, FileText, Lock, School, ShieldX, SlidersHorizontal, Users } from "lucide-react";
 import { birthYearFromDate, processExport, studentFromRecord } from "@/lib/pullInfo";
 import { downloadBlob, downloadText, toCsv } from "@/lib/utils";
-import { generateAgeGroupReportCsv, generateIssueReportCsv, generateSchoolSummaryCsv } from "@/lib/validator";
+import { ageOnDate, generateAgeGroupReportCsv, generateIssueReportCsv, generateSchoolSummaryCsv } from "@/lib/validator";
+import { prepareCheckedOutput } from "@/lib/stixExport";
 import type { ValidateSession } from "@/lib/types";
 import StatCard from "@/components/StatCard";
+import { activeSessionFixes } from "@/lib/types";
+import PagedTable from "@/components/PagedTable";
 
 // ─── Report filter helpers ─────────────────────────────────────────────────────
-
-function computeAge(birthDate: string): number | null {
-  if (!birthDate) return null;
-  const now = new Date();
-  const m = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const dob = m
-    ? new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]))
-    : new Date(birthDate);
-  if (isNaN(dob.getTime())) return null;
-  let age = now.getFullYear() - dob.getFullYear();
-  const md = now.getMonth() - dob.getMonth();
-  if (md < 0 || (md === 0 && now.getDate() < dob.getDate())) age--;
-  return age < 0 ? null : age;
-}
 
 function toggleItem(arr: string[], val: string): string[] {
   return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
@@ -115,20 +103,34 @@ function AgeRangeFilter({
 
 export default function DownloadView({
   session,
+  saveProgress,
   onStartOver,
   onReturnToFixes,
 }: {
   onReturnToFixes: (view: "fix" | "manual") => void;
   session: ValidateSession;
+  saveProgress?: ReactNode;
   onStartOver: () => void;
 }) {
   const baseName = session.fileName.replace(/\.xml$/i, "");
-  const result = session.revalidatedResult ?? session.initialResult;
+  const prepared = useMemo(() => {
+    try {
+      return { output: prepareCheckedOutput(session.document, session.validationRules), error: null };
+    } catch (cause) {
+      return { output: null, error: cause instanceof Error ? cause.message : "Output preparation failed." };
+    }
+  }, [session.document, session.validationRules]);
+  const xml = prepared.output?.xml ?? "";
+  const result = prepared.output?.result ?? session.currentResult;
   const gate = result.gate;
   const needsReview = gate === "REVIEW_REQUIRED";
-  const xml = session.finalXml ?? session.originalXml;
+  const outputKind = gate === "BLOCKED" ? "draft" : "checked";
+  const outputName = `${baseName}_${outputKind}.xml`;
+  const outputZipName = `${baseName}_${outputKind}.zip`;
+  const referenceDate = session.referenceDate;
+  const fixes = activeSessionFixes(session);
 
-  const dlXml = () => downloadText(xml, `${baseName}_validated.xml`, "application/xml");
+  const dlXml = () => downloadText(xml, outputName, "application/xml");
   const [encryptOpen, setEncryptOpen] = useState(false);
   const [zipPassword, setZipPassword] = useState("");
   const [zipConfirm, setZipConfirm] = useState("");
@@ -141,24 +143,59 @@ export default function DownloadView({
     setZipBusy(true); setZipError(null);
     try {
       const writer = new ZipWriter(new BlobWriter("application/zip"), { password: zipPassword, encryptionStrength: 3 });
-      await writer.add(`${baseName}_validated.xml`, new TextReader(xml));
+      await writer.add(outputName, new TextReader(xml));
       const blob = await writer.close();
-      downloadBlob(blob, `${baseName}_validated.zip`);
+      downloadBlob(blob, outputZipName);
       closeEncrypt();
     } catch (error) { setZipError(error instanceof Error ? error.message : "Encryption failed. Please try again."); setZipBusy(false); }
   };
 
   const dlReport = () => {
-    const csv = generateIssueReportCsv(session.initialResult.issues, session.fixes);
-    downloadText(csv, `${baseName}_issue_report.csv`, "text/csv");
+    const safe = (value: unknown) => {
+      const text = String(value ?? "");
+      return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    };
+    const workbook = XLSX.utils.book_new();
+    const overview = [
+      ["PanoReady review report", ""],
+      ["App version", "0.1.0"],
+      ["Source file", session.fileName],
+      ["Input format", session.inputFormat ?? ""],
+      ["Source-provided STIX CreatedBy", session.originalCreatedBy ?? ""],
+      ["Import-decoded value changes", session.importTransformationCount ?? 0],
+      ["Date interpretation", session.dateAssumption ?? "XML date text validated as YYYY-MM-DD"],
+      ["Age reference date", referenceDate],
+      ["Initial issues", session.initialIssueCount],
+      ["Current unresolved issues", result.issues.length],
+      ["Current gate", result.gate],
+    ].map((row) => row.map(safe));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(overview), "Overview");
+    const provenance = new Map<string, string>();
+    for (const school of session.document.schools) for (const student of school.students) {
+      for (const [field, source] of Object.entries(student.provenance ?? {})) provenance.set(`${student.recordId}\0${field}`, source.sourceLocation);
+    }
+    const changes = session.history.flatMap((group) => group.changes.map((change) => ({
+      Action: group.label, Origin: group.origin, Status: group.status,
+      AppliedAt: new Date(group.appliedAt).toISOString(), Record: change.recordId, Target: change.targetId ?? "",
+      Field: change.field, SourceLocation: provenance.get(`${change.recordId}\0${change.field}`) ?? "",
+      OriginalValue: change.oldValue, NewValue: change.newValue, Reason: change.ruleId,
+    })));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(changes.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, safe(value)])))), "Changes");
+    const remaining = result.issues.map((finding) => ({
+      Severity: finding.severity, Rule: finding.ruleId, Record: finding.recordId ?? "", Target: finding.targetId ?? "",
+      School: finding.schoolNumber ?? "", Student: finding.studentName ?? "", Field: finding.field ?? "",
+      SourceLocation: finding.sourceLocation ?? "", Message: finding.message,
+    }));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(remaining.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, safe(value)])))), "Remaining issues");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["Active local policy JSON"], [safe(JSON.stringify(session.validationRules))]]), "Local policy");
+    XLSX.writeFile(workbook, `${baseName}_review_report.xlsx`);
   };
 
-  const dlPretty = () => downloadText(prettyPrintXml(xml), `${baseName}_pretty.xml`, "application/xml");
-
-  const exportResult = useMemo(() => processExport(xml), [xml]);
+  const buildExport = () => processExport(xml);
   const dlExportCsv = (data: Record<string, unknown>[], name: string) =>
     downloadText(toCsv(data), `${baseName}_${name}.csv`, "text/csv");
   const dlExportExcel = () => {
+    const exportResult = buildExport();
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportResult.allStudents),      "All_Students");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportResult.filteredStudents), "Filtered_Students");
@@ -171,7 +208,7 @@ export default function DownloadView({
   const warningCount = result.issues.filter(i => i.severity === "warning").length;
 
   // ── Filter state ──────────────────────────────────────────────────────────
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedGrades,  setSelectedGrades]  = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
@@ -182,6 +219,7 @@ export default function DownloadView({
   const [filterOpts, setFilterOpts] = useState({ schools: [] as string[], grades: [] as string[], genders: [] as string[], birthYears: [] as string[] });
 
   useEffect(() => {
+    if (!showFilters) return;
     const records = result.records ?? [];
     const schoolsSet = new Set<string>();
     const gradesSet  = new Set<string>();
@@ -195,7 +233,7 @@ export default function DownloadView({
       if (r.fields.Gender) gendersSet.add(String(r.fields.Gender).trim());
       const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
       birthYearsSet.add(birthYear === null ? "(unknown)" : String(birthYear));
-      const age = computeAge((r.fields.BirthDate || "").trim());
+      const age = ageOnDate((r.fields.BirthDate || "").trim(), referenceDate);
       if (age !== null) { if (age < ageMin) ageMin = age; if (age > ageMax) ageMax = age; }
     }
     const schools = Array.from(schoolsSet).sort();
@@ -214,48 +252,53 @@ export default function DownloadView({
     setMinAge(lo);
     setMaxAge(hi);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [result]);
+  }, [result, referenceDate, showFilters]);
 
-  const filteredRecords = (result.records ?? []).filter((r) => {
+  const filteredRecords = showFilters ? (result.records ?? []).filter((r) => {
     const sn     = (r.fields.SchoolNumber || r.fields.SchoolName || "").trim() || "(unknown)";
     const grade  = (r.fields.Grade  || "").trim();
     const gender = (r.fields.Gender || "").trim();
     const birthYear = birthYearFromDate((r.fields.BirthDate || "").trim());
     const birthYearOption = birthYear === null ? "(unknown)" : String(birthYear);
-    const age    = computeAge((r.fields.BirthDate || "").trim());
+    const age    = ageOnDate((r.fields.BirthDate || "").trim(), referenceDate);
     if (!selectedSchools.includes(sn)) return false;
     if (grade  && !selectedGrades.includes(grade))   return false;
     if (gender && !selectedGenders.includes(gender)) return false;
     if (!selectedBirthYears.includes(birthYearOption)) return false;
     if (age !== null && (age < minAge || age > maxAge)) return false;
     return true;
-  });
+  }) : [];
 
   const filteredIds = new Set(filteredRecords.map((r) => r.id));
-  const filteredIssues = result.issues.filter((i) => {
+  const filteredIssues = showFilters ? result.issues.filter((i) => {
     if (i.recordId && filteredIds.has(i.recordId)) return true;
     const sn = i.schoolNumber || "";
     return selectedSchools.includes(sn || "(unknown)");
-  });
+  }) : [];
 
   const dlFilteredSchools = () => downloadText(generateSchoolSummaryCsv(filteredRecords), `${baseName}_filtered_schools.csv`, "text/csv");
-  const dlFilteredAges    = () => downloadText(generateAgeGroupReportCsv(filteredRecords), `${baseName}_filtered_ages.csv`, "text/csv");
-  const dlFilteredIssues  = () => downloadText(generateIssueReportCsv(filteredIssues, session.fixes), `${baseName}_filtered_issues.csv`, "text/csv");
+  const dlFilteredAges    = () => downloadText(generateAgeGroupReportCsv(filteredRecords, referenceDate), `${baseName}_filtered_ages.csv`, "text/csv");
+  const dlFilteredIssues  = () => downloadText(generateIssueReportCsv(filteredIssues, fixes), `${baseName}_filtered_issues.csv`, "text/csv");
   const dlFilteredStudents = () => downloadText(
     toCsv(filteredRecords.map(studentFromRecord) as unknown as Record<string, unknown>[]),
     `${baseName}_filtered_students_custom.csv`,
     "text/csv",
   );
 
+  if (!prepared.output) return <main className="fix-operation">
+    <p role="alert">{prepared.error}</p>
+    <button type="button" className="btn btn-secondary" onClick={() => onReturnToFixes("manual")}>Return to manual fixes</button>
+  </main>;
+
   return (
     <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
-      <WorkflowNavigation onBack={() => onReturnToFixes("manual")} backActions={<div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+      <WorkflowNavigation secondaryAction={saveProgress} onBack={() => onReturnToFixes("manual")} backActions={<div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
         <button type="button" onClick={() => onReturnToFixes("fix")} className="btn btn-secondary"><ArrowLeft size={16} /> Return to automatic fixes</button>
         <button type="button" onClick={() => onReturnToFixes("manual")} className="btn btn-secondary"><ArrowLeft size={16} /> Return to manual fixes</button>
       </div>} onNext={onStartOver} nextLabel="Process another file" />
 
       {/* Gate banner */}
-      <h1 style={{ fontSize: 22, margin: "0 0 24px" }}>Output</h1>
+      <h1 style={{ fontSize: 22, margin: "0 0 24px" }}>Summary and Output</h1>
       <div style={{
         borderLeft: `2px solid ${gate === "READY" ? "var(--verde)" : "var(--color-error-text)"}`,
         padding: "6px 0 6px 22px",
@@ -282,10 +325,16 @@ export default function DownloadView({
 
       {/* Stats */}
       <div className="summary-stats summary-stats--three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 28, marginBottom: 28 }}>
-        <StatCard label="Fixes Applied"    value={session.fixes.length}  accent="teal" />
+        <StatCard label="Fixes Applied"    value={fixes.length}  accent="teal" />
         <StatCard label="Remaining Issues" value={result.issues.length}  />
         <StatCard label="Students"         value={result.studentCount}   accent="green" />
       </div>
+
+      <section className="fix-group" aria-label="Session actions">
+        <h2>What changed</h2>
+        {session.history.length === 0 ? <p className="cleaning-description">No changes were applied during this session.</p> : <div className="overview-table"><PagedTable className="data-table" rows={session.history} rowKey={(group) => group.id} sortValue={(group, column) => [group.label, group.origin, group.changes.length, group.status][column] ?? ""} renderRow={(group) => <tr key={group.id} style={{ opacity: group.status === "applied" ? 1 : 0.65 }}><td>{group.label}</td><td>{group.origin}</td><td>{group.changes.length}</td><td>{group.status === "applied" ? "Applied" : group.status === "undone" ? "Undone" : "Changed again"}</td></tr>}><thead><tr><th>Action</th><th>Origin</th><th>Changes</th><th>Status</th></tr></thead></PagedTable></div>}
+        <p className="cleaning-description">Current findings: {result.issues.length} ({errorCount} blocking, {warningCount} warnings). Return to automatic or manual review above to continue.</p>
+      </section>
 
       {/* Downloads */}
       <div className="section-label" style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, marginBottom: 12 }}>Downloads</div>
@@ -297,53 +346,40 @@ export default function DownloadView({
               <FileText size={18} style={{ color: gate === "READY" ? "var(--color-brand-400)" : "var(--color-error-text)" }} />
             </div>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.xml</div>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{outputName}</div>
               <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
-                {session.fixes.length > 0 ? `Cleaned STIX XML with ${session.fixes.length} fix${session.fixes.length !== 1 ? "es" : ""} applied` : "Original STIX XML (no fixes applied)"}
+                {fixes.length > 0 ? `Cleaned STIX XML with ${fixes.length} fix${fixes.length !== 1 ? "es" : ""} applied` : "Original STIX XML (no fixes applied)"}
               </div>
             </div>
           </div>
-          <button onClick={dlXml} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> Download</button>
+          <button onClick={dlXml} className="btn btn-primary" style={{ gap: 7 }}><Download size={14} /> {gate === "BLOCKED" ? "Download draft" : "Download"}</button>
         </div>
 
         {/* Encrypted XML */}
         <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}><Lock size={18} style={{ color: "var(--color-text-muted)" }} /></div>
-            <div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.zip</div><div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>AES-256 encrypted ZIP containing the validated XML</div></div>
+            <div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{outputZipName}</div><div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>AES-256 encrypted ZIP containing the {outputKind} XML file</div></div>
           </div>
           <button onClick={() => setEncryptOpen(true)} className="btn btn-secondary" style={{ gap: 7 }}><Lock size={14} /> Encrypt &amp; ZIP</button>
         </div>
 
-        {/* Issue report CSV */}
+        {/* Review report */}
         <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}>
               <BarChart3 size={18} style={{ color: "var(--color-text-muted)" }} />
             </div>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_issue_report.csv</div>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_review_report.xlsx</div>
               <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
-                {session.initialResult.issues.length} issue{session.initialResult.issues.length !== 1 ? "s" : ""} · includes fixed/unfixed status
+                Source context, action history, current findings, and active local policy
               </div>
             </div>
           </div>
-          <button onClick={dlReport} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> CSV</button>
+          <button onClick={dlReport} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> Excel</button>
         </div>
 
-        {/* Pretty-printed XML */}
-        <div className="card download-row" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: 9 }}>
-              <FileCode size={18} style={{ color: "var(--color-text-muted)" }} />
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_pretty.xml</div>
-              <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>Reformatted for easier review — not for submission</div>
-            </div>
-          </div>
-          <button onClick={dlPretty} className="btn btn-secondary" style={{ gap: 7 }}><Download size={14} /> Download</button>
-        </div>
       </div>
 
       <Dialog.Root open={encryptOpen} onOpenChange={(open) => { if (!open) closeEncrypt(); }}>
@@ -372,10 +408,10 @@ export default function DownloadView({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {([
-            { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_all_students.csv`,   sub: `${exportResult.allStudents.length} students`,                       fn: () => dlExportCsv(exportResult.allStudents as unknown as Record<string,unknown>[],      "all_students") },
-            { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_filtered_students.csv`, sub: `${exportResult.filteredStudents.length} Gr7–8 born 2012–2013`,   fn: () => dlExportCsv(exportResult.filteredStudents as unknown as Record<string,unknown>[],  "filtered_students") },
-            { icon: <School size={16} style={{ color: "var(--color-text-muted)" }} />, title: `${baseName}_school_counts.csv`,  sub: "Students per school per birth year",                                fn: () => dlExportCsv(exportResult.schoolCounts as unknown as Record<string,unknown>[],      "school_counts") },
-            { icon: <BarChart3 size={16} style={{ color: "var(--color-warning-text)" }} />, title: `${baseName}_grade_counts.csv`, sub: "Students per school per grade",                                 fn: () => dlExportCsv(exportResult.gradeCounts as unknown as Record<string,unknown>[],       "grade_counts") },
+            { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_all_students.csv`,   sub: `${result.studentCount} students`, fn: () => { const output = buildExport(); dlExportCsv(output.allStudents as unknown as Record<string,unknown>[], "all_students"); } },
+            { icon: <Users size={16} style={{ color: "var(--color-text-muted)" }} />,  title: `${baseName}_filtered_students.csv`, sub: "Grade 7–8 students born 2012–2013", fn: () => { const output = buildExport(); dlExportCsv(output.filteredStudents as unknown as Record<string,unknown>[], "filtered_students"); } },
+            { icon: <School size={16} style={{ color: "var(--color-text-muted)" }} />, title: `${baseName}_school_counts.csv`,  sub: "Students per school per birth year", fn: () => { const output = buildExport(); dlExportCsv(output.schoolCounts as unknown as Record<string,unknown>[], "school_counts"); } },
+            { icon: <BarChart3 size={16} style={{ color: "var(--color-warning-text)" }} />, title: `${baseName}_grade_counts.csv`, sub: "Students per school per grade", fn: () => { const output = buildExport(); dlExportCsv(output.gradeCounts as unknown as Record<string,unknown>[], "grade_counts"); } },
           ] as const).map(({ icon, title, sub, fn }) => (
             <div key={title} className="card" style={{ padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 11 }}>

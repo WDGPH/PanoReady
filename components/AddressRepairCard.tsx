@@ -43,8 +43,6 @@ function optionsFor(field: string, rules: RulesProfile): string[] | null {
 export default function AddressRepairCard({
   proposal,
   record,
-  studentName,
-  schoolNumber,
   rules,
   draft,
   selected,
@@ -54,8 +52,6 @@ export default function AddressRepairCard({
 }: {
   proposal: AddressRepairProposal;
   record: StudentRecord;
-  studentName?: string;
-  schoolNumber?: string;
   rules: RulesProfile;
   draft: AddressDraft;
   selected: boolean;
@@ -84,17 +80,9 @@ export default function AddressRepairCard({
               <tone.Icon size={16} style={{ color: tone.text }} />
               <strong style={{ fontSize: 14 }}>{proposal.title}</strong>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "var(--color-text-muted)", fontSize: 11, marginBottom: 8 }}>
-              <span>{studentName || "Student record"}</span>
-              {schoolNumber && <span>School {schoolNumber}</span>}
-              <span style={{ fontFamily: "var(--font-mono)" }}>{record.id}</span>
-            </div>
             <p style={{ margin: 0, maxWidth: 720, color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.55 }}>{proposal.explanation}</p>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-            <input type="checkbox" checked={selected} onChange={(event) => onSelectedChange(event.target.checked)} />
-            Apply
-          </label>
+          <button type="button" className="text-action" style={{ whiteSpace: "nowrap" }} aria-pressed={selected} onClick={() => onSelectedChange(!selected)}>{selected ? "Selected ✓" : "Select"}</button>
         </div>
       </div>
 
@@ -133,13 +121,13 @@ export default function AddressRepairCard({
                   {maxLength && <span style={{ color: value.length > maxLength ? "var(--color-error-text)" : "inherit" }}>{value.length}/{maxLength}</span>}
                 </span>
                 {options ? (
-                  <select value={value} onChange={(event) => { onDraftChange(field, event.target.value); onSelectedChange(true); }} style={controlStyle}>
+                  <select value={value} onChange={(event) => { onDraftChange(field, event.target.value); }} style={controlStyle}>
                     <option value="">—</option>
                     {value && !options.includes(value) && <option value={value}>{value} (current)</option>}
                     {options.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
                 ) : (
-                  <input value={value} onChange={(event) => { onDraftChange(field, event.target.value); onSelectedChange(true); }} style={controlStyle} />
+                  <input value={value} onChange={(event) => { onDraftChange(field, event.target.value); }} style={controlStyle} />
                 )}
               </label>
             );
@@ -149,10 +137,10 @@ export default function AddressRepairCard({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 14 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: changedCount ? "var(--color-success-text)" : "var(--color-text-muted)", fontSize: 11 }}>
             {changedCount ? <Check size={12} /> : <MapPin size={12} />}
-            {changedCount ? `${changedCount} field change${changedCount === 1 ? "" : "s"} staged` : "No address changes staged"}
+            {changedCount ? `${changedCount} field change${changedCount === 1 ? "" : "s"} pending` : "No pending address changes"}
           </span>
           <button type="button" onClick={onReset} className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11, gap: 5 }}>
-            <RotateCcw size={11} /> Reset suggestion
+            <RotateCcw size={11} /> Clear selected
           </button>
         </div>
       </div>

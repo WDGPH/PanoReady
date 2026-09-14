@@ -1,14 +1,18 @@
 import * as XLSX from "xlsx";
 import defaultRules from "../config/rules.stix.default.json";
 import {
-  emptyCanonicalUpload, emptyAddress, serializeCanonicalXml, parseCanonicalXml,
+  emptyCanonicalUpload, emptyAddress, flattenCanonicalStudent, serializeCanonicalXml, parseCanonicalXml,
   type CanonicalStudent, type CanonicalUpload,
 } from "./canonical";
-import type { ImportColumnMapping, ImportPreview, ValidationIssue } from "./types";
+import type { AppliedFix, ImportColumnMapping, ImportPreview, ValidationIssue } from "./types";
 import { CANONICAL_FIELDS, type CanonicalField } from "./fields";
+import { analyzeDateField, interpretDate, type DateConvention, type DateFieldAnalysis } from "./calendar";
+import { analyzePhoneNumber } from "./phoneNumber";
 export { CANONICAL_FIELDS, type CanonicalField } from "./fields";
-/** Column overrides, keyed by 1-based column number (matches ImportColumnMapping.column). "IGNORE" drops the column instead of mapping it. */
-export type ColumnOverrides = Record<number, CanonicalField | "IGNORE">;
+
+const STUDENT_SHEET = "Student Info";
+const METADATA_SHEET = "File Info";
+const KNOWN_NON_DATA_SHEETS = new Set(["Lists of Values", "Student XML"]);
 
 const BASE_LABELS: Record<CanonicalField, string[]> = {
   OEN: ["oen", "o e n", "ontario education number", "student oen"],
@@ -25,11 +29,13 @@ const BASE_LABELS: Record<CanonicalField, string[]> = {
   Province: ["province", "province code"], PostalCode: ["postal code", "postalcode", "zip code"], Phone: ["phone", "phone number", "student phone", "student phone number"],
   PhoneType: ["phone type", "student phone type"],
   GuardianFirstName: ["guardian first name", "guardian1 first name", "guardian 1 first name", "parent first name"],
+  GuardianMiddleName: ["guardian middle name", "guardian1 middle name", "guardian 1 middle name", "parent middle name"],
   GuardianLastName: ["guardian last name", "guardian1 last name", "guardian 1 last name", "parent last name"],
   GuardianRelationship: ["guardian relationship", "guardian1 relationship", "guardian 1 relationship", "parent relationship"],
   GuardianPhoneNumber: ["guardian phone number", "guardian1 phone number", "guardian 1 phone number", "parent phone"],
   GuardianPhoneType: ["guardian phone type", "guardian1 phone type", "guardian 1 phone type"],
   Guardian2FirstName: ["guardian2 first name", "guardian 2 first name", "second guardian first name"],
+  Guardian2MiddleName: ["guardian2 middle name", "guardian 2 middle name", "second guardian middle name"],
   Guardian2LastName: ["guardian2 last name", "guardian 2 last name", "second guardian last name"],
   Guardian2Relationship: ["guardian2 relationship", "guardian 2 relationship", "second guardian relationship"],
   Guardian2PhoneNumber: ["guardian2 phone number", "guardian 2 phone number", "second guardian phone"],
@@ -47,15 +53,15 @@ export interface XlsmMetadata {
   contactEmail: string; fullUpload: string; boardNumber: string; boardName: string; schoolNumber: string; schoolName: string;
 }
 
+/** One decoded workbook owned by the currently selected browser file. */
+export type DecodedWorkbook = { fileName: string; workbook: XLSX.WorkBook };
+
 export interface WorkbookImportResult {
   upload: CanonicalUpload;
   xml: string;
   metadata: XlsmMetadata;
   preview: ImportPreview;
-}
-
-function filenameSchoolName(fileName: string): string {
-  return fileName.replace(/\.xlsm?$/i, "").replace(/\s*\(\d+\)$/, "").trim() || "Unknown school";
+  dateAnalysis: DateFieldAnalysis;
 }
 
 function rows(sheet: XLSX.WorkSheet): unknown[][] {
@@ -63,40 +69,40 @@ function rows(sheet: XLSX.WorkSheet): unknown[][] {
 }
 
 function findStudentSheet(workbook: XLSX.WorkBook): { name: string; rows: unknown[][]; headerIndex: number } {
-  let best: { name: string; rows: unknown[][]; headerIndex: number; score: number } | null = null;
-  for (const name of workbook.SheetNames) {
-    const sheetRows = rows(workbook.Sheets[name]);
-    for (let index = 0; index < Math.min(sheetRows.length, 60); index++) {
-      const mapped = new Set(sheetRows[index].map((cell) => FIELD_BY_LABEL.get(normalizeLabel(cell))).filter(Boolean));
-      const identity = ["FirstName", "LastName", "BirthDate"].filter((field) => mapped.has(field as CanonicalField)).length;
-      const score = mapped.size + identity * 4;
-      if (identity >= 2 && (!best || score > best.score)) best = { name, rows: sheetRows, headerIndex: index, score };
-    }
-  }
-  if (!best) throw new Error("Could not identify a student worksheet and header row. Map at least two identity columns such as First Name, Last Name, or Birth Date.");
-  return best;
+  const sheet = workbook.Sheets[STUDENT_SHEET];
+  if (!sheet) throw new Error(`Workbook is outside the supported input contract: missing the "${STUDENT_SHEET}" sheet.`);
+  const sheetRows = rows(sheet);
+  const candidates = sheetRows.slice(0, 60).map((row, headerIndex) => {
+    const mapped = new Set(row.map((cell) => FIELD_BY_LABEL.get(normalizeLabel(cell))).filter(Boolean));
+    return { headerIndex, mapped };
+  }).filter(({ mapped }) => ["FirstName", "LastName", "BirthDate"].every((field) => mapped.has(field as CanonicalField)));
+  if (candidates.length !== 1) throw new Error(`Workbook is outside the supported input contract: expected one header row in "${STUDENT_SHEET}" containing First Name, Last Name, and Birthdate.`);
+  return { name: STUDENT_SHEET, rows: sheetRows, headerIndex: candidates[0].headerIndex };
 }
 
-function findMetadata(workbook: XLSX.WorkBook, fileName: string): XlsmMetadata {
+function findMetadata(workbook: XLSX.WorkBook): XlsmMetadata {
   const labels: Record<string, keyof XlsmMetadata> = {
     datecreated: "dateCreated", timecreated: "timeCreated", createdby: "createdBy", contactphone: "contactPhone",
     phonetype: "phoneType", phucontactemail: "contactEmail", contactemail: "contactEmail", fullupload: "fullUpload",
     boardnumber: "boardNumber", boardname: "boardName", schoolnumber: "schoolNumber", schoolname: "schoolName",
   };
-  const metadata: XlsmMetadata = { requiredFields: [], dateCreated: "", timeCreated: "", createdBy: "", contactPhone: "", phoneType: "", contactEmail: "", fullUpload: "", boardNumber: "", boardName: "", schoolNumber: "", schoolName: filenameSchoolName(fileName) };
-  let best: unknown[][] | null = null;
-  let bestScore = 0;
-  for (const name of workbook.SheetNames) {
-    const sheetRows = rows(workbook.Sheets[name]);
-    const score = sheetRows.reduce((count, row) => count + (labels[normalizeLabel(row[0])] ? 1 : 0), 0);
-    if (score > bestScore) { best = sheetRows; bestScore = score; }
-  }
-  if (!best) return metadata;
-  const heading = best.find((row) => normalizeLabel(row[0]) === "field");
-  const valueColumn = heading ? Math.max(1, heading.findIndex((cell) => normalizeLabel(cell) === "value")) : 2;
-  for (const row of best) {
+  const metadata: XlsmMetadata = { requiredFields: [], dateCreated: "", timeCreated: "", createdBy: "", contactPhone: "", phoneType: "", contactEmail: "", fullUpload: "", boardNumber: "", boardName: "", schoolNumber: "", schoolName: "" };
+  const metadataSheet = workbook.Sheets[METADATA_SHEET];
+  if (!metadataSheet) throw new Error(`Workbook is outside the supported input contract: missing the "${METADATA_SHEET}" sheet.`);
+  const metadataRows = rows(metadataSheet);
+  const headings = metadataRows.filter((row) => normalizeLabel(row[0]) === "field" && row.some((cell) => normalizeLabel(cell) === "value"));
+  if (headings.length !== 1) throw new Error(`Workbook is outside the supported input contract: expected one Field / Value heading in "${METADATA_SHEET}".`);
+  const valueColumn = headings[0].findIndex((cell) => normalizeLabel(cell) === "value");
+  const seen = new Set<keyof XlsmMetadata>();
+  for (let index = 0; index < metadataRows.length; index++) {
+    const row = metadataRows[index];
+    if (!row.some((cell) => display(cell)) || row === headings[0]) continue;
     const key = labels[normalizeLabel(row[0])];
-    if (key && key !== "requiredFields") metadata[key] = display(row[valueColumn]);
+    if (!key || key === "requiredFields") throw new Error(`Workbook is outside the supported input contract: unexpected populated metadata row ${index + 1} in "${METADATA_SHEET}".`);
+    if (seen.has(key)) throw new Error(`Workbook is outside the supported input contract: duplicate metadata field "${display(row[0])}".`);
+    if (row.some((cell, column) => column !== 0 && column !== valueColumn && display(cell))) throw new Error(`Workbook is outside the supported input contract: unexpected populated metadata cell in row ${index + 1}.`);
+    seen.add(key);
+    metadata[key] = display(row[valueColumn]);
   }
   return metadata;
 }
@@ -104,23 +110,25 @@ function findMetadata(workbook: XLSX.WorkBook, fileName: string): XlsmMetadata {
 type Lookup = Map<string, string>;
 function controlledLookups(workbook: XLSX.WorkBook): Record<string, Lookup> {
   const result: Record<string, Lookup> = {};
-  for (const name of workbook.SheetNames) {
-    const sheetRows = rows(workbook.Sheets[name]);
+  const lookupSheet = workbook.Sheets["Lists of Values"];
+  if (lookupSheet) {
+    const sheetRows = rows(lookupSheet);
     const headerIndex = sheetRows.findIndex((row) => row.filter((cell) => normalizeLabel(cell) === "value").length >= 3);
-    if (headerIndex < 1) continue;
-    const groupRow = sheetRows[headerIndex - 1];
-    for (let col = 0; col < sheetRows[headerIndex].length; col++) {
-      if (normalizeLabel(sheetRows[headerIndex][col]) !== "value") continue;
-      const group = display(groupRow[col]);
-      const lookup = new Map<string, string>();
-      for (let r = headerIndex + 1; r < sheetRows.length; r++) {
-        const code = display(sheetRows[r][col]);
-        const definition = display(sheetRows[r][col + 1]);
-        if (!code) continue;
-        lookup.set(normalizeLabel(code), code);
-        if (definition) lookup.set(normalizeLabel(definition), code);
+    if (headerIndex >= 1) {
+      const groupRow = sheetRows[headerIndex - 1];
+      for (let col = 0; col < sheetRows[headerIndex].length; col++) {
+        if (normalizeLabel(sheetRows[headerIndex][col]) !== "value") continue;
+        const group = display(groupRow[col]);
+        const lookup = new Map<string, string>();
+        for (let r = headerIndex + 1; r < sheetRows.length; r++) {
+          const code = display(sheetRows[r][col]);
+          const definition = display(sheetRows[r][col + 1]);
+          if (!code) continue;
+          lookup.set(normalizeLabel(code), code);
+          if (definition) lookup.set(normalizeLabel(definition), code);
+        }
+        if (lookup.size) result[normalizeLabel(group)] = lookup;
       }
-      if (lookup.size) result[normalizeLabel(group)] = lookup;
     }
   }
   const addCodes = (group: string, values: string[]) => {
@@ -163,150 +171,226 @@ function canonicalValue(field: CanonicalField | "FullUpload", raw: string, looku
 function normalizePhone(raw: string, diagnostics: ValidationIssue[], location: string, field: string): string {
   const value = raw.trim();
   if (!value) return "";
-  if (/[;/]|\bor\b/i.test(value)) {
-    diagnostics.push(diagnostic(`import-phone-multiple-${location}`, "error", `${field} contains multiple phone numbers and requires review.`, "IMPORT_PHONE_AMBIGUOUS", location, field));
+  const analysis = analyzePhoneNumber(value);
+  if (analysis.status === "invalid") {
+    diagnostics.push(diagnostic(`import-phone-review-${location}`, "error", `${field} could not be safely normalized (${analysis.reason}); the original value was preserved for review.`, "IMPORT_PHONE_REVIEW", location, field));
     return value;
   }
-  const extension = value.match(/(?:x|ext\.?|extension)\s*(\d{1,5})\s*$/i)?.[1] ?? "";
-  const withoutExtension = extension ? value.replace(/(?:x|ext\.?|extension)\s*\d{1,5}\s*$/i, "") : value;
-  let digits = withoutExtension.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
-  if (digits.length !== 10) return value;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
+  return analysis.value;
 }
 
-function normalizeDate(raw: string, diagnostics: ValidationIssue[], location: string): string {
-  const value = raw.trim();
-  if (!value) return "";
-  const iso = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
-  const numeric = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (numeric) {
-    const a = Number(numeric[1]); const b = Number(numeric[2]);
-    if (a <= 12 && b <= 12) {
-      diagnostics.push(diagnostic(`import-date-ambiguous-${location}`, "error", `BirthDate "${value}" is ambiguous; use YYYY-MM-DD.`, "IMPORT_DATE_AMBIGUOUS", location, "BirthDate"));
-      return value;
-    }
-    const month = a > 12 ? b : a; const day = a > 12 ? a : b;
-    return `${numeric[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+function normalizeDate(raw: unknown, diagnostics: ValidationIssue[], location: string, convention?: DateConvention, fieldConflict = false): string {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  const evidence = interpretDate(raw);
+  if (fieldConflict && ["day-first", "month-first", "ambiguous", "same-day-month"].includes(evidence.classification)) {
+    diagnostics.push(diagnostic(`import-date-conflict-${location}`, "error", `BirthDate "${evidence.input}" belongs to a field with conflicting day/month conventions and must be repaired explicitly.`, "IMPORT_DATE_CONFLICT", location, "BirthDate"));
+    return typeof raw === "string" ? raw.trim() : String((raw as { v?: unknown }).v ?? raw);
   }
-  return value;
+  const interpreted = interpretDate(raw, { convention });
+  if (interpreted.canonical) return interpreted.canonical;
+  diagnostics.push(diagnostic(`import-date-${location}`, "error", interpreted.explanation, interpreted.classification === "ambiguous" ? "IMPORT_DATE_AMBIGUOUS" : "IMPORT_DATE_INVALID", location, "BirthDate"));
+  return typeof raw === "string" ? raw.trim() : String((raw as { v?: unknown }).v ?? raw);
 }
 
-function makeStudent(values: Record<string, string>, index: number, worksheet: string, rowNumber: number, lookups: Record<string, Lookup>, diagnostics: ValidationIssue[]): CanonicalStudent {
+function makeStudent(values: Record<string, unknown>, index: number, worksheet: string, rowNumber: number, lookups: Record<string, Lookup>, diagnostics: ValidationIssue[], convention?: DateConvention, dateFieldConflict = false): CanonicalStudent {
+  const diagnosticStart = diagnostics.length;
   const provenance: CanonicalStudent["provenance"] = {};
   const get = (field: CanonicalField) => {
-    const raw = values[field] ?? "";
+    const source = values[field] ?? "";
+    const raw = display(typeof source === "object" && source ? (source as { w?: unknown; v?: unknown }).w ?? (source as { v?: unknown }).v : source);
     if (raw) provenance[field] = { raw, sourceLocation: `${worksheet}!${rowNumber}` };
     const location = `${worksheet}!${rowNumber}`;
-    if (field === "BirthDate") return normalizeDate(raw, diagnostics, location);
+    if (field === "BirthDate") return normalizeDate(source, diagnostics, location, convention, dateFieldConflict);
     if (["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"].includes(field)) return normalizePhone(raw, diagnostics, location, field);
     if (field === "PostalCode") return raw.replace(/\s/g, "").toUpperCase().replace(/^(.{3})(.{3})$/, "$1 $2");
     return canonicalValue(field, raw, lookups, diagnostics, location);
   };
   const guardian = (second = false) => {
     const prefix = second ? "Guardian2" : "Guardian";
-    const first = get(`${prefix}FirstName` as CanonicalField); const last = get(`${prefix}LastName` as CanonicalField);
+    const first = get(`${prefix}FirstName` as CanonicalField); const middle = get(`${prefix}MiddleName` as CanonicalField); const last = get(`${prefix}LastName` as CanonicalField);
     const relationship = get(`${prefix}Relationship` as CanonicalField); const number = get(`${prefix}PhoneNumber` as CanonicalField);
     const type = get(`${prefix}PhoneType` as CanonicalField);
-    return first || last || relationship || number ? { name: { first, middle: "", last }, relationship, phone: number ? { number, type } : null } : null;
+    return first || middle || last || relationship || number || type ? { guardianId: `school0:student${index}:guardian${second ? 1 : 0}`, name: { first, middle, last }, relationship, phone: number || type ? { number, type } : null } : null;
   };
   const g1 = guardian(); const g2 = guardian(true);
   const alias = { first: get("AliasFirstName"), middle: get("AliasMiddleName"), last: get("AliasLastName") };
   const studentPhone = get("Phone");
-  return {
+  const student: CanonicalStudent = {
     recordId: `school0:student${index}`, oen: get("OEN"), grade: get("Grade"), className: get("Class"),
     name: { first: get("FirstName"), middle: get("MiddleName"), last: get("LastName") },
     aliasName: alias.first || alias.middle || alias.last ? alias : null, gender: get("Gender"), birthDate: get("BirthDate"),
     language: get("Language"), countryOfOrigin: get("CountryOfOrigin"), guardians: [g1, g2].filter((g): g is NonNullable<typeof g> => Boolean(g)),
     address: { ...emptyAddress(), unit: get("Unit"), streetNumber: get("StreetNumber"), streetNumberSuffix: get("StreetNumberSuffix"), streetName: get("StreetName"), streetType: get("StreetType"), streetDirection: get("StreetDirection"), ruralRoute: get("RuralRoute"), poBoxNumber: get("PoBoxNumber"), city: get("City"), province: get("Province"), postalCode: get("PostalCode") },
-    phone: studentPhone ? { number: studentPhone, type: get("PhoneType") } : null, provenance,
+    phone: studentPhone || values.PhoneType ? { number: studentPhone, type: get("PhoneType") } : null, provenance,
   };
+  const flat = flattenCanonicalStudent(student, { schoolId: "school0", schoolNumber: "", name: "", students: [] });
+  for (const finding of diagnostics.slice(diagnosticStart)) {
+    finding.recordId = student.recordId;
+    const guardian = finding.field?.startsWith("Guardian2") ? g2 : finding.field?.startsWith("Guardian") ? g1 : null;
+    if (guardian) {
+      finding.targetId = guardian.guardianId;
+      if (finding.field?.endsWith("PhoneNumber")) finding.currentValue = guardian.phone?.number ?? "";
+      else if (finding.field?.endsWith("PhoneType")) finding.currentValue = guardian.phone?.type ?? "";
+      else if (finding.field?.endsWith("Relationship")) finding.currentValue = guardian.relationship;
+    } else if (finding.field) finding.currentValue = flat[finding.field] ?? "";
+  }
+  return student;
 }
 
-export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): WorkbookImportResult {
-  if (data.byteLength > 50_000_000) throw new Error("Workbook exceeds the 50 MB local processing limit.");
-  const workbook = XLSX.read(data, { type: "array", cellDates: false, raw: false });
-  const source = findStudentSheet(workbook);
-  const metadata = { ...findMetadata(workbook, fileName), ...metadataOverrides };
-  const diagnostics: ValidationIssue[] = [];
-  const sourceSheet = workbook.Sheets[source.name];
-  for (const address of Object.keys(sourceSheet)) {
+function hasPopulatedCells(sheet: XLSX.WorkSheet): boolean {
+  return Object.keys(sheet).some((address) => !address.startsWith("!") && display(sheet[address]?.v) !== "");
+}
+
+function isPopulatedCell(cell: XLSX.CellObject | undefined): boolean {
+  return Boolean(cell && (display(cell.v) !== "" || cell.f));
+}
+
+function hiddenContentDiagnostics(sheetName: string, sheet: XLSX.WorkSheet): ValidationIssue[] {
+  const hiddenRows = new Set<number>();
+  const hiddenColumns = new Set<number>();
+  for (const address of Object.keys(sheet)) {
     if (address.startsWith("!")) continue;
-    const cell = sourceSheet[address];
-    if (!cell?.f) continue;
-    diagnostics.push(diagnostic(`import-formula-${address}`, cell.v === undefined || cell.v === null || cell.v === "" ? "error" : "warning", cell.v === undefined || cell.v === null || cell.v === "" ? `Formula ${source.name}!${address} has no cached value and cannot be imported safely.` : `Formula ${source.name}!${address} was not executed; its cached value was used.`, "IMPORT_FORMULA", `${source.name}!${address}`));
+    const cell = sheet[address] as XLSX.CellObject | undefined;
+    if (!isPopulatedCell(cell)) continue;
+    const { r, c } = XLSX.utils.decode_cell(address);
+    if (sheet["!rows"]?.[r]?.hidden) hiddenRows.add(r);
+    if (sheet["!cols"]?.[c]?.hidden) hiddenColumns.add(c);
+  }
+  return [
+    ...[...hiddenRows].sort((a, b) => a - b).map((row) => diagnostic(
+      `import-hidden-row-${sheetName}-${row + 1}`, "error",
+      `Worksheet "${sheetName}" contains populated content in hidden row ${row + 1}. Unhide the row or remove its content before import.`,
+      "IMPORT_HIDDEN_CONTENT", `${sheetName}!${row + 1}`,
+    )),
+    ...[...hiddenColumns].sort((a, b) => a - b).map((column) => {
+      const label = XLSX.utils.encode_col(column);
+      return diagnostic(
+        `import-hidden-column-${sheetName}-${label}`, "error",
+        `Worksheet "${sheetName}" contains populated content in hidden column ${label}. Unhide the column or remove its content before import.`,
+        "IMPORT_HIDDEN_CONTENT", `${sheetName}!${label}`,
+      );
+    }),
+  ];
+}
+
+export function decodeWorkbook(data: ArrayBuffer, fileName: string): DecodedWorkbook {
+  if (data.byteLength > 50_000_000) throw new Error("Workbook exceeds the 50 MB local processing limit.");
+  if (!/\.xlsm$/i.test(fileName)) throw new Error("The supported workbook input is the macro-enabled .xlsm template. Convert other spreadsheet layouts outside PanoReady before import.");
+  return { fileName, workbook: XLSX.read(data, { type: "array", cellDates: false, cellNF: true, cellStyles: true }) };
+}
+
+export function importDecodedWorkbook(decoded: DecodedWorkbook, metadataOverrides?: Partial<XlsmMetadata>, dateConvention?: DateConvention): WorkbookImportResult {
+  const { fileName, workbook } = decoded;
+  const source = findStudentSheet(workbook);
+  const metadata = { ...findMetadata(workbook), ...metadataOverrides };
+  const diagnostics: ValidationIssue[] = [];
+  for (const sheetName of [STUDENT_SHEET, METADATA_SHEET]) diagnostics.push(...hiddenContentDiagnostics(sheetName, workbook.Sheets[sheetName]));
+  for (const sheetName of workbook.SheetNames) {
+    if (sheetName === STUDENT_SHEET || sheetName === METADATA_SHEET || KNOWN_NON_DATA_SHEETS.has(sheetName)) continue;
+    if (hasPopulatedCells(workbook.Sheets[sheetName])) diagnostics.push(diagnostic(`import-unknown-sheet-${sheetName}`, "error", `Populated worksheet "${sheetName}" is outside the supported workbook contract.`, "IMPORT_UNKNOWN_SHEET", sheetName));
+  }
+  const sourceSheet = workbook.Sheets[source.name];
+  for (const sheetName of [STUDENT_SHEET, METADATA_SHEET]) {
+    for (const address of Object.keys(workbook.Sheets[sheetName])) {
+      if (address.startsWith("!") || !workbook.Sheets[sheetName][address]?.f) continue;
+      diagnostics.push(diagnostic(`import-formula-${sheetName}-${address}`, "error", `Formula ${sheetName}!${address} is not accepted in an input field. Replace it with its reviewed value before import.`, "IMPORT_FORMULA", `${sheetName}!${address}`));
+    }
   }
   if ((sourceSheet["!merges"]?.length ?? 0) > 0) diagnostics.push(diagnostic("import-merged-cells", "warning", `Worksheet "${source.name}" contains merged cells; verify the detected header and row boundaries.`, "IMPORT_MERGED_CELLS", source.name));
-  const sheetInfo = workbook.Workbook?.Sheets?.find((sheet) => sheet.name === source.name);
-  if (sheetInfo?.Hidden) diagnostics.push(diagnostic("import-hidden-sheet", "warning", `The selected student worksheet "${source.name}" is hidden.`, "IMPORT_HIDDEN_CONTENT", source.name));
+  for (const sheetName of [STUDENT_SHEET, METADATA_SHEET]) {
+    const sheetInfo = workbook.Workbook?.Sheets?.find((sheet) => sheet.name === sheetName);
+    if (sheetInfo?.Hidden) diagnostics.push(diagnostic(`import-hidden-sheet-${sheetName}`, "error", `Input worksheet "${sheetName}" must be visible.`, "IMPORT_HIDDEN_CONTENT", sheetName));
+  }
   const headers = source.rows[source.headerIndex];
-  const autoDestinations = headers.map((header) => FIELD_BY_LABEL.get(normalizeLabel(header)));
-  const ignoredColumns = new Set(Object.entries(columnOverrides ?? {}).filter(([, value]) => value === "IGNORE").map(([column]) => Number(column)));
-  const destinations = autoDestinations.map((field, index) => {
-    const override = columnOverrides?.[index + 1];
-    if (override === "IGNORE") return undefined;
-    if (override) return override;
-    return field;
-  });
+  const destinations = headers.map((header) => FIELD_BY_LABEL.get(normalizeLabel(header)));
   const duplicateFields = new Set(destinations.filter((field, index) => field && destinations.indexOf(field) !== index));
   const markerIndex = source.rows.findIndex((row, index) => index > source.headerIndex && normalizeLabel(row[0]).startsWith("enterdata"));
-  const scanStart = markerIndex >= 0 ? markerIndex + 1 : source.headerIndex + 1;
-  const excludedLabels = new Set(["required", "example", "notesformat", "notes", "field", "enterdataselectvaluesinthisrow"]);
-  // A row whose every populated mapped cell exactly restates its own column header (e.g. a
+  const instructionLabels = new Set(["required", "example", "notesformat", "notes"]);
+  for (let index = 0; index < source.headerIndex; index++) {
+    if (source.rows[index].some((cell) => display(cell))) diagnostics.push(diagnostic(`import-preheader-${index + 1}`, "error", `Unexpected populated content before the header at ${STUDENT_SHEET}!${index + 1}.`, "IMPORT_UNKNOWN_REGION", `${STUDENT_SHEET}!${index + 1}`));
+  }
+  if (markerIndex >= 0) for (let index = source.headerIndex + 1; index < markerIndex; index++) {
+    const row = source.rows[index];
+    if (row.some((cell) => display(cell)) && !instructionLabels.has(normalizeLabel(row[0]))) diagnostics.push(diagnostic(`import-instruction-region-${index + 1}`, "error", `Unexpected populated content in the instruction region at ${STUDENT_SHEET}!${index + 1}.`, "IMPORT_UNKNOWN_REGION", `${STUDENT_SHEET}!${index + 1}`));
+  }
+  let scanStart = markerIndex >= 0 ? markerIndex + 1 : source.headerIndex + 1;
+  if (markerIndex < 0) while (scanStart < source.rows.length && instructionLabels.has(normalizeLabel(source.rows[scanStart][0]))) scanStart++;
+  // A row whose every populated cell exactly restates its mapped column header (e.g. a
   // decorative repeated-header row with a blank leading cell) is never real student data —
   // no actual record has FirstName "First Name" and OEN "OEN" at once.
   const isHeaderEchoRow = (row: unknown[]) => {
     let populated = 0;
-    let echoed = 0;
-    destinations.forEach((field, index) => {
-      if (!field) return;
+    for (let index = 0; index < row.length; index++) {
       const value = display(row[index]);
-      if (!value) return;
+      if (!value) continue;
       populated++;
-      if (normalizeLabel(value) === normalizeLabel(headers[index])) echoed++;
-    });
-    return populated >= 2 && echoed === populated;
+      if (!destinations[index] || normalizeLabel(value) !== normalizeLabel(headers[index])) return false;
+    }
+    return populated >= 2;
   };
   let skippedHeaderEchoRows = 0;
-  const candidates = source.rows.slice(scanStart).map((row, offset) => ({ row, index: scanStart + offset }))
-    .filter(({ row }) => !excludedLabels.has(normalizeLabel(row[0])))
+  const inspectedRows = source.rows.slice(scanStart).map((row, offset) => ({ row, index: scanStart + offset }))
     .filter(({ row }) => {
       if (!isHeaderEchoRow(row)) return true;
       skippedHeaderEchoRows++;
       return false;
-    })
-    .filter(({ row }) => {
+    });
+  const candidates = inspectedRows.filter(({ row, index }) => {
       const values = Object.fromEntries(destinations.map((field, index) => field ? [field, display(row[index])] : ["", ""]));
       const identity = [values.FirstName, values.LastName, values.BirthDate, values.OEN].filter(Boolean).length;
       const populated = destinations.filter((field, index) => field && display(row[index])).length;
+      const anyPopulated = row.some((cell) => display(cell));
+      if (anyPopulated && !(identity > 0 && populated >= 2)) diagnostics.push(diagnostic(`import-unrecognized-row-${index + 1}`, "error", `Populated row ${index + 1} in "${STUDENT_SHEET}" does not have the supported student row shape.`, "IMPORT_UNRECOGNIZED_ROW", `${STUDENT_SHEET}!${index + 1}`));
       return identity > 0 && populated >= 2;
     });
   if (skippedHeaderEchoRows > 0) diagnostics.push(diagnostic("import-header-echo-rows", "warning", `Skipped ${skippedHeaderEchoRows} row(s) that only repeated the column headers as values.`, "IMPORT_HEADER_ECHO_ROW", source.name));
   const columns: ImportColumnMapping[] = headers.map((header, index) => {
     const canonicalField = destinations[index];
     const populatedCount = candidates.filter(({ row }) => display(row[index])).length;
-    const status: ImportColumnMapping["status"] = ignoredColumns.has(index + 1) ? "IGNORED"
-      : !canonicalField ? "UNMAPPED" : duplicateFields.has(canonicalField) ? "DUPLICATE" : "MAPPED";
+    const status: ImportColumnMapping["status"] = !canonicalField ? "UNMAPPED" : duplicateFields.has(canonicalField) ? "DUPLICATE" : "MAPPED";
     if (status === "UNMAPPED" && populatedCount > 0) diagnostics.push(diagnostic(`import-unmapped-${index}`, "error", `Populated column "${display(header)}" is not mapped.`, "IMPORT_UNMAPPED_COLUMN", `${source.name}!${XLSX.utils.encode_col(index)}`));
     if (status === "DUPLICATE") diagnostics.push(diagnostic(`import-duplicate-${index}`, "error", `Column "${display(header)}" duplicates the ${canonicalField} destination.`, "IMPORT_DUPLICATE_COLUMN", `${source.name}!${XLSX.utils.encode_col(index)}`, canonicalField));
     return { column: index + 1, sourceHeader: display(header), canonicalField, status, populatedCount };
   });
   if (markerIndex < 0) diagnostics.push(diagnostic("import-marker-missing", "warning", "No data marker row was found; positive identity evidence was used to identify student rows.", "IMPORT_MARKER_MISSING", source.name));
   const lookups = controlledLookups(workbook);
-  const students = candidates.map(({ row, index }, studentIndex) => {
-    const values: Record<string, string> = {};
-    destinations.forEach((field, column) => { if (field && !duplicateFields.has(field)) values[field] = display(row[column]); });
-    return makeStudent(values, studentIndex, source.name, index + 1, lookups, diagnostics);
+  const date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
+  const sourceCell = (row: number, column: number): unknown => {
+    const cell = sourceSheet[XLSX.utils.encode_cell({ r: row, c: column })];
+    if (!cell) return "";
+    if (cell.t === "d" || (cell.t === "n" && typeof cell.v === "number" && XLSX.SSF.is_date(cell.z ?? ""))) {
+      return { t: cell.t, v: cell.v, w: cell.w, z: cell.z, date1904, location: `${source.name}!${XLSX.utils.encode_cell({ r: row, c: column })}` };
+    }
+    return display(cell.v);
+  };
+  const birthDateColumn = destinations.findIndex((field) => field === "BirthDate");
+  const dateEntries = birthDateColumn < 0 ? [] : candidates.map(({ index }) => sourceCell(index, birthDateColumn));
+  const dateAnalysis = analyzeDateField(dateEntries, { field: "BirthDate", convention: dateConvention });
+  const students = candidates.map(({ index }, studentIndex) => {
+    const values: Record<string, unknown> = {};
+    destinations.forEach((field, column) => { if (field && !duplicateFields.has(field)) values[field] = sourceCell(index, column); });
+    return makeStudent(values, studentIndex, source.name, index + 1, lookups, diagnostics, dateConvention, dateAnalysis.conflict);
   });
+  for (const finding of diagnostics) {
+    if (finding.recordId || !finding.sourceLocation) continue;
+    const student = students.find((candidate) => Object.values(candidate.provenance ?? {}).some((source) => source.sourceLocation === finding.sourceLocation));
+    if (student) finding.recordId = student.recordId;
+    else if (finding.sourceLocation === "metadata") finding.recordId = "metadata";
+  }
   const upload = emptyCanonicalUpload(`${fileName}:${Date.now()}`);
   upload.metadata = {
     createDate: metadata.dateCreated.trim(), createTime: metadata.timeCreated.trim(), createdBy: metadata.createdBy.trim(),
-    contactPhone: metadata.contactPhone ? { number: normalizePhone(metadata.contactPhone, diagnostics, "metadata", "ContactPhone"), type: canonicalValue("PhoneType", metadata.phoneType, lookups, diagnostics, "metadata") } : null,
+    contactPhone: metadata.contactPhone || metadata.phoneType ? { number: normalizePhone(metadata.contactPhone, diagnostics, "metadata", "MetadataContactPhone"), type: canonicalValue("PhoneType", metadata.phoneType, lookups, diagnostics, "metadata") } : null,
     contactEmail: metadata.contactEmail.trim(), fullUpload: canonicalValue("FullUpload", metadata.fullUpload, lookups, diagnostics, "metadata"),
     boardNumber: metadata.boardNumber.trim(), boardName: metadata.boardName.trim(),
   };
-  upload.schools[0] = { schoolId: "school0", schoolNumber: metadata.schoolNumber.trim(), name: metadata.schoolName.trim() || filenameSchoolName(fileName), students };
+  upload.schools[0] = { schoolId: "school0", schoolNumber: metadata.schoolNumber.trim(), name: metadata.schoolName.trim(), students };
+  for (const finding of diagnostics) if (finding.sourceLocation === "metadata") {
+    finding.recordId = "metadata";
+    if (finding.field === "PhoneType") finding.field = "MetadataContactPhoneType";
+    if (finding.field === "MetadataContactPhone") finding.currentValue = upload.metadata.contactPhone?.number ?? "";
+    if (finding.field === "MetadataContactPhoneType") finding.currentValue = upload.metadata.contactPhone?.type ?? "";
+  }
   upload.diagnostics = diagnostics;
   const xml = serializeCanonicalXml(upload);
   let reconciled = false;
@@ -319,20 +403,40 @@ export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOver
     const transformed = field === "BirthDate" ? student.birthDate : field === "Gender" ? student.gender : field === "PostalCode" ? student.address.postalCode : "";
     return transformed && transformed !== p.raw;
   }).length, 0);
-  return { upload, xml, metadata, preview: { worksheet: source.name, headerRow: source.headerIndex + 1, firstDataRow: scanStart + 1, sourceRowCount: candidates.length, canonicalStudentCount: students.length, columns, diagnostics, transformationCount, reconciled } };
+  return { upload, xml, metadata, dateAnalysis, preview: { worksheet: source.name, headerRow: source.headerIndex + 1, firstDataRow: scanStart + 1, sourceRowCount: candidates.length, canonicalStudentCount: students.length, columns, diagnostics, transformationCount, reconciled } };
 }
 
-export function xlsmMetadata(data: ArrayBuffer, fileName: string): XlsmMetadata {
-  const workbook = XLSX.read(data, { type: "array", cellDates: false, raw: false });
-  const metadata = findMetadata(workbook, fileName);
+export function importWorkbook(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, dateConvention?: DateConvention): WorkbookImportResult {
+  return importDecodedWorkbook(decodeWorkbook(data, fileName), metadataOverrides, dateConvention);
+}
+
+export function workbookMetadata(decoded: DecodedWorkbook): XlsmMetadata {
+  const metadata = findMetadata(decoded.workbook);
   try {
-    const source = findStudentSheet(workbook);
+    const source = findStudentSheet(decoded.workbook);
     const required = source.rows[source.headerIndex + 1] ?? [];
     metadata.requiredFields = source.rows[source.headerIndex].map((header, index) => display(required[index]).toUpperCase() === "Y" ? FIELD_BY_LABEL.get(normalizeLabel(header)) : undefined).filter((field): field is CanonicalField => Boolean(field));
   } catch { /* metadata remains editable even when import inspection fails */ }
   return metadata;
 }
 
-export function xlsmToSTIXXml(data: ArrayBuffer, fileName: string, metadataOverrides?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): string {
-  return importWorkbook(data, fileName, metadataOverrides, columnOverrides).xml;
+/** Describe operator changes made to detected workbook setup before import. */
+export function workbookSetupChanges(detected: XlsmMetadata, document: CanonicalUpload): AppliedFix[] {
+  const current: Record<string, string> = {
+    CreateDate: document.metadata.createDate, CreateTime: document.metadata.createTime, CreatedBy: document.metadata.createdBy,
+    MetadataContactPhone: document.metadata.contactPhone?.number ?? "", MetadataContactPhoneType: document.metadata.contactPhone?.type ?? "",
+    ContactEmail: document.metadata.contactEmail, FullUpload: document.metadata.fullUpload,
+    BoardNumber: document.metadata.boardNumber, BoardName: document.metadata.boardName,
+    SchoolNumber: document.schools[0]?.schoolNumber ?? "", SchoolName: document.schools[0]?.name ?? "",
+  };
+  const original: Record<string, string> = {
+    CreateDate: detected.dateCreated, CreateTime: detected.timeCreated, CreatedBy: detected.createdBy,
+    MetadataContactPhone: detected.contactPhone, MetadataContactPhoneType: detected.phoneType,
+    ContactEmail: detected.contactEmail, FullUpload: detected.fullUpload, BoardNumber: detected.boardNumber, BoardName: detected.boardName,
+    SchoolNumber: detected.schoolNumber, SchoolName: detected.schoolName,
+  };
+  return Object.keys(current).filter((field) => current[field] !== original[field]).map((field, index) => {
+    const school = field === "SchoolNumber" || field === "SchoolName";
+    return { issueId: `workbook-setup-${index}`, recordId: school ? document.schools[0].schoolId : "metadata", targetId: school ? document.schools[0].schoolId : undefined, field, oldValue: original[field], newValue: current[field], ruleId: "WORKBOOK_SETUP", appliedAt: 0 };
+  });
 }

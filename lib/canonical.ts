@@ -3,10 +3,12 @@ import type { ValidationIssue } from "./types";
 
 export const CANONICAL_SCHEMA_VERSION = "1.0.0";
 export const ONTARIO_NAMESPACE = "http://ontario.ca";
+const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 
 export type CanonicalName = { first: string; middle: string; last: string };
 export type CanonicalPhone = { number: string; type: string };
 export type CanonicalGuardian = {
+  guardianId: string;
   name: CanonicalName;
   relationship: string;
   phone: CanonicalPhone | null;
@@ -84,13 +86,14 @@ function node(value: unknown): XmlNode {
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return text((value as XmlNode)["#text"]);
-  return String(value).trim();
+  return String(value);
 }
 
 function phone(value: unknown): CanonicalPhone | null {
   const n = node(value);
   const number = text(value);
-  return number ? { number, type: text(n["@_type"]) } : null;
+  const type = text(n["@_type"]);
+  return number || type ? { number, type } : null;
 }
 
 function name(value: unknown): CanonicalName {
@@ -98,24 +101,102 @@ function name(value: unknown): CanonicalName {
   return { first: text(n.First), middle: text(n.Middle), last: text(n.Last) };
 }
 
-function rootNamespace(xml: string): string | null {
-  const withoutProlog = xml.replace(/^\s*<\?xml[\s\S]*?\?>/i, "").replace(/^\s*<!--([\s\S]*?)-->/, "").trimStart();
-  const match = withoutProlog.match(/^<([A-Za-z_][\w.-]*:)?SchoolUpload\b([^>]*)>/i);
-  if (!match) return null;
-  const prefix = match[1]?.slice(0, -1) ?? "";
-  const attrs = match[2];
-  const declaration = prefix
-    ? new RegExp(`\\bxmlns:${prefix}\\s*=\\s*["']([^"']+)["']`, "i")
-    : /\bxmlns\s*=\s*["']([^"']+)["']/i;
-  return attrs.match(declaration)?.[1] ?? "";
+type NamespaceContext = Map<string, string>;
+
+const CHILDREN: Record<string, readonly string[]> = {
+  SchoolUpload: ["Metadata", "School"],
+  Metadata: ["CreateDate", "CreateTime", "CreatedBy", "ContactPhone", "ContactEmail", "FullUpload", "SchoolBoard"],
+  SchoolBoard: ["BoardNumber", "Name"],
+  School: ["SchoolNumber", "Name", "Students"],
+  Students: ["Student"],
+  Student: ["OEN", "Grade", "Class", "Name", "AliasName", "Gender", "BirthDate", "Language", "CountryOfOrigin", "Guardian", "Address", "Phone"],
+  Guardian: ["Name", "Relationship", "Phone"],
+  Address: ["Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "StreetType", "StreetDirection", "RuralRoute", "PoBoxNumber", "City", "Province", "PostalCode"],
+};
+
+const REPEATED_CHILDREN = new Set(["School", "Student"]);
+
+function splitQName(qName: string): { prefix: string; local: string } {
+  const separator = qName.indexOf(":");
+  return separator < 0 ? { prefix: "", local: qName } : { prefix: qName.slice(0, separator), local: qName.slice(separator + 1) };
 }
 
-function inspectKeys(target: XmlNode, allowed: string[], path: string, diagnostics: ValidationIssue[]) {
-  for (const [key, value] of Object.entries(target)) {
-    if (key.startsWith("@_") || key === "#text") continue;
-    if (!allowed.includes(key)) diagnostics.push({ id: `xml-unknown-${path}-${key}`, severity: "warning", ruleId: "XML_UNKNOWN_ELEMENT", layer: "XML", message: `Unknown element ${path}/${key} is preserved only in the original XML and requires review.`, xmlPath: `${path}/${key}`, autoFixable: false });
-    else if (Array.isArray(value) && !["School", "Student", "Guardian"].includes(key)) diagnostics.push({ id: `xml-duplicate-${path}-${key}`, severity: "error", ruleId: "XML_DUPLICATE_ELEMENT", layer: "XML", message: `Duplicate singleton element ${path}/${key} is not allowed.`, xmlPath: `${path}/${key}`, autoFixable: false });
+function declarations(attributes: XmlNode, inherited: NamespaceContext): NamespaceContext {
+  const context = new Map(inherited);
+  for (const [rawName, rawValue] of Object.entries(attributes)) {
+    const name = rawName.replace(/^@_/, "");
+    if (name === "xmlns") context.set("", String(rawValue));
+    else if (name.startsWith("xmlns:")) context.set(name.slice(6), String(rawValue));
   }
+  return context;
+}
+
+function elementNamespace(qName: string, context: NamespaceContext): string {
+  return context.get(splitQName(qName).prefix) ?? "";
+}
+
+function validateAttributes(local: string, attributes: XmlNode, context: NamespaceContext, path: string) {
+  for (const rawName of Object.keys(attributes)) {
+    const qName = rawName.replace(/^@_/, "");
+    if (qName === "xmlns" || qName.startsWith("xmlns:")) continue;
+    const { prefix, local: attributeLocal } = splitQName(qName);
+    const namespace = prefix ? context.get(prefix) ?? "" : "";
+    if (local === "SchoolUpload" && attributeLocal === "schemaLocation" && namespace === XSI_NAMESPACE) continue;
+    if ((local === "Phone" || local === "ContactPhone") && !prefix && attributeLocal === "type") continue;
+    throw new Error(`Unsupported attribute ${path}/@${qName}.`);
+  }
+}
+
+function validateElement(qName: string, orderedChildren: unknown, rawAttributes: unknown, inherited: NamespaceContext, path: string, parentLocal?: string) {
+  const attributes = node(rawAttributes);
+  const context = declarations(attributes, inherited);
+  const { local } = splitQName(qName);
+  if (elementNamespace(qName, context) !== ONTARIO_NAMESPACE) throw new Error(`Unexpected namespace on ${path}; every supported STIX element must use "${ONTARIO_NAMESPACE}".`);
+  validateAttributes(local, attributes, context, path);
+
+  const allowed = local === "AliasName" || (local === "Name" && (parentLocal === "Student" || parentLocal === "Guardian"))
+    ? ["First", "Middle", "Last"]
+    : CHILDREN[local];
+  const entries = Array.isArray(orderedChildren) ? orderedChildren as XmlNode[] : [];
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    for (const [childQName, value] of Object.entries(entry)) {
+      if (childQName === ":@" || childQName === "#comment" || childQName === "?xml") continue;
+      if (childQName === "#text") {
+        if (allowed && String(value).trim()) throw new Error(`Unsupported mixed text content at ${path}.`);
+        continue;
+      }
+      const childLocal = splitQName(childQName).local;
+      if (!allowed?.includes(childLocal)) throw new Error(`Unsupported element ${path}/${childQName}.`);
+      const count = (counts.get(childLocal) ?? 0) + 1;
+      counts.set(childLocal, count);
+      const maximum = childLocal === "Guardian" ? 2 : REPEATED_CHILDREN.has(childLocal) ? Infinity : 1;
+      if (count > maximum) throw new Error(`Unsupported cardinality at ${path}/${childLocal}; expected at most ${maximum}.`);
+      validateElement(childQName, value, entry[":@"], context, `${path}/${childLocal}[${count}]`, local);
+    }
+  }
+}
+
+/** Reject unsupported XML structure before projecting values into the working model. */
+function assertSupportedXmlStructure(xml: string): void {
+  const parser = new XMLParser({
+    preserveOrder: true,
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    textNodeName: "#text",
+    commentPropName: "#comment",
+    trimValues: false,
+    parseTagValue: false,
+    parseAttributeValue: false,
+    processEntities: true,
+  });
+  const document = parser.parse(xml) as XmlNode[];
+  const roots = document.flatMap((entry) => Object.entries(entry)
+    .filter(([key]) => ![":@", "?xml", "#comment", "#text"].includes(key))
+    .map(([qName, value]) => ({ qName, value, attributes: entry[":@"] })));
+  for (const entry of document) if (typeof entry["#text"] === "string" && entry["#text"].trim()) throw new Error("Unsupported text outside the root element.");
+  if (roots.length !== 1 || splitQName(roots[0].qName).local !== "SchoolUpload") throw new Error("Expected exactly one root element named SchoolUpload.");
+  validateElement(roots[0].qName, roots[0].value, roots[0].attributes, new Map(), "SchoolUpload");
 }
 
 export function parseCanonicalXml(xml: string): CanonicalUpload {
@@ -123,9 +204,7 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error("DOCTYPE and entity declarations are not supported.");
   const wellFormed = XMLValidator.validate(xml);
   if (wellFormed !== true) throw new Error(`XML parse error: ${wellFormed.err.msg}`);
-  const namespace = rootNamespace(xml);
-  if (namespace === null) throw new Error("Root element <SchoolUpload> not found.");
-  if (namespace !== ONTARIO_NAMESPACE) throw new Error(`Unexpected SchoolUpload namespace "${namespace || "(none)"}".`);
+  assertSupportedXmlStructure(xml);
 
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -133,8 +212,9 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
     textNodeName: "#text",
     parseTagValue: false,
     parseAttributeValue: false,
+    trimValues: false,
     removeNSPrefix: true,
-    processEntities: false,
+    processEntities: true,
     isArray: (tagName) => tagName === "School" || tagName === "Student" || tagName === "Guardian",
   });
   const parsed = parser.parse(xml) as XmlNode;
@@ -142,27 +222,15 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
   const metadataNode = node(root.Metadata);
   const board = node(metadataNode.SchoolBoard);
   const diagnostics: ValidationIssue[] = [];
-  inspectKeys(root, ["Metadata", "School"], "SchoolUpload", diagnostics);
-  inspectKeys(metadataNode, ["CreateDate", "CreateTime", "CreatedBy", "ContactPhone", "ContactEmail", "FullUpload", "SchoolBoard"], "SchoolUpload/Metadata", diagnostics);
-  inspectKeys(board, ["BoardNumber", "Name"], "SchoolUpload/Metadata/SchoolBoard", diagnostics);
   const schools = array(root.School as XmlNode | XmlNode[]).map((rawSchool, schoolIndex): CanonicalSchool => {
     const school = node(rawSchool);
-    inspectKeys(school, ["SchoolNumber", "Name", "Students"], `SchoolUpload/School[${schoolIndex}]`, diagnostics);
     const studentsContainer = node(school.Students);
-    inspectKeys(studentsContainer, ["Student"], `SchoolUpload/School[${schoolIndex}]/Students`, diagnostics);
     const students = array(studentsContainer.Student as XmlNode | XmlNode[]).map((rawStudent, studentIndex): CanonicalStudent => {
       const student = node(rawStudent);
       const addressNode = node(student.Address);
-      const studentPath = `SchoolUpload/School[${schoolIndex}]/Students/Student[${studentIndex}]`;
-      inspectKeys(student, ["OEN", "Grade", "Class", "Name", "AliasName", "Gender", "BirthDate", "Language", "CountryOfOrigin", "Guardian", "Address", "Phone"], studentPath, diagnostics);
-      inspectKeys(node(student.Name), ["First", "Middle", "Last"], `${studentPath}/Name`, diagnostics);
-      inspectKeys(node(student.AliasName), ["First", "Middle", "Last"], `${studentPath}/AliasName`, diagnostics);
-      inspectKeys(addressNode, ["Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "StreetType", "StreetDirection", "RuralRoute", "PoBoxNumber", "City", "Province", "PostalCode"], `${studentPath}/Address`, diagnostics);
-      const guardians = array(student.Guardian as XmlNode | XmlNode[]).slice(0, 2).map((rawGuardian): CanonicalGuardian => {
+      const guardians = array(student.Guardian as XmlNode | XmlNode[]).map((rawGuardian, guardianIndex): CanonicalGuardian => {
         const guardian = node(rawGuardian);
-        inspectKeys(guardian, ["Name", "Relationship", "Phone"], `${studentPath}/Guardian`, diagnostics);
-        inspectKeys(node(guardian.Name), ["First", "Middle", "Last"], `${studentPath}/Guardian/Name`, diagnostics);
-        return { name: name(guardian.Name), relationship: text(guardian.Relationship), phone: phone(guardian.Phone) };
+        return { guardianId: `school${schoolIndex}:student${studentIndex}:guardian${guardianIndex}`, name: name(guardian.Name), relationship: text(guardian.Relationship), phone: phone(guardian.Phone) };
       });
       const alias = name(student.AliasName);
       const hasAlias = alias.first || alias.middle || alias.last;
@@ -212,12 +280,35 @@ function element(tag: string, value: string): string {
   return value ? `<${tag}>${esc(value)}</${tag}>` : "";
 }
 function phoneElement(tag: string, value: CanonicalPhone | null): string {
-  return value?.number ? `<${tag} type="${esc(value.type)}">${esc(value.number)}</${tag}>` : "";
+  return value && (value.number || value.type) ? `<${tag}${value.type ? ` type="${esc(value.type)}"` : ""}>${esc(value.number)}</${tag}>` : "";
 }
 function nameXml(tag: string, value: CanonicalName | null, required = false): string {
   if (!value) return required ? `<${tag}></${tag}>` : "";
   const body = element("First", value.first) + element("Middle", value.middle) + element("Last", value.last);
   return body || required ? `<${tag}>${body}</${tag}>` : "";
+}
+
+function indentSerializedXml(xml: string): string {
+  const declarationEnd = xml.indexOf("?>") + 2;
+  const declaration = xml.slice(0, declarationEnd);
+  const body = xml.slice(declarationEnd);
+  const tokens = body.match(/<[^>]+>|[^<]+/g) ?? [];
+  const lines: string[] = [declaration];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.startsWith("</")) depth--;
+    const next = tokens[index + 1];
+    if (token.startsWith("<") && next && !next.startsWith("<")) {
+      const closing = tokens[index + 2];
+      lines.push(`${"  ".repeat(depth)}${token}${next}${closing ?? ""}`);
+      index += closing ? 2 : 1;
+      continue;
+    }
+    lines.push(`${"  ".repeat(depth)}${token}`);
+    if (token.startsWith("<") && !token.startsWith("</") && !token.endsWith("/>")) depth++;
+  }
+  return lines.join("\n");
 }
 
 export function serializeCanonicalXml(upload: CanonicalUpload): string {
@@ -228,7 +319,7 @@ export function serializeCanonicalXml(upload: CanonicalUpload): string {
     + (m.boardNumber || m.boardName ? `<SchoolBoard>${element("BoardNumber", m.boardNumber)}${element("Name", m.boardName)}</SchoolBoard>` : "");
   const schools = upload.schools.map((school) => {
     const students = school.students.map((student) => {
-      const guardians = student.guardians.slice(0, 2).map((guardian) =>
+      const guardians = student.guardians.map((guardian) =>
         `<Guardian>${nameXml("Name", guardian.name, true)}${element("Relationship", guardian.relationship)}${phoneElement("Phone", guardian.phone)}</Guardian>`
       ).join("");
       const a = student.address;
@@ -246,7 +337,8 @@ export function serializeCanonicalXml(upload: CanonicalUpload): string {
   }).join("");
   const xml = `<SchoolUpload xmlns:ns1="${ONTARIO_NAMESPACE}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="${ONTARIO_NAMESPACE} studentuploaddata.xsd"><Metadata>${metadata}</Metadata>${schools}</SchoolUpload>`;
   const prefixed = xml.replace(/<(\/?)([A-Z][A-Za-z0-9]*)(?=[\s>])/g, "<$1ns1:$2");
-  return `<?xml version="1.0" encoding="utf-8"?>${prefixed}`;
+  const serialized = `<?xml version="1.0" encoding="utf-8"?>${prefixed}`;
+  return indentSerializedXml(serialized);
 }
 
 export function flattenCanonicalStudent(student: CanonicalStudent, school: CanonicalSchool): Record<string, string> {
@@ -264,8 +356,10 @@ export function flattenCanonicalStudent(student: CanonicalStudent, school: Canon
     Province: student.address.province, PostalCode: student.address.postalCode,
     Phone: student.phone?.number ?? "", PhoneType: student.phone?.type ?? "",
     GuardianFirstName: g1?.name.first ?? "", GuardianLastName: g1?.name.last ?? "",
+    GuardianMiddleName: g1?.name.middle ?? "",
     GuardianRelationship: g1?.relationship ?? "", GuardianPhoneNumber: g1?.phone?.number ?? "", GuardianPhoneType: g1?.phone?.type ?? "",
     Guardian2FirstName: g2?.name.first ?? "", Guardian2LastName: g2?.name.last ?? "",
+    Guardian2MiddleName: g2?.name.middle ?? "",
     Guardian2Relationship: g2?.relationship ?? "", Guardian2PhoneNumber: g2?.phone?.number ?? "", Guardian2PhoneType: g2?.phone?.type ?? "",
   };
 }

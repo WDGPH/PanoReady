@@ -1,59 +1,60 @@
 /**
- * Custom ruleset persistence and validation.
+ * Session-local custom rulesets and validation.
  *
- * Rulesets are stored in localStorage so they survive page refreshes and can
- * be shared between the main Validate workflow and the Reports page.
- * All localStorage access is guarded against SSR environments.
+ * Imported profiles and cleaning mappings can contain operational values, so
+ * they remain in memory and disappear when the application is reloaded.
  */
 
 import type { CustomRuleset, RulesProfile, CleaningProfile } from "./types";
 import defaultRulesJson from "../config/rules.stix.default.json";
+import { ALL_CLEANABLE_FIELDS } from "./cleaning";
 
 /** The built-in ruleset, cast to the explicit (widened) RulesProfile type. */
 export const defaultRules: RulesProfile = defaultRulesJson as RulesProfile;
 
-/** Sentinel ID for the built-in ruleset — never written to localStorage. */
+/** Sentinel ID for the built-in ruleset. */
 export const BUILTIN_ID = "builtin" as const;
 
-const LS_RULESETS_KEY = "panoready_rulesets_v1";
-const LS_ACTIVE_KEY = "panoready_active_ruleset_v1";
-
-// ── localStorage helpers ──────────────────────────────────────────────────────
-
-function lsGet(key: string): string | null {
-  if (typeof window === "undefined") return null;
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-
-function lsSet(key: string, value: string): void {
-  if (typeof window === "undefined") return;
-  try { localStorage.setItem(key, value); } catch { /* quota exceeded */ }
-}
+let sessionRulesets: CustomRuleset[] = [];
+let activeRulesetId: string = BUILTIN_ID;
 
 // ── Ruleset CRUD ──────────────────────────────────────────────────────────────
 
 export function listCustomRulesets(): CustomRuleset[] {
-  const raw = lsGet(LS_RULESETS_KEY);
-  if (!raw) return [];
-  try { return JSON.parse(raw) as CustomRuleset[]; } catch { return []; }
+  return sessionRulesets;
 }
 
 export function saveCustomRuleset(rs: CustomRuleset): void {
-  const rest = listCustomRulesets().filter((r) => r.id !== rs.id);
-  lsSet(LS_RULESETS_KEY, JSON.stringify([...rest, rs]));
+  validateRulesetSchema(rs);
+  const rest = sessionRulesets.filter((r) => r.id !== rs.id);
+  sessionRulesets = [...rest, rs];
 }
 
 export function deleteCustomRuleset(id: string): void {
-  lsSet(LS_RULESETS_KEY, JSON.stringify(listCustomRulesets().filter((r) => r.id !== id)));
+  sessionRulesets = sessionRulesets.filter((r) => r.id !== id);
   if (getActiveRulesetId() === id) setActiveRulesetId(BUILTIN_ID);
 }
 
 export function getActiveRulesetId(): string {
-  return lsGet(LS_ACTIVE_KEY) ?? BUILTIN_ID;
+  return activeRulesetId;
 }
 
 export function setActiveRulesetId(id: string): void {
-  lsSet(LS_ACTIVE_KEY, id);
+  activeRulesetId = id;
+}
+
+/** Remove only storage keys created by older PanoReady releases. */
+export function clearLegacyPanoReadyStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index);
+      if (key === "panoready_rulesets_v1" || key === "panoready_active_ruleset_v1" || key?.startsWith("panoready:xlsm-metadata:")) localStorage.removeItem(key);
+    }
+    sessionStorage.removeItem("twig_stix_session");
+  } catch {
+    // Storage may be unavailable; current processing remains session-local.
+  }
 }
 
 /**
@@ -145,11 +146,7 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
   }
   const phoneConfig = r.phoneConfig as Record<string, unknown>;
   requireStringArray(phoneConfig, "placeholderNumbers");
-  if (
-    "canadianAreaCodeCheck" in phoneConfig &&
-    phoneConfig.canadianAreaCodeCheck !== undefined &&
-    !["off", "info", "warning"].includes(String(phoneConfig.canadianAreaCodeCheck))
-  ) {
+  if (!["off", "info", "warning"].includes(String(phoneConfig.canadianAreaCodeCheck))) {
     throw new Error(
       "'rules.phoneConfig.canadianAreaCodeCheck' must be 'off', 'info', or 'warning'."
     );
@@ -188,6 +185,7 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
       throw new Error("'cleaning.mappings' must be an object.");
     }
     for (const [fieldName, list] of Object.entries(c.mappings as Record<string, unknown>)) {
+      if (!ALL_CLEANABLE_FIELDS.includes(fieldName)) throw new Error(`Cleaning field '${fieldName}' is not a supported target.`);
       if (!Array.isArray(list)) {
         throw new Error(`'cleaning.mappings.${fieldName}' must be an array.`);
       }
@@ -204,6 +202,7 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
         }
       }
     }
+    for (const fieldName of c.enabledFields as string[]) if (!ALL_CLEANABLE_FIELDS.includes(fieldName)) throw new Error(`Cleaning field '${fieldName}' is not a supported target.`);
 
     // Collect warnings for unknown keys inside cleaning (merged below)
     const knownCleaningKeys = new Set(["enabledFields", "mappings"]);
@@ -229,8 +228,45 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
   const warnings: string[] | undefined = allWarnings.length > 0 ? allWarnings : undefined;
 
   const result = obj as unknown as CustomRuleset;
+  assertDoesNotRelaxBaseline(result.rules);
   if (warnings) result.warnings = warnings;
   return result;
+}
+
+function assertDoesNotRelaxBaseline(rules: RulesProfile): void {
+  const baseline = defaultRules;
+  for (const field of baseline.requiredFields) {
+    if (!rules.requiredFields.includes(field)) throw new Error(`Custom profiles cannot remove required baseline field '${field}'.`);
+  }
+  const controlledKeys = [
+    "allowedGradeValues", "allowedGenderValues", "allowedProvinceValues", "allowedLanguageValues",
+    "allowedCountryValues", "allowedStreetTypeValues", "allowedRelationshipValues", "allowedPhoneTypeValues",
+    "allowedStreetDirectionValues", "allowedFullLoadTypeValues",
+  ] as const;
+  for (const key of controlledKeys) {
+    const supported = new Set(baseline[key]);
+    const added = rules[key].find((value) => !supported.has(value));
+    if (added !== undefined) throw new Error(`Custom profiles cannot add unsupported ${key} value '${added}'.`);
+  }
+  for (const field of baseline.dateFields) {
+    if (!rules.dateFields.includes(field)) throw new Error(`Custom profiles cannot remove baseline date field '${field}'.`);
+  }
+  for (const [field, limit] of Object.entries(baseline.fieldLengths)) {
+    const custom = rules.fieldLengths[field];
+    if (custom === undefined || custom > limit) throw new Error(`Custom profiles cannot increase or remove the baseline ${field} length limit of ${limit}.`);
+  }
+  if (rules.postalCodePattern !== baseline.postalCodePattern) throw new Error("Custom profiles cannot replace the supported postal-code pattern.");
+  for (const key of ["gradeAliases", "genderAliases"] as const) {
+    for (const [input, output] of Object.entries(rules[key])) {
+      if (baseline[key][input] !== output) throw new Error(`Custom profiles cannot add or change supported ${key} entry '${input}'.`);
+    }
+  }
+  if (baseline.duplicateDetection.checkOen && !rules.duplicateDetection.checkOen) throw new Error("Custom profiles cannot disable baseline OEN duplicate detection.");
+  if (baseline.duplicateDetection.checkNameDobSchool && !rules.duplicateDetection.checkNameDobSchool) throw new Error("Custom profiles cannot disable baseline name, birth-date, and school duplicate detection.");
+  for (const value of baseline.phoneConfig.placeholderNumbers) {
+    if (!rules.phoneConfig.placeholderNumbers.includes(value)) throw new Error(`Custom profiles cannot remove baseline phone placeholder '${value}'.`);
+  }
+  if (rules.phoneConfig.canadianAreaCodeCheck !== baseline.phoneConfig.canadianAreaCodeCheck) throw new Error(`Custom profiles cannot weaken the baseline Canadian area-code check (${baseline.phoneConfig.canadianAreaCodeCheck}).`);
 }
 
 // ── Schema guard helpers ──────────────────────────────────────────────────────
