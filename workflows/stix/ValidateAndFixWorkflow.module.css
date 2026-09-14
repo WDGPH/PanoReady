@@ -1,0 +1,26 @@
+.workflow {
+  flex: 1;
+  min-width: 0;
+}
+
+.workflow > nav {
+  max-width: 1348px;
+  padding-right: 272px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1100px) 200px;
+  gap: 24px;
+  width: 100%;
+  max-width: 1348px;
+  margin: 0 auto;
+  padding-right: 24px;
+  align-items: start;
+}
+
+.layout > main {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
