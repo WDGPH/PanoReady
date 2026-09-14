@@ -3,20 +3,12 @@
  * Reshapes StudentRecord[] (parseSTIXXml, lib/validator.ts) → Student records → filtered/summarized datasets
  */
 
+import { validRealDate } from "./calendarDate";
 import type { Student, ExportResult, SchoolCount, GradeCount, StudentRecord } from "./types";
 import { parseSTIXXml } from "./validator";
 
 export function birthYearFromDate(birthDate: string): number | null {
-  const match = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  const date = new Date(`${birthDate}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-    ? year
-    : null;
+  return validRealDate(birthDate) ? Number(birthDate.slice(0, 4)) : null;
 }
 
 export function studentFromRecord(record: StudentRecord): Student {
