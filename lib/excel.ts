@@ -1,3 +1,4 @@
+import { analyzeCalendarDate } from "./calendarDate";
 import * as XLSX from "xlsx";
 import defaultRules from "../config/rules.stix.default.json";
 import {
@@ -178,18 +179,11 @@ function normalizePhone(raw: string, diagnostics: ValidationIssue[], location: s
 function normalizeDate(raw: string, diagnostics: ValidationIssue[], location: string): string {
   const value = raw.trim();
   if (!value) return "";
-  const iso = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
-  const numeric = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (numeric) {
-    const a = Number(numeric[1]); const b = Number(numeric[2]);
-    if (a <= 12 && b <= 12) {
-      diagnostics.push(diagnostic(`import-date-ambiguous-${location}`, "error", `BirthDate "${value}" is ambiguous; use YYYY-MM-DD.`, "IMPORT_DATE_AMBIGUOUS", location, "BirthDate"));
-      return value;
-    }
-    const month = a > 12 ? b : a; const day = a > 12 ? a : b;
-    return `${numeric[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
+  const date = analyzeCalendarDate(value);
+  if (date.status === "valid" || date.status === "normalizable") return date.value;
+  diagnostics.push(diagnostic(`import-date-${date.status}-${location}`, "error",
+    `BirthDate "${value}" is ${date.status}; confirm the source date and use YYYY-MM-DD.`,
+    date.status === "ambiguous" ? "IMPORT_DATE_AMBIGUOUS" : "IMPORT_DATE_INVALID", location, "BirthDate"));
   return value;
 }
 
