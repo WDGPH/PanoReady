@@ -4,6 +4,7 @@ import WorkflowNavigation from "@/components/WorkflowNavigation";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
 import { type ReactNode, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Wand2, CheckCircle2 } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
@@ -193,50 +194,9 @@ export default function FixView({
 
       {groups.filter(group => group.automatic === (view === "automatic")).map(group => {
         const visible = group.items.filter(issue => severityFilter === "all" || issue.severity === severityFilter);
-        const visibleIssues = visible.filter(issue => !issue.repairProposal);
-        const visibleAddressIssues = visible.filter(issue => issue.repairProposal && issue.recordId);
+        const visibleIssues = visible;
         return <section key={group.label} aria-label={group.label} className="fix-group fix-group--review">
           {visible.length === 0 && <p className="cleaning-description">{group.items.length ? "No issues match this filter." : "No issues."}</p>}
-
-      {visibleAddressIssues.length > 0 && (
-        <section style={{ marginBottom: 22 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-            <div>
-              <h2 style={{ margin: "0 0 3px", fontSize: 16 }}>Address repairs</h2>
-
-            </div>
-            <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>{visibleAddressIssues.length} address{visibleAddressIssues.length === 1 ? "" : "es"}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {visibleAddressIssues.map((issue) => {
-              const proposal = issue.repairProposal!;
-              const record = records.find((candidate) => candidate.id === issue.recordId);
-              if (!record) return null;
-              return (
-                <AddressRepairCard
-                  key={proposal.id}
-                  proposal={proposal}
-                  record={record}
-                  studentName={issue.studentName}
-                  schoolNumber={issue.schoolNumber}
-                  rules={session.validationRules ?? defaultRules}
-                  draft={addressDrafts[proposal.id] ?? suggestedAddressDraft(issue, records)}
-                  selected={selectedAddressRepairs[proposal.id] ?? false}
-                  onDraftChange={(field, value) => setAddressDrafts((current) => ({
-                    ...current,
-                    [proposal.id]: { ...(current[proposal.id] ?? suggestedAddressDraft(issue, records)), [field]: value },
-                  }))}
-                  onSelectedChange={(selected) => setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: selected }))}
-                  onReset={() => {
-                    setAddressDrafts((current) => ({ ...current, [proposal.id]: suggestedAddressDraft(issue, records) }));
-                    setSelectedAddressRepairs((current) => ({ ...current, [proposal.id]: false }));
-                  }}
-                />
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* Fix table */}
       <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
@@ -271,9 +231,10 @@ export default function FixView({
                 const pendingVal = pending[issue.id] ?? "";
                 const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
 
+                const proposal = issue.repairProposal;
                 const recordLabel = record ? studentReference(record) : "File / unassigned";
                 return (
-                  <tr key={issue.id} data-row-id={issue.id} style={{ opacity: !issue.field ? 0.5 : 1 }}>
+                  <tr key={issue.id} data-row-id={issue.id} style={{ opacity: !issue.field && !issue.repairProposal ? 0.5 : 1 }}>
                     <td data-sort-value={issue.severity === "error" ? 0 : issue.severity === "warning" ? 1 : 2}><SeverityBadge severity={issue.severity} /></td>
                     <td data-sort-value={recordLabel} style={{ fontSize: 12 }}>
                       {record ? <StudentEntry record={record} /> : recordLabel}
@@ -293,6 +254,40 @@ export default function FixView({
                           }} />
                           <span>Remove school from corrected export</span>
                         </label>
+                      ) : proposal && record ? (
+                        <Dialog.Root>
+                          <Dialog.Trigger asChild><button type="button" className="review-context-action">{selectedAddressRepairs[proposal.id] ? "Edit staged address" : "Review address"}</button></Dialog.Trigger>
+                          <Dialog.Portal>
+                            <Dialog.Overlay className="review-dialog-overlay" />
+                            <Dialog.Content className="review-dialog">
+                              <header className="review-dialog-header">
+                                <div><Dialog.Title>Edit address</Dialog.Title><Dialog.Description>Edit the address fields, then return to the table. Selected changes are applied when you continue to the summary.</Dialog.Description></div>
+                                <Dialog.Close asChild><button type="button" className="btn btn-ghost">Back to fixes</button></Dialog.Close>
+                              </header>
+                              <div style={{ marginTop: 16 }}>
+                                <AddressRepairCard
+                                  key={proposal!.id}
+                                  proposal={proposal}
+                                  record={record}
+                                  studentName={issue.studentName}
+                                  schoolNumber={issue.schoolNumber}
+                                  rules={session.validationRules ?? defaultRules}
+                                  draft={addressDrafts[proposal!.id] ?? suggestedAddressDraft(issue, records)}
+                                  selected={selectedAddressRepairs[proposal!.id] ?? false}
+                                  onDraftChange={(field, value) => setAddressDrafts((current) => ({
+                                    ...current,
+                                    [proposal!.id]: { ...(current[proposal!.id] ?? suggestedAddressDraft(issue, records)), [field]: value },
+                                  }))}
+                                  onSelectedChange={(selected) => setSelectedAddressRepairs((current) => ({ ...current, [proposal!.id]: selected }))}
+                                  onReset={() => {
+                                    setAddressDrafts((current) => ({ ...current, [proposal!.id]: suggestedAddressDraft(issue, records) }));
+                                    setSelectedAddressRepairs((current) => ({ ...current, [proposal!.id]: false }));
+                                  }}
+                                />
+                              </div>
+                            </Dialog.Content>
+                          </Dialog.Portal>
+                        </Dialog.Root>
                       ) : group.automatic || isEmptyGuardian ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={pending[issue.id] !== undefined} disabled={suggestedValue === undefined} onChange={event => {
