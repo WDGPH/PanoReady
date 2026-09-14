@@ -1,0 +1,22 @@
+name: Offline operation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-operation:
+    name: Production workflows without external network access
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Build image, then run tests with no external network
+        run: npm run e2e:offline

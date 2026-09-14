@@ -25,6 +25,7 @@
     "test": "vitest run",
     "e2e:build": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\" && GITHUB_PAGES=true npm run build",
     "e2e": "playwright test",
+    "e2e:offline": "docker build -f Dockerfile.e2e -t panoready-e2e . && docker run --rm --init --network none --shm-size=1g panoready-e2e",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
