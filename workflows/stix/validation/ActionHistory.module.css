@@ -1,0 +1,23 @@
+.history {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: var(--page-width);
+  margin: 16px auto 0;
+  padding: 0 var(--page-gutter);
+  font-size: 13px;
+}
+
+.history summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+
+.history ol {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-left: 24px;
+  line-height: 1.8;
+}
