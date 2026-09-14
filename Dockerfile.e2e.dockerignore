@@ -5,6 +5,7 @@
 !next.config.ts
 !tsconfig.json
 !postcss.config.mjs
+!tokens.css
 !playwright.config.ts
 !app/**
 !components/**
