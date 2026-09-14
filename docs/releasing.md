@@ -25,7 +25,7 @@ mkdocs build --strict
 
 CI runs lint, TypeScript checks, the Vitest suite, and a production build on Node.js 22 and 24. The tests cover canonical data, validation, rulesets, and repair helpers with synthetic records. They do not replace browser testing of the interface.
 
-Manually check both workflows with synthetic inputs. Cover XML and workbook intake, malformed input, cleaning mappings, unresolved validation errors, ruleset import/export, comparison review and corrections, filters, and every download type. Review the documented validation, comparison, and export limits before describing the release's capabilities.
+Manually check both workflows with synthetic inputs. Cover XML and workbook intake, malformed input, cleaning mappings, unresolved validation errors, ruleset import/export, comparison review and its review log, filters, and every retained download type. Review the documented validation and comparison limits before describing the release's capabilities.
 
 ## Publish
 

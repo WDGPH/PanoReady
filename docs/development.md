@@ -1,71 +1,35 @@
 # Development
 
-## Prerequisites
-
-- Node.js 22 or 24 (24 is the default in `.nvmrc`)
-- npm
-- Python 3.12 (the CI version) or newer to build the documentation
-
-## Run the app
+Use Node.js 22 or 24 and npm. Node 24 is selected by `.nvmrc`.
 
 ```bash
-git clone https://github.com/WDGPH/PanoReady.git
-cd PanoReady
 npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. The application uses the Next.js App Router and runs locally with webpack.
+Read `AGENTS.md` and the relevant installed guide in `node_modules/next/dist/docs/` before changing Next.js code. Routes remain lowercase, React component files use PascalCase, non-component modules use camelCase, and tests end in `.test.ts`.
 
-## Repository layout
-
-| Path | Purpose |
-|---|---|
-| `app/` | Next.js routes, layout, and global styles |
-| `components/` | Reusable interface components |
-| `lib/` | STIX parsing, validation, cleaning, comparison, and export logic |
-| `config/` | Bundled default validation rules |
-| `docs/` | MkDocs user and technical documentation |
-| `.github/` | Contribution templates and automation |
-
-### TypeScript file names
-
-- Use the lowercase names required by Next.js for route files, such as `page.tsx` and `layout.tsx`.
-- Use PascalCase for React component files and camelCase for non-component `.ts` modules.
-- Name tests after their module or subject and append `.test.ts`.
-- Write the STIX acronym as either `STIX` in PascalCase component/type names or `stix` in camelCase paths and filenames; do not use a mixed-case acronym.
-
-## Checks
-
-Run the same application checks used in continuous integration:
+## Verification
 
 ```bash
 npm run check
+npm run e2e
+npm run e2e:offline
 ```
 
-This runs ESLint, generates Next.js route types, checks TypeScript, runs the regression tests, and creates a production build. Keep test inputs synthetic and free of student or personal information.
+`check` runs ESLint, Next route generation, TypeScript, Vitest, and a production build. `e2e` builds and serves the GitHub Pages static artifact, then runs a serial Chromium scenario with request, WebSocket, storage, URL, and log guards. It exercises import, correction, undo, comparison review logs, reports, encryption, download bytes, reset, and reload with synthetic markers.
 
-## Build the documentation
+`e2e:offline` builds `Dockerfile.e2e`, which prepares the same production artifact and Playwright runtime, then runs the container with Docker's `--network none` isolation. The app and test server share that isolated container. A passing observed run proves that tested browser activity stayed at the local origin; a passing offline run proves that the prepared scenario did not require network access. Neither proves hosted deployment behaviour or destination-system acceptance.
+
+Keep browser tests serial and synthetic. Never place operational record values, real passwords, or private template material in fixtures, logs, traces, screenshots, issues, or commits.
+
+## Documentation
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-docs.txt
-mkdocs serve
+mkdocs build --strict
 ```
 
-Use `mkdocs build --strict` before submitting documentation changes. The `site/` output is generated and ignored by Git.
-
-## Contribution principles
-
-Automatic data fixes must be deterministic and explainable. Changes that transmit record data, add analytics, or persist it beyond existing browser-local behaviour require explicit privacy and security review. See the repository's [contribution guide](https://github.com/WDGPH/PanoReady/blob/main/CONTRIBUTING.md).
-
-## Tests and dependency updates
-
-`npm test` runs the Vitest suite. Tests use synthetic values and cover the canonical model, field definitions, address repair, phone and postal-code handling, ruleset import, and validator integration.
-
-Add regression tests when changing data behaviour. UI changes also need a browser check; there is no automated end-to-end browser suite yet.
-
-Run `npm audit` when updating dependencies and review the findings. Commit `package-lock.json` with dependency changes. See [release maintenance](releasing.md#dependency-maintenance) for the SheetJS distribution source.
-
-Read `AGENTS.md` and the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing framework code. Historical planning notes are kept in `notes/`, outside the published site. Private workbook inspection notes are excluded from Git and the documentation build.
+Generated `out/`, `site/`, Playwright reports, and test results are not committed.
