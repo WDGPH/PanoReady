@@ -440,3 +440,7 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 | `whitespace` | Yes | Trimmed value |
 | `duplicate-oen` | No | — |
 | `duplicate-name-dob-school` | No | — |
+
+## XML structure acceptance
+
+STIX XML is checked before values enter the working model. Every element must use the `http://ontario.ca` namespace and the supported STIX hierarchy. Unknown elements or attributes, duplicate singleton elements, more than two guardians, mixed container text, multiple roots, and DTD/entity declarations are rejected. Namespace aliases, comments, standard XML entities, phone `type` attributes and root `xsi:schemaLocation` are supported. Missing values in known fields remain validation findings. These are local structure checks, not certified XSD validation.
