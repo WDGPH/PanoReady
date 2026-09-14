@@ -1,4 +1,4 @@
-name: CI
+name: Application quality and privacy
 
 on:
   push:
@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   check:
+    name: Lint, types, unit tests, and build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -29,7 +30,8 @@ jobs:
       - name: Lint, typecheck, test, and build
         run: npm run check
 
-  e2e:
+  browser-privacy:
+    name: Browser privacy — request and storage guards
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -46,5 +48,17 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test production static site with browser traffic and storage guards
         run: npm run e2e
-      - name: Test prepared image without a network
+
+  offline-operation:
+    name: Offline operation — no external network
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Test prepared image without external network access
         run: npm run e2e:offline

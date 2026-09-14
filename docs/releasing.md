@@ -8,7 +8,7 @@ Use this checklist when preparing a public release. Files in the repository cann
 - Review tracked files and Git history for credentials, student records, operational inputs, third-party reference assets, and other material that cannot be redistributed. Synthetic examples belong in tests; operational workbooks and reference documents do not.
 - Confirm the security-reporting link works and enable private vulnerability reporting in repository settings. Confirm the Code of Conduct contact route reaches someone responsible for the project.
 - Enable GitHub Pages with GitHub Actions as the source.
-- Protect `main` with pull-request review and required CI checks: `check (22)`, `check (24)`, and the documentation workflow's `build` job. Select their actual names after the first successful run.
+- Protect `main` with pull-request review and these required checks after their first successful run: `Lint, types, unit tests, and build (Node 22)`, `Lint, types, unit tests, and build (Node 24)`, `Browser privacy — request and storage guards`, `Offline operation — no external network`, and `Build application and documentation`.
 - Enable dependency alerts and review Dependabot updates.
 
 ## Validate the release
