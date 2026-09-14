@@ -81,13 +81,13 @@
   "genderAliases": {
     "MALE":       "M",
     "FEMALE":     "F",
-    "NON-BINARY": "X",
-    "NONBINARY":  "X",
+    "NON-BINARY": "Other",
+    "NONBINARY":  "Other",
     "UNKNOWN":    "Unk",
     "U":          "Unk",
     "m":          "M",
     "f":          "F",
-    "x":          "X",
+    "x":          "Other",
     "u":          "Unk"
   },
   "duplicateDetection": {

@@ -1,4 +1,4 @@
-const stages = ["Assess quality", "Automatic fixes", "Manual fixes", "Summary", "Output"];
+const stages = ["Quality assessment", "Automatic fixes", "Manual fixes", "Summary and Output"];
 
 export default function WorkflowProgress({ stage, canNavigate, onNavigate }: { stage: number; canNavigate: (stage: number) => boolean; onNavigate: (stage: number) => void }) {
   const overview = <ol className="workflow-progress-list">
@@ -13,7 +13,7 @@ export default function WorkflowProgress({ stage, canNavigate, onNavigate }: { s
   return <nav className="workflow-progress" aria-label="Validate and fix progress">
     <div className="workflow-progress-desktop">{overview}</div>
     <details className="workflow-progress-mobile">
-      <summary>Step {stage} of 5 — {stages[stage - 1]}</summary>
+      <summary>Step {stage} of 4 — {stages[stage - 1]}</summary>
       {overview}
     </details>
   </nav>;

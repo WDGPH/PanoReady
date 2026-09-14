@@ -1,25 +1,20 @@
 # Compare Files
 
-Select **Compare Files**, then load the previous and current snapshots. Either input may be STIX XML or a supported `.xlsm` workbook. Workbook metadata can be reviewed before conversion; macros are not executed. Click **Compare Files** to review student counts, additions, removals, field changes, and school transfers.
+Compare Files accepts a previous and current supported XML or XLSM input. A workbook with unresolved import findings must first be repaired through Validate & Fix.
 
-## Matching
+File setup accepts separate optional labels for the previous source, current source, and comparison reviewer. They stay in memory, appear in the local review log, and never enter STIX XML.
 
-The comparison matches students by OEN when present. Without an OEN, it uses school number, first/middle/last name, and birth date. Comparisons ignore letter case and surrounding whitespace.
+Records with a unique OEN in both files match by OEN. Repeated OENs remain ambiguous. For records where both OENs are blank, fallback matching requires the same school, name, and birth date. A populated conflicting OEN is never overridden by name or school similarity. Sorting and input order do not decide a match.
 
-Repeated matching keys are paired in input order. A changed name or school can appear as an addition and removal when an OEN is missing. Review duplicate and ambiguous records against the source system.
+The result separates added, removed, changed, unchanged, ambiguous, and unmatched records. A transfer is reported only for a matched student whose nonblank school number changed. School-name edits alone are not transfers.
 
-The compared fields cover school identifiers, names, birth date, grade, class, gender, language, country of origin, and address values. Alias names and guardian fields are not compared. A record marked unchanged can still differ in those fields.
+For each changed field, record one of these review labels:
 
-School summaries group by school name. Transfers are detected from changes in school name, so renaming a school can look like a transfer.
+- **Keep current** when the current value is accepted for analysis; or
+- **Needs fix in Validate & Fix** when the source should be corrected before submission.
 
-## Review and export
+These labels are analysis state only. Compare Files never edits either document, applies a previous value, accepts a replacement, or regenerates XML. Make corrections through Validate & Fix, where they use the canonical session updater, stale-value checks, and Undo last action.
 
-Use the school, record, field, and transfer views to inspect differences. In the record view, mark individual field changes as confirmed or needing a fix. A proposed correction is written to the downloaded current XML; the original input file is not modified.
+The Review log download records each changed field, its previous and current values, the review label, and optional source/reviewer context. It is a local analyst aid and is not a submission file. Comparison does not waive validation errors or establish readiness.
 
-Export `stix_comparison_school_changes.csv` for school counts and change totals, or `stix_change_review_log.csv` for field decisions and proposed corrections. You can also download the reviewed current XML for all schools or for the selected school. XML downloads can use an AES-256 password-protected ZIP.
-
-The change rate is `(added + removed + changed) / previous student count`, expressed as a percentage. It can exceed 100%. With no previous students it is 0% for an empty current file and 100% otherwise. The interface labels rates up to 1% stable, up to 5% moderate, and higher rates high. These thresholds are fixed heuristics, not reporting-policy requirements.
-
-ZIP passwords must contain at least eight characters and are not saved. Keep the password separate from the archive and use an archive tool that supports AES ZIP encryption. Source files, comparison results, and downloads contain record data.
-
-The implementation is `compareSTIXFiles()` in `lib/compare.ts`.
+Comparison parsing and matching run locally in the browser. Review decisions, labels, and filters remain in memory until the page is reset or reloaded.

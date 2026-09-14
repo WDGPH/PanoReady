@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import type { CustomRuleset, RulesProfile, CleaningProfile, CleaningMapping } from "@/lib/types";
-import { BUILTIN_ID, defaultRules, listCustomRulesets, saveCustomRuleset } from "@/lib/rulesets";
+import { BUILTIN_ID, defaultRules, listCustomRulesets, saveCustomRuleset, validateRulesetSchema } from "@/lib/rulesets";
 import { getCleanableFields } from "@/lib/cleaning";
 import { REQUIRED_FIELD_GROUPS } from "@/lib/fields";
 
@@ -14,7 +14,7 @@ const FIELD_LENGTH_KEYS = [
   "City", "StreetName", "StreetNumber", "StreetNumberSuffix", "Unit",
 ];
 
-type TabId = "general" | "required" | "values" | "lengths" | "format" | "duplication" | "cleaning";
+type TabId = "general" | "required" | "values" | "lengths" | "phones" | "cleaning";
 
 export interface RulesetEditorProps {
   initial?: CustomRuleset;
@@ -68,11 +68,15 @@ function TagList({
   onAdd,
   onRemove,
   placeholder,
+  allowAdd = true,
+  canRemove = () => true,
 }: {
   values: string[];
   onAdd: (v: string) => void;
   onRemove: (v: string) => void;
   placeholder?: string;
+  allowAdd?: boolean;
+  canRemove?: (value: string) => boolean;
 }) {
   const [input, setInput] = useState("");
 
@@ -99,17 +103,17 @@ function TagList({
             }}
           >
             {v}
-            <button
+            {canRemove(v) && <button
               type="button"
               onClick={() => onRemove(v)}
               style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--color-text-muted)", lineHeight: 1, display: "flex" }}
             >
               <X size={11} />
-            </button>
+            </button>}
           </span>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 6 }}>
+      {allowAdd && <div style={{ display: "flex", gap: 6 }}>
         <input
           type="text"
           value={input}
@@ -121,7 +125,7 @@ function TagList({
         <button type="button" onClick={commit} style={smallBtnStyle} title="Add">
           <Plus size={13} />
         </button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -144,8 +148,6 @@ function AllowedValuesSection({
   onAliasesChange?: (a: Record<string, string>) => void;
 }) {
   const [aliasOpen, setAliasOpen] = useState(false);
-  const [aliasRaw, setAliasRaw] = useState("");
-  const [aliasCanon, setAliasCanon] = useState("");
 
   return (
     <div style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "14px 16px" }}>
@@ -154,7 +156,8 @@ function AllowedValuesSection({
       </div>
       <TagList
         values={values}
-        onAdd={(v) => onValuesChange([...values, v])}
+        allowAdd={false}
+        onAdd={() => undefined}
         onRemove={(v) => onValuesChange(values.filter((x) => x !== v))}
       />
       {hasAliases && aliases && onAliasesChange && (
@@ -204,39 +207,6 @@ function AllowedValuesSection({
                   )}
                 </tbody>
               </table>
-              <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-                <input
-                  type="text"
-                  value={aliasRaw}
-                  onChange={(e) => setAliasRaw(e.target.value)}
-                  placeholder="Raw value"
-                  style={{ ...inputStyle, width: 130, flex: "none" }}
-                />
-                <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>→</span>
-                <input
-                  type="text"
-                  value={aliasCanon}
-                  onChange={(e) => setAliasCanon(e.target.value)}
-                  placeholder="Canonical"
-                  style={{ ...inputStyle, width: 130, flex: "none" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const r = aliasRaw.trim();
-                    const c = aliasCanon.trim();
-                    if (r && c) {
-                      onAliasesChange({ ...aliases, [r]: c });
-                      setAliasRaw("");
-                      setAliasCanon("");
-                    }
-                  }}
-                  style={smallBtnStyle}
-                  title="Add alias"
-                >
-                  <Plus size={13} />
-                </button>
-              </div>
             </div>
           )}
         </div>
@@ -254,53 +224,33 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
   const [name, setName]             = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [cloneFrom, setCloneFrom]   = useState<string>(BUILTIN_ID);
-  const [cloneOptions, setCloneOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const cloneOptions = [
+    { id: BUILTIN_ID, name: "STIX Default (built-in)" },
+    ...listCustomRulesets().map((ruleset) => ({ id: ruleset.id, name: ruleset.name })),
+  ];
   const [rules, setRules] = useState<RulesProfile>(() =>
     JSON.parse(JSON.stringify(initial?.rules ?? defaultRules))
   );
   const [cleaning, setCleaning] = useState<CleaningProfile>(
     () => JSON.parse(JSON.stringify(initial?.cleaning ?? { enabledFields: [], mappings: {} }))
   );
-  const [regexError, setRegexError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Populate clone options (client-only)
-  useEffect(() => {
-    const all = listCustomRulesets();
-    setCloneOptions([
-      { id: BUILTIN_ID, name: "STIX Default (built-in)" },
-      ...all.map((r) => ({ id: r.id, name: r.name })),
-    ]);
-  }, []);
-
-  // When cloneFrom changes (new mode only), reset rules and cleaning
-  useEffect(() => {
-    if (!isNew) return;
-    if (cloneFrom === BUILTIN_ID) {
+  function handleCloneChange(id: string) {
+    setCloneFrom(id);
+    if (id === BUILTIN_ID) {
       setRules(JSON.parse(JSON.stringify(defaultRules)));
       setCleaning({ enabledFields: [], mappings: {} });
     } else {
-      const found = listCustomRulesets().find((r) => r.id === cloneFrom);
+      const found = listCustomRulesets().find((ruleset) => ruleset.id === id);
       if (found) {
         setRules(JSON.parse(JSON.stringify(found.rules)));
         setCleaning(JSON.parse(JSON.stringify(found.cleaning ?? { enabledFields: [], mappings: {} })));
       }
     }
-  }, [cloneFrom, isNew]);
-
-  // Validate regex on mount for existing rulesets
-  useEffect(() => {
-    try { new RegExp(rules.postalCodePattern); setRegexError(null); }
-    catch (e) { setRegexError(e instanceof Error ? e.message : "Invalid regex"); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function handlePatternChange(v: string) {
-    setRules((r) => ({ ...r, postalCodePattern: v }));
-    try { new RegExp(v); setRegexError(null); }
-    catch (e) { setRegexError(e instanceof Error ? e.message : "Invalid regex"); }
   }
 
-  const canSave = name.trim() !== "" && regexError === null;
+  const canSave = name.trim() !== "";
 
   function handleSave() {
     if (!canSave) return;
@@ -312,8 +262,13 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
       rules,
       ...(cleaning.enabledFields.length > 0 ? { cleaning } : {}),
     };
-    saveCustomRuleset(rs);
-    onSave(rs);
+    try {
+      validateRulesetSchema(rs);
+      saveCustomRuleset(rs);
+      onSave(rs);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "This profile is incompatible with the fixed STIX baseline.");
+    }
   }
 
   const allowedFieldsConfig: Array<{
@@ -343,8 +298,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
     { id: "required",    label: "Required Fields" },
     { id: "values",      label: "Allowed Values" },
     { id: "lengths",     label: "Field Lengths" },
-    { id: "format",      label: "Format Rules" },
-    { id: "duplication", label: "Duplicate Detection" },
+    { id: "phones",      label: "Phone placeholders" },
     { id: "cleaning",    label: "Cleaning mappings" },
   ];
 
@@ -439,7 +393,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                     <label style={labelStyle}>Clone from</label>
                     <select
                       value={cloneFrom}
-                      onChange={(e) => setCloneFrom(e.target.value)}
+                      onChange={(e) => handleCloneChange(e.target.value)}
                       style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, cursor: "pointer" }}
                     >
                       {cloneOptions.map((o) => (
@@ -479,6 +433,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                               <input
                                 type="checkbox"
                                 checked={checked}
+                                disabled={defaultRules.requiredFields.includes(field)}
                                 onChange={(e) => {
                                   setRules((r) => ({
                                     ...r,
@@ -536,6 +491,7 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                       <input
                         type="number"
                         min={1}
+                        max={defaultRules.fieldLengths[field]}
                         value={rules.fieldLengths[field] ?? ""}
                         onChange={(e) => {
                           const v = parseInt(e.target.value, 10);
@@ -551,29 +507,9 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
               </div>
             )}
 
-            {/* ── Format Rules ── */}
-            {activeTab === "format" && (
+            {/* ── Additional phone placeholders ── */}
+            {activeTab === "phones" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <div>
-                  <label style={labelStyle}>Postal Code Pattern</label>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="text"
-                      value={rules.postalCodePattern}
-                      onChange={(e) => handlePatternChange(e.target.value)}
-                      style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12 }}
-                    />
-                    <span style={{ fontSize: 18, flexShrink: 0, color: regexError === null ? "var(--color-brand-400)" : "var(--color-error-text)" }}>
-                      {regexError === null ? "✓" : "✗"}
-                    </span>
-                  </div>
-                  {regexError && (
-                    <div style={{ fontSize: 12, color: "var(--color-error-text)", marginTop: 5 }}>
-                      {regexError}
-                    </div>
-                  )}
-                </div>
-
                 <div>
                   <label style={labelStyle}>Placeholder Phone Numbers</label>
                   <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
@@ -583,82 +519,10 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                     values={rules.phoneConfig.placeholderNumbers}
                     onAdd={(v) => setRules((r) => ({ ...r, phoneConfig: { ...r.phoneConfig, placeholderNumbers: [...r.phoneConfig.placeholderNumbers, v] } }))}
                     onRemove={(v) => setRules((r) => ({ ...r, phoneConfig: { ...r.phoneConfig, placeholderNumbers: r.phoneConfig.placeholderNumbers.filter((x) => x !== v) } }))}
+                    canRemove={(value) => !defaultRules.phoneConfig.placeholderNumbers.includes(value)}
                     placeholder="e.g. 000-000-0000"
                   />
                 </div>
-
-                <div>
-                  <label style={labelStyle}>Canadian Geographic Area-Code Check</label>
-                  <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
-                    Flag structurally valid NANP numbers whose area code is not an active Canadian geographic area code. This policy check never blocks validation.
-                  </div>
-                  <select
-                    value={rules.phoneConfig.canadianAreaCodeCheck ?? "off"}
-                    onChange={(e) => setRules((r) => ({
-                      ...r,
-                      phoneConfig: {
-                        ...r.phoneConfig,
-                        canadianAreaCodeCheck: e.target.value as "off" | "info" | "warning",
-                      },
-                    }))}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, cursor: "pointer" }}
-                  >
-                    <option value="off">Off</option>
-                    <option value="info">Info</option>
-                    <option value="warning">Warning</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Date Fields</label>
-                  <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 }}>
-                    Fields that must contain a valid YYYY-MM-DD date.
-                  </div>
-                  <TagList
-                    values={rules.dateFields}
-                    onAdd={(v) => setRules((r) => ({ ...r, dateFields: [...r.dateFields, v] }))}
-                    onRemove={(v) => setRules((r) => ({ ...r, dateFields: r.dateFields.filter((x) => x !== v) }))}
-                    placeholder="e.g. BirthDate"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* ── Duplicate Detection ── */}
-            {activeTab === "duplication" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ fontSize: 13, color: "var(--color-text-muted)", marginBottom: 4 }}>
-                  Control which duplicate detection checks are active.
-                </div>
-                {(
-                  [
-                    { key: "checkOen" as const, label: "Check for duplicate OEN", desc: "Error and block when two records in the same school share an OEN; warn (without blocking) when the match is across different schools, e.g. dual enrollment." },
-                    { key: "checkNameDobSchool" as const, label: "Check for duplicate Name + DOB", desc: "Error and block when two records in the same school share a first name, last name, and birth date; warn (without blocking) when the match is across different schools." },
-                  ] as const
-                ).map(({ key, label, desc }) => (
-                  <label
-                    key={key}
-                    style={{
-                      display: "flex", alignItems: "flex-start", gap: 12,
-                      padding: "12px 14px",
-                      background: "var(--color-surface-2)", border: "1px solid var(--color-border)",
-                      borderRadius: 4, cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={rules.duplicateDetection[key]}
-                      onChange={(e) =>
-                        setRules((r) => ({ ...r, duplicateDetection: { ...r.duplicateDetection, [key]: e.target.checked } }))
-                      }
-                      style={{ accentColor: "var(--color-brand-500)", cursor: "pointer", marginTop: 2 }}
-                    />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-                      <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginTop: 2 }}>{desc}</div>
-                    </div>
-                  </label>
-                ))}
               </div>
             )}
 
@@ -676,7 +540,8 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
           </div>
 
           {/* Footer */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--color-border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--color-border)", flexShrink: 0 }}>
+            {saveError && <p role="alert" style={{ color: "var(--color-error-text)", fontSize: 12, margin: "0 auto 0 0" }}>{saveError}</p>}
             <button type="button" onClick={onClose} style={{ ...smallBtnStyle, padding: "8px 18px" }}>
               Cancel
             </button>
@@ -729,7 +594,8 @@ function CleaningTabPanel({
   }
 
   function removeField(field: string) {
-    const { [field]: _m, ...restMappings } = profile.mappings;
+    const restMappings = { ...profile.mappings };
+    delete restMappings[field];
     onChange({
       enabledFields: profile.enabledFields.filter((f) => f !== field),
       mappings: restMappings,

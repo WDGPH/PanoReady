@@ -7,6 +7,32 @@ export const ADDRESS_REPAIR_FIELDS = [
 
 const NON_STREET_NAME_WORDS = /^(?:unit|apt|apartment|suite|ste|basement|bsmt|floor|fl|upper|lower|box|po|p\.o\.|rr|rural\s+route|rear|front)\b/i;
 
+/** Normalize a unit only when the result is unambiguous and within five characters. */
+export function standardizeUnit(text: string): [value: string, changed: boolean, needsReview: boolean] {
+  if (!text) return ["", false, false];
+  const trimmed = text.trim();
+  if (trimmed.length <= 5) return trimmed !== text ? [trimmed, true, false] : [text, false, false];
+
+  if (/^basem/i.test(trimmed)) return ["BSMT", true, false];
+  if (/^d\s*lower/i.test(trimmed) || /^lower\s*(un|ap|fl)/i.test(trimmed)) return ["LOWR", true, false];
+  if (/^(upper|top)\s*(lev|un|ap|fl)/i.test(trimmed)) return ["UPPR", true, false];
+  if (/^(main\s*flo|mainflo)/i.test(trimmed)) return ["MAIN", true, false];
+  if (/^second$/i.test(trimmed)) return ["2ND", true, false];
+  if (/^2nd\s*fl/i.test(trimmed)) return ["2F", true, false];
+  if (/^ground/i.test(trimmed)) return ["GRD", true, false];
+
+  if (/\(/.test(trimmed)) {
+    const withoutParentheses = trimmed.replace(/\s*\(([^)]*)\)/, "$1").replace(/\s+/g, "").trim();
+    if (withoutParentheses.length <= 5) return [withoutParentheses, true, false];
+    const beforeParentheses = trimmed.replace(/\s*\([^)]*\)/, "").trim();
+    if (beforeParentheses.length <= 5) return [beforeParentheses, true, false];
+  }
+
+  const prefixed = trimmed.match(/^(?:unit|apt\.?|ph\.?)\s+(.+)$/i)?.[1].trim();
+  if (prefixed && prefixed.length <= 5) return [prefixed, true, false];
+  return [text, false, true];
+}
+
 function comparable(value: string): string {
   return value.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
 }

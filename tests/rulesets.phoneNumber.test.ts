@@ -13,19 +13,15 @@ function customRuleset(rules: RulesProfile): CustomRuleset {
 }
 
 describe("phone ruleset schema", () => {
-  it.each(["off", "info", "warning"] as const)("accepts policy level %s", (level) => {
+  it("accepts the fixed baseline policy level", () => {
     const rules = structuredClone(defaultRulesJson) as RulesProfile;
-    rules.phoneConfig.canadianAreaCodeCheck = level;
-    expect(validateRulesetSchema(customRuleset(rules)).rules.phoneConfig.canadianAreaCodeCheck).toBe(level);
+    expect(validateRulesetSchema(customRuleset(rules)).rules.phoneConfig.canadianAreaCodeCheck).toBe("warning");
   });
 
-  it("accepts a legacy custom ruleset without the policy property", () => {
+  it("rejects a profile missing the fixed policy level", () => {
     const rules = structuredClone(defaultRulesJson) as RulesProfile;
-    delete rules.phoneConfig.canadianAreaCodeCheck;
-    const imported = importRulesetFromJson(JSON.stringify(customRuleset(rules)));
-    expect(imported.rules.phoneConfig).toEqual({
-      placeholderNumbers: ["519-000-0000", "000-000-0000"],
-    });
+    delete (rules.phoneConfig as Partial<RulesProfile["phoneConfig"]>).canadianAreaCodeCheck;
+    expect(() => importRulesetFromJson(JSON.stringify(customRuleset(rules)))).toThrow(/canadianAreaCodeCheck/);
   });
 
   it("rejects unsupported policy values", () => {
@@ -34,5 +30,24 @@ describe("phone ruleset schema", () => {
     expect(() => validateRulesetSchema(customRuleset(rules))).toThrow(
       "'rules.phoneConfig.canadianAreaCodeCheck' must be 'off', 'info', or 'warning'."
     );
+  });
+
+  it.each([
+    ["required field", (rules: RulesProfile) => { rules.requiredFields = rules.requiredFields.filter((field) => field !== "BirthDate"); }],
+    ["controlled value", (rules: RulesProfile) => { rules.allowedGenderValues.push("UNSUPPORTED"); }],
+    ["length limit", (rules: RulesProfile) => { rules.fieldLengths.FirstName = 500; }],
+    ["duplicate check", (rules: RulesProfile) => { rules.duplicateDetection.checkOen = false; }],
+  ] as const)("rejects a profile that relaxes the baseline %s", (_label, mutate) => {
+    const rules = structuredClone(defaultRulesJson) as RulesProfile;
+    mutate(rules);
+    expect(() => validateRulesetSchema(customRuleset(rules))).toThrow(/Custom profiles cannot/);
+  });
+
+  it("accepts additional local restrictions", () => {
+    const rules = structuredClone(defaultRulesJson) as RulesProfile;
+    rules.requiredFields.push("City");
+    rules.allowedGenderValues = ["F", "M"];
+    rules.fieldLengths.FirstName = 40;
+    expect(validateRulesetSchema(customRuleset(rules)).rules.requiredFields).toContain("City");
   });
 });

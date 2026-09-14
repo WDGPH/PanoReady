@@ -19,6 +19,17 @@ describe("paged tables", () => {
     expect(html).toContain("Page 1 of 3");
     expect(html).toContain('aria-sort="none"');
   });
+  it("pages raw data before constructing table rows", () => {
+    let rendered = 0;
+    const rows = Array.from({ length: 60 }, (_, id) => ({ id }));
+    const html = renderToStaticMarkup(<PagedTable rows={rows} rowKey={(row) => String(row.id)} renderRow={(row) => {
+      rendered++;
+      return <tr key={row.id}><td>Record {row.id + 1}</td></tr>;
+    }}><thead><tr><th>Record</th></tr></thead></PagedTable>);
+    expect(rendered).toBe(25);
+    expect(html).toContain("Record 25");
+    expect(html).not.toContain("Record 26");
+  });
   it("does not add paging controls to short tables", () => {
     const html = renderToStaticMarkup(<PagedTable><tbody><tr><td>Only row</td></tr></tbody></PagedTable>);
     expect(html).not.toContain('aria-label="Table pages"');

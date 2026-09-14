@@ -1,4 +1,4 @@
-name: GitHub Pages
+name: Documentation and GitHub Pages
 
 on:
   push:
@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   build:
+    name: Build application and documentation
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -50,6 +51,7 @@ jobs:
           path: out
 
   deploy:
+    name: Deploy GitHub Pages
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest

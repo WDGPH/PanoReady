@@ -1,31 +1,15 @@
 # PanoReady
 
-PanoReady is a browser-based utility with two workflows for preparing and comparing Ontario school enrolment data in STIX XML format.
+PanoReady is an experimental browser-local utility for preparing known school-enrolment inputs for STIX submission and comparing two snapshots. It processes source records in memory without intentionally transmitting or persisting them.
 
-**Your record data stays on your device.** File parsing and generated outputs are handled in the browser; source files are not uploaded to a PanoReady server.
-
-[Open PanoReady](https://wdgph.github.io/PanoReady/){ .md-button .md-button--primary }
-[Get started](getting-started.md){ .md-button }
-[View on GitHub](https://github.com/WDGPH/PanoReady){ .md-button }
-
-## Workflows
-
-| Workflow | Purpose | Output |
+| Workflow | Use it to | Main output |
 |---|---|---|
-| [Validate & Fix](workflow-validate-and-fix.md) | Import, optionally clean, validate, review issues, apply fixes, and revalidate | Validated and formatted XML, optional encrypted ZIP, issue reports, CSV summaries, and Excel workbook |
-| [Compare Files](workflow-compare-files.md) | Compare previous and current snapshots, review changes, and correct current values | Comparison views and logs, full or school-scoped current XML, optional encrypted ZIP |
+| [Validate & Fix](workflow-validate-and-fix.md) | Check a supported XML or workbook, review corrections, and undo the latest change group | Checked STIX XML, or a clearly labelled draft while errors remain |
+| [Compare Files](workflow-compare-files.md) | Inspect conservative matches and review changes between previous and current files | Local comparison review log |
 
-## Input formats
+Both workflows accept `.xml` and the supported `.xlsm` layout. See [Supported inputs and outputs](supported-inputs-and-outputs.md) before using operational data.
 
-PanoReady accepts STIX XML and supported Excel macro-enabled workbooks (`.xlsm`). Workbook imports include a metadata review step before conversion to STIX XML.
+!!! warning "Operational meaning"
+    `READY` means PanoReady's implemented checks passed. The application does not currently run independent XSD validation or prove acceptance by a destination system.
 
-## Configure validation
-
-Validation settings and optional cleaning mappings are configured through rulesets in **Validate & Fix**. You can export the built-in ruleset, create a custom variant, and import that variant without changing application code. Start with the [ruleset reference](rulesets.md) and [validation rules](validation-rules.md).
-
-## Open-source project
-
-PanoReady is maintained by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/) and its original code and documentation are released under the [MIT License](https://github.com/WDGPH/PanoReady/blob/main/LICENSE). Panorama, STIX, and related third-party systems and materials remain the property of their respective owners. References identify intended compatibility only and do not imply affiliation or endorsement. Contributions are welcome; see the [project policies](project-policies.md) and [development guide](development.md).
-
-!!! warning "Protect sensitive information"
-    Do not attach real student records or other sensitive information to GitHub issues or pull requests. Follow your organization's policies when handling source files and generated downloads.
+Downloads can contain sensitive student records. Follow your organization's requirements for storage, transfer, access, passwords, and deletion. Use synthetic data in public issues and tests.

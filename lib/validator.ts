@@ -1,11 +1,10 @@
 /**
- * STIX XML validator — Phase 1 of PLAN.md
+ * STIX XML validator.
  *
  * Runs structural + rules validation and produces ValidationIssue records.
  * Also provides helpers for applying fixes back to XML and exporting reports.
  */
 
-import { standardizeUnit } from "./cleaner";
 import { normalizeCanadianPostalCode } from "./postalCode";
 import {
   analyzePhoneNumber,
@@ -25,15 +24,16 @@ import {
   flattenCanonicalStudent,
   parseCanonicalXml,
   serializeCanonicalXml,
-  type CanonicalStudent,
-  type CanonicalSchool,
+  type CanonicalUpload,
 } from "./canonical";
+import { commitChangeGroup } from "./session";
 import {
   ADDRESS_REPAIR_FIELDS,
   analyzeAlternateDeliveryInStreetFields,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
+  standardizeUnit,
 } from "./addressRepair";
 import { SCHOOL_FIELDS } from "./fields";
 
@@ -63,11 +63,35 @@ function issue(
   issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, autoFixable: value.autoFixable ?? false, ...value });
 }
 
+/** Derive the release gate from the findings that apply to the exact output. */
+export function gateForIssues(issues: ValidationIssue[]): GateState {
+  if (issues.some((finding) => finding.severity === "error")) return "BLOCKED";
+  return issues.some((finding) => finding.severity === "warning" && finding.ruleId !== "PHONE_CANADIAN_AREA_CODE")
+    ? "REVIEW_REQUIRED"
+    : "READY";
+}
+
 function validRealDate(value: string): boolean {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return false;
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
+}
+
+/** Return age on an exact calendar date, or null for invalid/future birth dates. */
+export function ageOnDate(birthDate: string, referenceDate: string): number | null {
+  if (!validRealDate(birthDate) || !validRealDate(referenceDate)) return null;
+  const [birthYear, birthMonth, birthDay] = birthDate.split("-").map(Number);
+  const [referenceYear, referenceMonth, referenceDay] = referenceDate.split("-").map(Number);
+  let age = referenceYear - birthYear;
+  if (referenceMonth < birthMonth || (referenceMonth === birthMonth && referenceDay < birthDay)) age--;
+  return age < 0 ? null : age;
+}
+
+/** Use an accepted source CreateDate, otherwise the explicit session date. */
+export function chooseAgeReferenceDate(createDate: string, sessionDate: string): string {
+  if (!validRealDate(sessionDate)) throw new Error("Session date must be a valid YYYY-MM-DD date.");
+  return validRealDate(createDate) && createDate <= sessionDate ? createDate : sessionDate;
 }
 
 type CanonicalPhoneFinding = {
@@ -80,7 +104,7 @@ type CanonicalPhoneFinding = {
 
 const SAFE_TRAILING_PHONE_NOTE = /[\s\-*/(),.!]*(?:(?:please\s+)?call\b[\s\-*/(),.!]*)?\b(?:1st|first|2nd|second|3rd|third)\b[\s\-*/(),.!]*(?:call\b[\s\-*/(),.!]*)?$|[\s\-*/(),.!]*\bcell\b[\s\-*/(),.!]*$/i;
 
-function legacyCanonicalPhoneFix(raw: string): string | undefined {
+function safePhoneNoteFix(raw: string): string | undefined {
   const withoutNote = raw.replace(SAFE_TRAILING_PHONE_NOTE, "");
   const extension = withoutNote.match(/\bex\s*(\d{1,5})\s*$/i)?.[1] ?? "";
   const base = extension ? withoutNote.replace(/\bex\s*\d{1,5}\s*$/i, "") : withoutNote;
@@ -115,18 +139,18 @@ function canonicalPhoneFindings(
   label: string,
   rules: RulesProfile,
 ): CanonicalPhoneFinding[] {
-  const legacyFix = legacyCanonicalPhoneFix(raw);
-  if (legacyFix) {
+  const noteFix = safePhoneNoteFix(raw);
+  if (noteFix) {
     return [{
       severity: "error",
-      message: `${label} "${raw}" can be safely normalized to "${legacyFix}".`,
-      suggestedFix: legacyFix,
+      message: `${label} "${raw}" can be safely normalized to "${noteFix}".`,
+      suggestedFix: noteFix,
       autoFixable: true,
       ruleId: "PHONE_FORMAT",
     }];
   }
   const analysis = analyzePhoneNumber(raw);
-  const placeholders = new Set(rules.phoneConfig?.placeholderNumbers ?? []);
+  const placeholders = new Set(rules.phoneConfig.placeholderNumbers);
   if (analysis.status === "invalid") {
     const findings = [invalidPhoneFinding(raw, label, analysis)];
     if (analysis.baseValue && placeholders.has(analysis.baseValue)) {
@@ -150,7 +174,7 @@ function canonicalPhoneFindings(
   if (placeholders.has(analysis.baseValue)) {
     findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
   }
-  const canadianAreaCodeCheck = rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
+  const canadianAreaCodeCheck = rules.phoneConfig.canadianAreaCodeCheck;
   if (canadianAreaCodeCheck !== "off" && !isActiveCanadianGeographicNpa(analysis.npa)) {
     findings.push({
       severity: canadianAreaCodeCheck,
@@ -181,30 +205,27 @@ function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFind
   return { severity: "warning", message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
 }
 
-/** Namespace-aware validation of the canonical STIX model. */
-export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
+/** Validate the canonical STIX model while preserving its stable local identities. */
+export function validateCanonicalUpload(
+  upload: CanonicalUpload,
+  rules: RulesProfile = defaultRules as RulesProfile,
+): ValidationResult {
   const issues: ValidationIssue[] = [];
-  let upload;
-  try {
-    upload = parseCanonicalXml(xmlText);
-  } catch (error) {
-    issue(issues, { severity: "error", ruleId: "XML_PARSE_OR_NAMESPACE", layer: "XML", message: error instanceof Error ? error.message : String(error) });
-    return { issues, records: [], schoolCount: 0, studentCount: 0, gate: "BLOCKED", xsdValidated: false };
-  }
   const records: StudentRecord[] = [];
   issues.push(...upload.diagnostics);
   const metadata = upload.metadata;
-  const metadataRequired: Array<[string, string]> = [
-    ["CreateDate", metadata.createDate], ["CreateTime", metadata.createTime], ["CreatedBy", metadata.createdBy],
-    ["ContactPhone", metadata.contactPhone?.number ?? ""], ["ContactEmail", metadata.contactEmail], ["FullUpload", metadata.fullUpload],
+  const metadataRequired: Array<[string, string, string]> = [
+    ["CreateDate", metadata.createDate, "CreateDate"], ["CreateTime", metadata.createTime, "CreateTime"], ["CreatedBy", metadata.createdBy, "CreatedBy"],
+    ["MetadataContactPhone", metadata.contactPhone?.number ?? "", "ContactPhone"], ["ContactEmail", metadata.contactEmail, "ContactEmail"], ["FullUpload", metadata.fullUpload, "FullUpload"],
   ];
-  for (const [field, value] of metadataRequired) if (!value.trim()) issue(issues, { severity: "error", field, ruleId: "METADATA_REQUIRED", layer: "CANONICAL", message: `${field} is required but missing.` });
-  if (metadata.createDate && (!validRealDate(metadata.createDate) || metadata.createDate > new Date().toISOString().slice(0, 10))) issue(issues, { severity: "error", field: "CreateDate", ruleId: "METADATA_DATE", layer: "CANONICAL", message: "CreateDate must be a real YYYY-MM-DD date no later than today." });
-  if (metadata.createTime && !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(metadata.createTime)) issue(issues, { severity: "error", field: "CreateTime", ruleId: "METADATA_TIME", layer: "CANONICAL", message: "CreateTime must use HH:mm:ss." });
-  if (metadata.createdBy && (metadata.createdBy.length < 1 || metadata.createdBy.length > 100)) issue(issues, { severity: "error", field: "CreatedBy", ruleId: "METADATA_CREATED_BY", layer: "CANONICAL", message: "CreatedBy must contain 1–100 characters." });
-  if (metadata.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(metadata.contactEmail)) issue(issues, { severity: "error", field: "ContactEmail", ruleId: "METADATA_EMAIL", layer: "CANONICAL", message: "ContactEmail is not a valid email address." });
-  if (metadata.fullUpload && !rules.allowedFullLoadTypeValues.includes(metadata.fullUpload)) issue(issues, { severity: "error", field: "FullUpload", ruleId: "FULL_UPLOAD_ALLOWED_VALUE", layer: "CANONICAL", message: `FullUpload "${metadata.fullUpload}" is not allowed.` });
-  if (metadata.boardNumber && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(metadata.boardNumber)) issue(issues, { severity: "error", field: "BoardNumber", ruleId: "BOARD_NUMBER_FORMAT", layer: "CANONICAL", message: "BoardNumber must be B plus 5 digits or D plus 2 letters and 3 digits." });
+  const metadataBase = { recordId: "metadata", studentName: "File metadata", layer: "CANONICAL" as const };
+  for (const [field, value, label] of metadataRequired) if (!value.trim()) issue(issues, { ...metadataBase, severity: "error", field, currentValue: value, ruleId: "METADATA_REQUIRED", message: `${label} is required but missing.` });
+  if (metadata.createDate && (!validRealDate(metadata.createDate) || metadata.createDate > new Date().toISOString().slice(0, 10))) issue(issues, { ...metadataBase, severity: "error", field: "CreateDate", currentValue: metadata.createDate, ruleId: "METADATA_DATE", message: "CreateDate must be a real YYYY-MM-DD date no later than today." });
+  if (metadata.createTime && !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(metadata.createTime)) issue(issues, { ...metadataBase, severity: "error", field: "CreateTime", currentValue: metadata.createTime, ruleId: "METADATA_TIME", message: "CreateTime must use HH:mm:ss." });
+  if (metadata.createdBy && (metadata.createdBy.length < 1 || metadata.createdBy.length > 100)) issue(issues, { ...metadataBase, severity: "error", field: "CreatedBy", currentValue: metadata.createdBy, ruleId: "METADATA_CREATED_BY", message: "CreatedBy must contain 1–100 characters." });
+  if (metadata.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(metadata.contactEmail)) issue(issues, { ...metadataBase, severity: "error", field: "ContactEmail", currentValue: metadata.contactEmail, ruleId: "METADATA_EMAIL", message: "ContactEmail is not a valid email address." });
+  if (metadata.fullUpload && !rules.allowedFullLoadTypeValues.includes(metadata.fullUpload)) issue(issues, { ...metadataBase, severity: "error", field: "FullUpload", currentValue: metadata.fullUpload, ruleId: "FULL_UPLOAD_ALLOWED_VALUE", message: `FullUpload "${metadata.fullUpload}" is not allowed.` });
+  if (metadata.boardNumber && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(metadata.boardNumber)) issue(issues, { ...metadataBase, severity: "error", field: "BoardNumber", currentValue: metadata.boardNumber, ruleId: "BOARD_NUMBER_FORMAT", message: "BoardNumber must be B plus 5 digits or D plus 2 letters and 3 digits." });
   if (metadata.contactPhone) {
     for (const finding of canonicalPhoneFindings(metadata.contactPhone.number, "Metadata ContactPhone", rules)) {
       issue(issues, {
@@ -216,11 +237,12 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         ...finding,
       });
     }
-    if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
+    if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { ...metadataBase, severity: "error", field: "MetadataContactPhoneType", currentValue: metadata.contactPhone.type, ruleId: "PHONE_TYPE_ALLOWED_VALUE", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
   }
 
-  const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
-  const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  type SeenIdentity = { studentName: string; schoolId: string; schoolNumber: string; schoolName: string };
+  const seenOens = new Map<string, SeenIdentity[]>();
+  const seenIdentity = new Map<string, SeenIdentity[]>();
   const allowedByField: Record<string, string[]> = {
     Grade: rules.allowedGradeValues, Gender: rules.allowedGenderValues, Province: rules.allowedProvinceValues,
     Language: rules.allowedLanguageValues, CountryOfOrigin: rules.allowedCountryValues, StreetType: rules.allowedStreetTypeValues,
@@ -230,20 +252,23 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
   };
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
   const schoolFields = new Set<string>(SCHOOL_FIELDS);
+  const schoolNumberCounts = new Map<string, number>();
+  for (const school of upload.schools) if (school.schoolNumber) schoolNumberCounts.set(school.schoolNumber, (schoolNumberCounts.get(school.schoolNumber) ?? 0) + 1);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
     const school = upload.schools[schoolIndex];
-    if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
-    if (rules.requiredFields.includes("SchoolName") && !school.name) issue(issues, { severity: "error", field: "SchoolName", schoolNumber: school.schoolNumber, ruleId: "REQUIRED_FIELD", layer: "CANONICAL", message: "SchoolName is required but missing or empty." });
-    if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
+    const schoolBase = { recordId: school.schoolId, targetId: school.schoolId, studentName: school.name || `School ${schoolIndex + 1}`, schoolNumber: school.schoolNumber };
+    if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { ...schoolBase, severity: "error", field: "SchoolNumber", currentValue: school.schoolNumber, ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
+    if (rules.requiredFields.includes("SchoolName") && !school.name) issue(issues, { ...schoolBase, severity: "error", field: "SchoolName", currentValue: school.name, ruleId: "REQUIRED_FIELD", layer: "CANONICAL", message: "SchoolName is required but missing or empty." });
+    if (school.schoolNumber && (schoolNumberCounts.get(school.schoolNumber) ?? 0) > 1) issue(issues, { ...schoolBase, severity: "error", field: "SchoolNumber", currentValue: school.schoolNumber, ruleId: "SCHOOL_NUMBER_DUPLICATE", layer: "IDENTITY", message: `SchoolNumber "${school.schoolNumber}" appears in more than one School container.` });
+    if (school.schoolNumber.length > 100) issue(issues, { ...schoolBase, severity: "error", field: "SchoolNumber", currentValue: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
     if (school.students.length === 0) issue(issues, { severity: "error", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records.` });
     for (let studentIndex = 0; studentIndex < school.students.length; studentIndex++) {
       const student = school.students[studentIndex];
       const fields = flattenCanonicalStudent(student, school);
-      const recordId = `school${schoolIndex}:student${studentIndex}`;
+      const recordId = student.recordId;
       const studentName = [fields.FirstName, fields.LastName].filter(Boolean).join(" ") || `Student #${studentIndex + 1}`;
       const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
       records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
-
       // Only a standalone finding when StreetNumber is within its length limit — an over-length
       // value gets this same proposal attached to the blocking FIELD_LENGTH error instead.
       const unitPrefixProposal = (fields.StreetNumber ?? "").length <= (rules.fieldLengths.StreetNumber ?? Infinity)
@@ -286,6 +311,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
             : (index === 0 ? "Guardian" : "Guardian2");
           issue(issues, {
             ...base,
+            targetId: guardian.guardianId,
             severity: "error",
             field,
             ruleId: hasGuardianDetails ? "GUARDIAN_RELATIONSHIP_REQUIRED" : "EMPTY_GUARDIAN",
@@ -299,21 +325,22 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       }
       if (fields.BirthDate) {
         if (!validRealDate(fields.BirthDate)) {
-          const parsed = new Date(fields.BirthDate);
-          const canNormalize = !isNaN(parsed.getTime());
-          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.`, suggestedFix: canNormalize ? parsed.toISOString().slice(0, 10) : undefined, autoFixable: canNormalize });
+          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date. Confirm the source date and enter it explicitly.`, autoFixable: false });
         } else if (fields.BirthDate > new Date().toISOString().slice(0, 10)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
       }
       if (fields.OEN) {
         if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
-        else if (rules.duplicateDetection.checkOen && seenOens.has(fields.OEN)) {
-          const prior = seenOens.get(fields.OEN)!;
-          if (prior.schoolNumber === school.schoolNumber) {
+        else if (rules.duplicateDetection.checkOen) {
+          const priorOccurrences = seenOens.get(fields.OEN) ?? [];
+          const prior = priorOccurrences.find((entry) => entry.schoolId === school.schoolId) ?? priorOccurrences[0];
+          if (prior?.schoolId === school.schoolId) {
             issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}).` });
-          } else {
+          } else if (prior) {
             issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment.` });
           }
-        } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+          priorOccurrences.push({ studentName, schoolId: school.schoolId, schoolNumber: school.schoolNumber, schoolName: school.name });
+          seenOens.set(fields.OEN, priorOccurrences);
+        }
       }
       if (fields.PostalCode) {
         const finding = postalCodeFinding(fields.PostalCode, rules);
@@ -364,7 +391,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           const manualProposal = manualAddressProposal(field, val, limit);
           issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: manualProposal.explanation, autoFixable: false, repairProposal: manualProposal });
         } else {
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
+          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit. Review the complete value; PanoReady will not shorten it automatically.`, autoFixable: false });
         }
       }
       for (const field of ["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"]) {
@@ -376,116 +403,41 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       }
       const identity = `${fields.FirstName.toLowerCase()}|${fields.LastName.toLowerCase()}|${fields.BirthDate}`;
       if (rules.duplicateDetection.checkNameDobSchool && fields.FirstName && fields.LastName && fields.BirthDate) {
-        const priorIdentity = seenIdentity.get(identity);
-        if (priorIdentity && priorIdentity.schoolNumber === school.schoolNumber) {
+        const priorOccurrences = seenIdentity.get(identity) ?? [];
+        const priorIdentity = priorOccurrences.find((entry) => entry.schoolId === school.schoolId) ?? priorOccurrences[0];
+        if (priorIdentity?.schoolId === school.schoolId) {
           issue(issues, { ...base, severity: "error", ruleId: "NAME_DOB_DUPLICATE", layer: "IDENTITY", message: `Possible duplicate: ${studentName} (DOB ${fields.BirthDate}) also appears as ${priorIdentity.studentName} in the same school (${school.name || school.schoolNumber}).` });
         } else if (priorIdentity) {
           issue(issues, { ...base, severity: "warning", ruleId: "IDENTITY_REVIEW", layer: "IDENTITY", message: `Same name and birth date also appear at ${priorIdentity.schoolName || priorIdentity.schoolNumber} (${priorIdentity.schoolNumber}) as ${priorIdentity.studentName}; review for dual enrollment.` });
-        } else {
-          seenIdentity.set(identity, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
         }
+        priorOccurrences.push({ studentName, schoolId: school.schoolId, schoolNumber: school.schoolNumber, schoolName: school.name });
+        seenIdentity.set(identity, priorOccurrences);
       }
     }
   }
-  const hasErrors = issues.some((finding) => finding.severity === "error");
-  const hasWarnings = issues.some((finding) => finding.severity === "warning" && finding.ruleId !== "PHONE_CANADIAN_AREA_CODE");
-  const gate: GateState = hasErrors ? "BLOCKED" : hasWarnings ? "REVIEW_REQUIRED" : "READY";
-  return { issues, records, schoolCount: upload.schools.length, studentCount: records.length, gate, xsdValidated: false };
+  const gate = gateForIssues(issues);
+  return { issues, records, schoolCount: upload.schools.length, studentCount: records.length, gate };
+}
+
+/** Check external XML structure, then use the canonical semantic validator. */
+export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
+  try {
+    return validateCanonicalUpload(parseCanonicalXml(xmlText), rules);
+  } catch (error) {
+    const issues: ValidationIssue[] = [];
+    issue(issues, { severity: "error", ruleId: "XML_PARSE_OR_NAMESPACE", layer: "XML", message: error instanceof Error ? error.message : String(error) });
+    return { issues, records: [], schoolCount: 0, studentCount: 0, gate: "BLOCKED" };
+  }
 }
 
 // ─── Fix application ──────────────────────────────────────────────────────────
-
-/** Parse recordId → { schoolIndex, studentIndex } */
-function decodeRecordId(recordId: string): { si: number; pi: number } | null {
-  const m = recordId.match(/^school(\d+):student(\d+)$/);
-  if (!m) return null;
-  return { si: parseInt(m[1]), pi: parseInt(m[2]) };
-}
-
-function setCanonicalStudentField(student: CanonicalStudent, school: CanonicalSchool, field: string, value: string) {
-  const direct: Record<string, keyof Pick<CanonicalStudent, "oen" | "grade" | "className" | "gender" | "birthDate" | "language" | "countryOfOrigin">> = {
-    OEN: "oen", Grade: "grade", Class: "className", Gender: "gender", BirthDate: "birthDate", Language: "language", CountryOfOrigin: "countryOfOrigin",
-  };
-  if (direct[field]) { student[direct[field]] = value; return; }
-  if (field === "SchoolName") { school.name = value; return; }
-  if (field === "SchoolNumber") { school.schoolNumber = value; return; }
-  const names: Record<string, ["name" | "aliasName", "first" | "middle" | "last"]> = {
-    FirstName: ["name", "first"], MiddleName: ["name", "middle"], LastName: ["name", "last"],
-    AliasFirstName: ["aliasName", "first"], AliasMiddleName: ["aliasName", "middle"], AliasLastName: ["aliasName", "last"],
-  };
-  if (names[field]) {
-    const [container, part] = names[field];
-    if (container === "aliasName" && !student.aliasName) student.aliasName = { first: "", middle: "", last: "" };
-    (student[container] as { first: string; middle: string; last: string })[part] = value;
-    return;
-  }
-  const address: Record<string, keyof CanonicalStudent["address"]> = {
-    Unit: "unit", StreetNumber: "streetNumber", StreetNumberSuffix: "streetNumberSuffix", StreetName: "streetName",
-    StreetType: "streetType", StreetDirection: "streetDirection", RuralRoute: "ruralRoute", PoBoxNumber: "poBoxNumber",
-    City: "city", Province: "province", PostalCode: "postalCode",
-  };
-  if (address[field]) { student.address[address[field]] = value; return; }
-  if (field === "Phone" || field === "ContactPhone") { student.phone = { number: value, type: student.phone?.type ?? "" }; return; }
-  if (field === "PhoneType") { student.phone = { number: student.phone?.number ?? "", type: value }; return; }
-  const guardianMatch = field.match(/^Guardian(2)?(FirstName|LastName|Relationship|PhoneNumber|PhoneType)$/);
-  if (guardianMatch) {
-    const index = guardianMatch[1] ? 1 : 0;
-    while (student.guardians.length <= index) student.guardians.push({ name: { first: "", middle: "", last: "" }, relationship: "", phone: null });
-    const guardian = student.guardians[index];
-    const part = guardianMatch[2];
-    if (part === "FirstName") guardian.name.first = value;
-    else if (part === "LastName") guardian.name.last = value;
-    else if (part === "Relationship") guardian.relationship = value;
-    else if (part === "PhoneNumber") guardian.phone = { number: value, type: guardian.phone?.type ?? "" };
-    else guardian.phone = { number: guardian.phone?.number ?? "", type: value };
-  }
-}
 
 /** Apply fixes through the canonical model so every namespace-prefix form behaves identically. */
 export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
   if (fixes.length === 0) return xmlText;
   const upload = parseCanonicalXml(xmlText);
-  const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
-  for (const fix of fixes) {
-    if (fix.recordId === "metadata" && fix.field === "MetadataContactPhone") {
-      upload.metadata.contactPhone = { number: fix.newValue, type: upload.metadata.contactPhone?.type ?? "" };
-      continue;
-    }
-    const coordinates = decodeRecordId(fix.recordId);
-    if (!coordinates) continue;
-    const school = upload.schools[coordinates.si];
-    const student = school?.students[coordinates.pi];
-    if (!school || !student) continue;
-    if (fix.field === "Guardian" || fix.field === "Guardian2") {
-      const removals = guardianRemovals.get(student) ?? new Set<number>();
-      removals.add(fix.field === "Guardian2" ? 1 : 0);
-      guardianRemovals.set(student, removals);
-      continue;
-    }
-    setCanonicalStudentField(student, school, fix.field, fix.newValue);
-  }
-  for (const [student, indexes] of guardianRemovals) {
-    for (const index of [...indexes].sort((a, b) => b - a)) student.guardians.splice(index, 1);
-  }
-  return serializeCanonicalXml(upload);
-}
-
-// ─── Apply fixes to in-memory records (for UI refresh without re-parsing XML) ─
-
-export function applyFixesToRecords(
-  records: StudentRecord[],
-  fixes: AppliedFix[]
-): StudentRecord[] {
-  const byRecord = new Map<string, Map<string, string>>();
-  for (const fix of fixes) {
-    if (!byRecord.has(fix.recordId)) byRecord.set(fix.recordId, new Map());
-    byRecord.get(fix.recordId)!.set(fix.field, fix.newValue);
-  }
-  return records.map((r) => {
-    const fieldFixes = byRecord.get(r.id);
-    if (!fieldFixes) return r;
-    return { ...r, fields: { ...r.fields, ...Object.fromEntries(fieldFixes) } };
-  });
+  const { document } = commitChangeGroup(upload, fixes, { label: "Apply validation corrections", origin: "manual" });
+  return serializeCanonicalXml(document);
 }
 
 // ─── Issue report CSV ─────────────────────────────────────────────────────────
@@ -560,36 +512,15 @@ export function generateSchoolSummaryCsv(records: StudentRecord[]): string {
  * Generate an age-group CSV. Buckets is an array of [min,max] pairs in years, last bucket may have max=null for open-ended.
  * Output columns: bucketLabel, count
  */
-export function generateAgeGroupReportCsv(records: StudentRecord[], buckets?: Array<[number, number | null]>): string {
+export function generateAgeGroupReportCsv(records: StudentRecord[], referenceDate: string, buckets?: Array<[number, number | null]>): string {
   const defaultBuckets: Array<[number, number | null]> = [[0,4],[5,9],[10,14],[15,19],[20,null]];
   const b = buckets ?? defaultBuckets;
   const counts = new Array(b.length).fill(0);
-  const now = new Date();
+  if (!validRealDate(referenceDate)) throw new Error("Age reports require a valid YYYY-MM-DD reference date.");
   for (const r of records) {
     const bd = (r.fields.BirthDate || "").trim();
-    if (!bd) continue;
-    const m = bd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    let age: number | null = null;
-    if (m) {
-      const y = parseInt(m[1], 10);
-      const mo = parseInt(m[2], 10) - 1;
-      const d = parseInt(m[3], 10);
-      const dob = new Date(y, mo, d);
-      if (!isNaN(dob.getTime())) {
-        age = now.getFullYear() - dob.getFullYear();
-        const mDiff = now.getMonth() - dob.getMonth();
-        if (mDiff < 0 || (mDiff === 0 && now.getDate() < dob.getDate())) age--;
-      }
-    } else {
-      // try Date parse of other formats
-      const parsed = new Date(bd);
-      if (!isNaN(parsed.getTime())) {
-        age = now.getFullYear() - parsed.getFullYear();
-        const mDiff = now.getMonth() - parsed.getMonth();
-        if (mDiff < 0 || (mDiff === 0 && now.getDate() < parsed.getDate())) age--;
-      }
-    }
-    if (age === null || age < 0) continue;
+    const age = ageOnDate(bd, referenceDate);
+    if (age === null) continue;
     for (let i = 0; i < b.length; i++) {
       const [min, max] = b[i];
       if (age >= min && (max === null || age <= max)) {

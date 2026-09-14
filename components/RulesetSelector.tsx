@@ -40,7 +40,7 @@ export default function RulesetSelector({ onRulesChange, compact = false, notify
   const [editingRuleset, setEditingRuleset] = useState<CustomRuleset | undefined>(undefined);
   const [managerOpen, setManagerOpen]     = useState(false);
 
-  // Initialise from localStorage on mount (safe — this is a client component)
+  // Initialise from the workflow's in-memory profile registry on mount.
   useEffect(() => {
     const id  = initialId ?? getActiveRulesetId();
     const all = listCustomRulesets();
@@ -84,9 +84,9 @@ export default function RulesetSelector({ onRulesChange, compact = false, notify
       if (rs.warnings && rs.warnings.length > 0) {
         setImportWarnings(rs.warnings);
       }
-      // Strip the transient `warnings` field before persisting so it does not
-      // appear in localStorage or in subsequently exported files.
-      const { warnings: _w, ...rsToSave } = rs;
+      // Strip transient import warnings before the session copy can be exported.
+      const rsToSave = { ...rs };
+      delete rsToSave.warnings;
       saveCustomRuleset(rsToSave);
       refreshAndSelect(rsToSave.id);
     } catch (err) {

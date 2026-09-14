@@ -1,46 +1,9 @@
 # Deployment
 
-One GitHub Pages deployment publishes both sites:
+The GitHub Pages workflow builds the static Next.js application into `out/`, builds MkDocs into `out/docs/`, and publishes one combined Pages artifact. Pull requests verify the builds; pushes to `main` can deploy through the configured environment.
 
-- PanoReady: <https://wdgph.github.io/PanoReady/>
-- Documentation: <https://wdgph.github.io/PanoReady/docs/>
+The production application has no server-side record-processing API, database, analytics integration, or required runtime environment variable. Package installation and build steps still require network access for declared dependencies. The resulting static artifact serves its own scripts, styles, and fonts.
 
-GitHub Pages has one published site per repository. The workflow builds the static Next.js application into `out/`, builds MkDocs into `out/docs/`, and uploads that combined directory as one Pages artifact. Separate Pages deployment jobs would replace the same published site instead of creating independent sites.
+Before release, run the checks in [Development](development.md), including the network-observed and offline browser scenarios. After deployment, use synthetic XML to inspect both rendered workflows and downloads at the Pages base path. When a locally approved workbook matching PanoReady's documented layout is available, test that path separately; the repository does not publish an authoritative workbook fixture. Hosted rendering, browser download policy, and Pages configuration are separate acceptance checks from a local static build.
 
-## Run the application
-
-Use Node.js 24 (the version in `.nvmrc`) or Node.js 22 and npm. From a checkout:
-
-```bash
-npm ci
-npm run check
-npm start
-```
-
-`check` includes the production build. `start` serves it on port 3000. Use your hosting platform's process manager and HTTPS configuration for a public instance. The app has no required environment variables or database setup.
-
-The build downloads Google fonts through `next/font/google`. Allow access to Google's font services from the build environment. The resulting font assets are served with the app. Package installation also requires access to the npm registry and the SheetJS CDN.
-
-Test `/` and `/reports` on the deployed instance, then process a synthetic XML file and workbook. Check downloads and ruleset persistence in the browsers your users run.
-
-## Publish on GitHub Pages
-
-The `GitHub Pages` workflow builds the application and documentation on every pull request and push to `main`. Pull requests verify both builds. Only pushes to `main` upload and deploy the combined site.
-
-A repository administrator must select **GitHub Actions** under **Settings → Pages → Build and deployment → Source**. Check any `github-pages` environment approval rules if deployment waits for approval.
-
-For a fork, update the GitHub Pages base path in `next.config.ts`; update `site_url`, `repo_url`, `repo_name`, and `edit_uri` in `mkdocs.yml`; and update repository links in the README and policies. Set up Pages in the fork as well.
-
-To build locally:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-docs.txt
-mkdocs build --strict
-mkdocs serve
-```
-
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed. The Pages workflow instead passes `--site-dir out/docs` so the documentation is included below the application.
-
-Internal pages and anchors are checked using [MkDocs link validation](https://www.mkdocs.org/user-guide/configuration/#validation). External URLs still need review when publishing.
+For a fork, update the base path in `next.config.ts`, the repository/site settings in `mkdocs.yml`, and public links. Configure **GitHub Actions** as the Pages source. Do not add telemetry or remote validation merely to monitor deployment; any transmission of operational values requires a separate privacy decision.

@@ -1,0 +1,8 @@
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run e2e:build
+ENV PLAYWRIGHT_SKIP_WEBSERVER=1
+CMD ["bash", "-lc", "node e2e/static-server.mjs & server=$!; trap 'kill $server' EXIT; ./node_modules/.bin/playwright test"]

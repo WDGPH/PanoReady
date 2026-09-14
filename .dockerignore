@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+out
+site
+coverage
+playwright-report
+test-results
+.venv
+*.log
+private-reference
+reference-assets
+local-reference
