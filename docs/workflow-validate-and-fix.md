@@ -13,7 +13,7 @@ Use this workflow when you need to:
 
 ### Review history and Undo
 
-After applying corrections, **History** lists each automatic-fix batch, manual-fix submission, and confirmed cleaning mapping batch with its number of field changes. Address corrections submitted together stay in the same action. History shows aggregate labels and counts; it does not display student details or correction values.
+The desktop review layout keeps **History** in a sticky right-hand pane, expanded by default. After applying corrections, it lists each automatic-fix batch, manual-fix submission, and confirmed cleaning mapping batch with its number of field changes. Address corrections submitted together stay in the same action. History shows aggregate labels and counts; it does not display student details or correction values.
 
 **Undo last action** reverses the most recent action still applied and rechecks the restored file using the currently selected ruleset. Repeat Undo to work backwards. Undone entries remain visible in History, while the output file and fix reports include only corrections still applied. There is no Redo; review and apply the findings again if needed.
 

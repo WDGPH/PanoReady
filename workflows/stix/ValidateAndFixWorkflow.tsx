@@ -14,6 +14,7 @@ import IssuesView from "./validation/IssuesView";
 import RevalidateView from "./validation/RevalidateView";
 import AssessmentView from "./validation/AssessmentView";
 import ActionHistory from "./validation/ActionHistory";
+import styles from "./ValidateAndFixWorkflow.module.css";
 
 import RulesetSelector from "@/components/RulesetSelector";
 import WorkflowProgress from "./validation/WorkflowProgress";
@@ -128,22 +129,24 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
     if (target === 4) setState({ step: "revalidate", session });
     window.scrollTo({ top: 0 });
   };
-  return <>
+  return <div className={styles.workflow}>
     <WorkflowProgress canNavigate={canNavigate} onNavigate={navigate} stage={stage} />
-    {"session" in state && <ActionHistory history={state.session.history ?? []} disabled={applying || pendingChanges || state.step === "clean-summary"} onUndo={() => {
-      try {
-        const session = undoLastReviewAction(state.session);
-        const action = state.session.history?.findLast((entry) => entry.status === "applied");
-        setHistoryError(null);
-        setAnnouncement(`${action?.label} undone. Unapplied selections cleared.`);
-        setReviewRevision((revision) => revision + 1);
-        setState({ step: state.step === "manual" ? "manual" : "fix", session });
-      } catch {
-        setHistoryError("The last action could not be undone. Your file is unchanged.");
-      }
-    }} />}
     <p className="sr-only" role="status">{announcement}</p>
     {historyError && <p role="alert">{historyError}</p>}
-    {renderStep()}
-  </>;
+    <div className={styles.layout}>
+      {renderStep()}
+      {"session" in state && <ActionHistory history={state.session.history ?? []} disabled={applying || pendingChanges || state.step === "clean-summary"} onUndo={() => {
+        try {
+          const session = undoLastReviewAction(state.session);
+          const action = state.session.history?.findLast((entry) => entry.status === "applied");
+          setHistoryError(null);
+          setAnnouncement(`${action?.label} undone. Unapplied selections cleared.`);
+          setReviewRevision((revision) => revision + 1);
+          setState({ step: state.step === "manual" ? "manual" : "fix", session });
+        } catch {
+          setHistoryError("The last action could not be undone. Your file is unchanged.");
+        }
+      }} />}
+    </div>
+  </div>;
 }
