@@ -1,4 +1,5 @@
 "use client";
+import { isOenIdentityFinding } from "@/lib/identityRules";
 import WorkflowHeading from "@/components/WorkflowHeading";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import SeverityFilter from "@/components/SeverityFilter";
@@ -395,6 +396,8 @@ export default function FixView({
                           }} />
                           <SectionRemoval field={issue.field ?? "Guardian"} />
                         </label>
+                      ) : isOenIdentityFinding(issue.ruleId) ? (
+                        <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Review in the source system and upload a corrected file.</span>
                       ) : isIdentityReview(issue) ? (
                         <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Review in source</span>
                       ) : record && !issue.field ? (

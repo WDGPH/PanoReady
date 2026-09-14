@@ -5,6 +5,7 @@
  * Also provides helpers for applying fixes back to XML and exporting reports.
  */
 
+import { isOenIdentityFinding } from "./identityRules";
 import { standardizeUnit } from "./cleaner";
 import { normalizeCanadianPostalCode } from "./postalCode";
 import {
@@ -270,7 +271,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
     if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
   }
 
-  const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  const seenOens = new Map<string, { studentName: string; schoolId: string; schoolNumber: string; schoolName: string }[]>();
   const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
   const allowedByField = Object.fromEntries([
     "Grade", "Gender", "Province", "Language", "CountryOfOrigin", "StreetType", "StreetDirection",
@@ -358,14 +359,17 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       }
       if (fields.OEN) {
         if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
-        else if (rules.duplicateDetection.checkOen && seenOens.has(fields.OEN)) {
-          const prior = seenOens.get(fields.OEN)!;
-          if (prior.schoolNumber === school.schoolNumber) {
-            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}).` });
-          } else {
-            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment.` });
+        else if (rules.duplicateDetection.checkOen) {
+          const occurrences = seenOens.get(fields.OEN) ?? [];
+          const prior = occurrences.find((entry) => entry.schoolId === school.schoolId) ?? occurrences[0];
+          if (prior?.schoolId === school.schoolId) {
+            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}). Resolve the duplicate in the source system and upload a corrected file.` });
+          } else if (prior) {
+            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment in the source system.` });
           }
-        } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+          occurrences.push({ studentName, schoolId: school.schoolId, schoolNumber: school.schoolNumber, schoolName: school.name });
+          seenOens.set(fields.OEN, occurrences);
+        }
       }
       if (fields.PostalCode) {
         const finding = postalCodeFinding(fields.PostalCode, rules);
@@ -509,6 +513,7 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
   const removedSchools = new Set<number>();
   for (const fix of fixes) {
+    if (isOenIdentityFinding(fix.ruleId)) continue;
     if (fix.field === "RemoveSchool") {
       const schoolMatch = fix.recordId.match(/^school(\d+)$/);
       if (fix.newValue === "REMOVE" && schoolMatch) {
