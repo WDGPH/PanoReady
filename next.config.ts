@@ -23,9 +23,21 @@ const nextConfig: NextConfig = {
   basePath: isGitHubPages ? pagesBasePath : undefined,
   trailingSlash: isGitHubPages,
   assetPrefix: assetPrefix || undefined,
-  // Required when accessing `next dev` through a notebook/Jupyter proxy host.
-  // Include wildcard and `null` to support iframe/opaque origins used by some notebook proxies.
-  allowedDevOrigins: ["ai.wdgpublichealth.ca", "*.wdgpublichealth.ca", "null"],
+  // The workspace proxy strips assetPrefix, but Next's WebSocket handler
+  // expects it. Send the stripped HMR endpoint back with its full path.
+  ...(process.env.NODE_ENV === "development" && nbPrefix && !isGitHubPages
+    ? {
+        rewrites: async () => [
+          {
+            source: "/_next/hmr",
+            destination: `http://127.0.0.1:${APP_PORT}${assetPrefix}/_next/hmr`,
+          },
+        ],
+      }
+    : {}),
+  // Additional development proxy hosts; localhost remains allowed by Next.js.
+  // See docs/development.md when using a different proxy hostname.
+  allowedDevOrigins: ["*.wdgpublichealth.ca"],
 };
 
 export default nextConfig;
