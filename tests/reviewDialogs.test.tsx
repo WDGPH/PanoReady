@@ -49,4 +49,20 @@ describe("review dialogs", () => {
     expect(html).toContain("File / unassigned");
     expect(html).not.toContain("View student");
   });
+
+  it("keeps single-field manual corrections inline", () => {
+    const record = result.records[0];
+    const issue = { id: "single-field", recordId: record.id, field: "GuardianRelationship", ruleId: "GUARDIAN_RELATIONSHIP_REQUIRED", message: "Relationship required", severity: "error" as const, autoFixable: false };
+    const html = render("manual", { ...session, initialResult: { ...result, issues: [issue] } });
+    expect(html).toContain(`aria-label="GuardianRelationship for Student 1.1"`);
+    expect(html).not.toContain("Review and edit");
+  });
+
+  it.each(["OEN_DUPLICATE", "OEN_DUAL_ENROLLMENT", "NAME_DOB_DUPLICATE", "IDENTITY_REVIEW"])("keeps %s as source review", ruleId => {
+    const issue = { id: "identity-review", recordId: result.records[0].id, field: ruleId.startsWith("OEN_") ? "OEN" : undefined, ruleId, message: "Review identity", severity: "error" as const, autoFixable: false };
+    const html = render("manual", { ...session, initialResult: { ...result, issues: [issue] } });
+    expect(html).toContain("Review in source");
+    expect(html).not.toContain("Correct OEN");
+    expect(html).not.toContain("Review and edit");
+  });
 });
