@@ -17,6 +17,18 @@ npm run dev
 
 Open <http://localhost:3000>. The application uses the Next.js App Router and runs locally with webpack.
 
+In the workspace, open the port-3000 proxy. `next.config.ts` restores the proxy
+prefix for Next.js's development WebSocket endpoint so the page becomes
+interactive and live updates can connect. This rewrite only runs in development
+when `NB_PREFIX` is set.
+
+`allowedDevOrigins` in `next.config.ts` adds permission for WDGPH proxy hosts
+(`*.wdgpublichealth.ca`). Localhost development
+works without changes. For another proxy, add its hostname, such as
+`workspace.example.org`, to this list and restart `npm run dev`. Use the hostname
+only, without a scheme, port, or path. Open the app directly in a browser tab;
+opaque origins (`Origin: null`), such as sandboxed frames, are not allowed.
+
 ## Repository layout
 
 | Path | Purpose |
