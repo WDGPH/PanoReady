@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display, DM_Mono } from "next/font/google";
+import { Inter, DM_Mono, Patrick_Hand } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -8,9 +8,10 @@ const inter = Inter({
   display: "swap",
 });
 
-const playfair = Playfair_Display({
+const patrickHand = Patrick_Hand({
   subsets: ["latin"],
-  variable: "--font-serif",
+  weight: "400",
+  variable: "--font-title",
   display: "swap",
 });
 
@@ -33,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`h-full antialiased ${inter.variable} ${playfair.variable} ${dmMono.variable}`}>
+    <html lang="en" className={`h-full antialiased ${inter.variable} ${dmMono.variable} ${patrickHand.variable}`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

@@ -23,7 +23,7 @@ export default function StatCard({ label, value, sub, accent = "default" }: Prop
       <div style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-muted)", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
         {label}
       </div>
-      <div style={{ fontFamily: "var(--font-serif), Georgia, serif", color, fontSize: 26, fontWeight: 600, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-sans), sans-serif", color, fontSize: 26, fontWeight: 600, lineHeight: 1 }}>{value}</div>
       {sub && (
         <div style={{ color: "var(--color-text-muted)", fontSize: 12, marginTop: 6 }}>{sub}</div>
       )}
