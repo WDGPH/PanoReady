@@ -1,0 +1,11 @@
+# Keep this version aligned with @playwright/test in package.json.
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run e2e:build
+# Runtime starts only the exported-file server and tests; no build or installs.
+ENV E2E_PREBUILT=1
+ENV CI=true
+CMD ["npm", "run", "e2e"]

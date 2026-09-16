@@ -39,9 +39,28 @@ For documentation changes, also run:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-docs.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
 mkdocs build --strict
 ```
+
+The documentation dependency inputs are in `requirements-docs.in`; the generated
+`requirements-docs.txt` pins the full dependency set and package hashes. Dependabot
+checks these weekly. To regenerate the lock after editing the inputs, use Python 3.12:
+
+```bash
+uvx --python 3.12 --from pip-tools==7.6.1 pip-compile --generate-hashes --pip-args='--only-binary=:all:' --output-file=requirements-docs.txt requirements-docs.in
+```
+
+Review dependency changes before merging. Manual upgrades do not automatically
+apply Dependabot's seven-day cooldown.
+
+For workflow changes, run `uvx zizmor==1.30.1 --offline .github/workflows` locally.
+The **Workflow security / Audit GitHub Actions** CI check also runs online audits
+using a read-only token. Action references must use full commit SHAs with exact
+release tags in comments. Review the release and confirm the SHA belongs to its
+upstream tag when updating an action. Update the explicit zizmor `version` input
+alongside its action when upgrading the scanner; Dependabot updates the action
+reference but does not manage that input.
 
 ## Pull requests
 
