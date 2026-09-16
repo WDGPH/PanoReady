@@ -364,7 +364,7 @@ export default function DownloadView({
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
           <BarChart3 size={15} style={{ color: "var(--color-text-muted)" }} />
           <div>
-            <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Export Reports</div>
+            <div style={{ fontFamily: "var(--font-sans), sans-serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Export Reports</div>
             <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>
               CSV and Excel reports built from every student record in this file
             </div>
@@ -411,7 +411,7 @@ export default function DownloadView({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <SlidersHorizontal size={15} style={{ color: "var(--color-text-muted)" }} />
             <div>
-              <div style={{ fontFamily: "var(--font-serif), Georgia, serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Custom Report</div>
+              <div style={{ fontFamily: "var(--font-sans), sans-serif", fontWeight: 600, fontSize: 16, color: "var(--color-text-primary)" }}>Filter &amp; Custom Report</div>
               <div style={{ fontSize: 11.5, color: "var(--color-text-muted)", marginTop: 2 }}>
                 Narrow by school, grade, gender, or age — then download targeted CSVs
               </div>
