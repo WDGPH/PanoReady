@@ -1,0 +1,16 @@
+# Only maintained application sources and synthetic tests enter the image.
+**
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!postcss.config.mjs
+!tokens.css
+!playwright.config.ts
+!app/**
+!components/**
+!config/**
+!lib/**
+!workflows/**
+!public/**
+!e2e/**

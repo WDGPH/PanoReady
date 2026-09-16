@@ -16,13 +16,15 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "next build --webpack && next start --port 3000",
-    "dev:webpack": "next dev --webpack --port 3000",
+    "dev": "next dev --webpack --port 3000",
     "build": "next build --webpack",
     "start": "next start --port 3000",
     "lint": "eslint",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "test": "vitest run",
+    "e2e:build": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\" && GITHUB_PAGES=true npm run build",
+    "e2e": "playwright test",
+    "e2e:offline": "docker build -f Dockerfile.e2e -t panoready-e2e . && docker run --rm --init --network none --shm-size=1g panoready-e2e",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -43,6 +45,7 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
