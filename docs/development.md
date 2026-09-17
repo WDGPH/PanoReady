@@ -81,3 +81,14 @@ Add regression tests when changing data behaviour. UI changes also need a browse
 Run `npm audit` when updating dependencies and review the findings. Commit `package-lock.json` with dependency changes. See [release maintenance](releasing.md#dependency-maintenance) for the SheetJS distribution source.
 
 Read `AGENTS.md` and the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing framework code. Historical planning notes are kept in `notes/`, outside the published site. Private workbook inspection notes are excluded from Git and the documentation build.
+
+## Build version
+
+Local `npm run dev` and `npm run build` derive the visible version and eight-character
+commit SHA from Git, using the same highest reachable `vX.Y.Z` release tag as Pages.
+Commits beyond that tag show `+`. Uncommitted edits do not change the commit label.
+Restart the development server after changing commits or tags to refresh it.
+
+Without a reachable release tag the version reads `unversioned`; without Git metadata
+the SHA reads `unknown`. Builds from source archives can supply
+`NEXT_PUBLIC_BUILD_VERSION` and `NEXT_PUBLIC_BUILD_SHA` explicitly, as Pages does.
