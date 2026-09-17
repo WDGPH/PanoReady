@@ -17,18 +17,20 @@ import { issueTypeLabel, matchesReviewFilter, isExcludedFromReview } from "./ove
 import type { ReviewFilter, ReviewExclusion } from "./overview";
 
 function SectionRemoval({ field }: { field: string }) {
-  const name = guardianSectionForField(field) === "Guardian2" ? "Guardian 2" : "Guardian 1";
+  const name = field === "School" ? "empty school" : guardianSectionForField(field) === "Guardian2" ? "Guardian 2" : "Guardian 1";
   return <span className="fix-section-removal">
     <Trash2 size={17} aria-hidden="true" />
     <span><strong>Remove {name}</strong><span className="fix-removal-description">Entire empty section will be removed when applied.</span></span>
   </span>;
 }
 
-function FixValues({ changes }: {
-  changes: { field: string; currentValue: string; proposedValue: string }[];
+function FixValues({ changes, beforeLabel = "Before", afterLabel = "After" }: {
+  changes: { field: string; currentValue: string; proposedValue: ReactNode }[];
+  beforeLabel?: string;
+  afterLabel?: string;
 }) {
-  return <table className="fix-values" aria-label="Suggested field changes">
-    <thead><tr><th scope="col">Field</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
+  return <table className="fix-values" aria-label={afterLabel === "After" ? "Suggested field changes" : "Manual field review"}>
+    <thead><tr><th scope="col">Field</th><th scope="col">{beforeLabel}</th><th scope="col">{afterLabel}</th></tr></thead>
     <tbody>{changes.map(change => <tr key={change.field}>
       <th scope="row">{change.field.replace(/([a-z])([A-Z])/g, "$1 $2")}</th>
       <td>{change.currentValue}</td>
@@ -117,7 +119,7 @@ export default function FixView({
 
   const groups = [
     { label: "Automatic fixes", items: issues.filter(isAutomaticIssue), automatic: true },
-    { label: "Needs review", items: issues, automatic: false },
+    { label: "Needs review", items: issues.filter(issue => issue.ruleId !== "EMPTY_GUARDIAN"), automatic: false },
   ];
 
   const automaticCandidates = issues.filter(issue => isAutomaticIssue(issue) && issue.recordId && issue.field && (issue.repairProposal || issue.ruleId === "EMPTY_GUARDIAN" || issue.suggestedFix !== undefined));
@@ -288,7 +290,7 @@ export default function FixView({
       {/* Fix table */}
       <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
         <div style={{ overflowX: "auto" }}>
-          <PagedTable className={`data-table fix-table${group.automatic ? " fix-table--automatic" : ""}`} headerControls={{ 0: <SeverityFilter value={severityFilter} onChange={setSeverityFilter} /> }} pageActions={ids => <div className="autofix-page-actions">
+          <PagedTable className={`data-table fix-table${group.automatic ? " fix-table--automatic" : " fix-table--manual"}`} headerControls={{ 0: <SeverityFilter value={severityFilter} onChange={setSeverityFilter} /> }} pageActions={ids => <div className="autofix-page-actions">
             <button type="button" className="btn btn-secondary" disabled={!pendingCount} onClick={clearAll}>Clear all</button>
             {group.automatic && <div className="autofix-apply-actions">
             <button type="button" className="btn btn-secondary" disabled={!ids.length} onClick={() => selectAutomatic(automaticCandidates.filter(issue => ids.includes(issue.id)), ids)}>Select all on current page ({ids.length})</button>
@@ -301,9 +303,8 @@ export default function FixView({
                 <th className="fix-severity-column">Severity</th>
                 <th>Record</th>
                 <th>Issue</th>
-                {!group.automatic && <th>Field</th>}
-                <th className={group.automatic ? "fix-values-column" : undefined}>{group.automatic ? "Autofix" : "Current Value"}</th>
-                <th className={group.automatic ? "fix-selection-column" : undefined} data-sortable={false}>{group.automatic ? <span className="sr-only">Select</span> : "New Value"}</th>
+                <th className="fix-values-column" data-sortable={group.automatic}>{group.automatic ? "Autofix" : "Manual review"}</th>
+                {group.automatic && <th className="fix-selection-column" data-sortable={false}><span className="sr-only">Select</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -322,7 +323,7 @@ export default function FixView({
                 const changes = proposal?.changes ?? (issue.field ? [{
                   field: issue.field, currentValue, proposedValue: suggestedValue ?? currentValue,
                 }] : []);
-                const recordLabel = record ? studentReference(record) : "File / unassigned";
+                const recordLabel = record ? studentReference(record) : issue.ruleId === "EMPTY_STUDENTS" ? `School ${issue.schoolNumber || "(unnamed)"}` : "File / unassigned";
                 const selected = pending[issue.id] !== undefined;
                 const waveIndex = selectionWave.indexOf(issue.id);
                 const toggleSelection = () => {
@@ -331,63 +332,41 @@ export default function FixView({
                   if (selected) setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => id !== issue.id)));
                   else stageIssue(issue, suggestedValue);
                 };
-                return (
-                  <tr key={issue.id} data-row-id={issue.id} className={group.automatic ? `autofix-row${selected && waveIndex >= 0 ? " autofix-row--selecting" : ""}` : undefined} data-selected={group.automatic ? selected : undefined} onAnimationEnd={event => {
-                    if (event.animationName === "autofix-select-row" && waveIndex === selectionWave.length - 1) setSelectionWave([]);
-                  }} onClick={group.automatic ? event => {
-                    if ((event.target as HTMLElement).closest("button, input, label, a, select") || window.getSelection()?.toString()) return;
-                    toggleSelection();
-                  } : undefined} style={{ opacity: !record && !issue.field && !issue.repairProposal ? 0.5 : 1, "--selection-delay": `${Math.max(0, waveIndex) * 180 / Math.max(1, selectionWave.length - 1)}ms` } as CSSProperties}>
-                    <td data-sort-value={issue.severity === "error" ? 0 : issue.severity === "warning" ? 1 : 2}><SeverityBadge severity={issue.severity} /></td>
-                    <td className="fix-record-column" data-sort-value={recordLabel} style={{ fontSize: 12 }}>
-                      {record ? <StudentEntry record={record} /> : recordLabel}
-                    </td>
-                    <td style={{ fontSize: 12 }}>{issue.message}</td>
-                    {group.automatic ? [
-                      <td key="comparison" data-sort-value={changes.map(change => `${change.field}: ${change.currentValue}`).join(" · ")}>
-                        {isEmptyGuardian ? <SectionRemoval field={issue.field ?? "Guardian"} /> : <FixValues changes={changes} />}
-                      </td>,
-                      <td key="selection" className="fix-selection-column">
-                        <label className="fix-select-control" title={selected ? "Deselect fix" : "Select fix"}>
-                          <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={selected} disabled={suggestedValue === undefined} onChange={toggleSelection} />
-                        </label>
-                      </td>
-                    ] : [
-                    <td key="field" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>,
-                    <td key="before">
-                      {currentValue ? (
-                        <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
-                      ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
-                    </td>,
-                    <td key="after" style={{ minWidth: 200 }}>
-                      {isEmptySchool ? (
+                const draft = !group.automatic && record ? studentDraft(record) : {};
+                const reviewFields = proposal ? [...new Set([
+                  ...(issue.field ? [issue.field] : []),
+                  ...ADDRESS_REPAIR_FIELDS.filter(field => draft[field] !== undefined && draft[field] !== (record?.fields[field] ?? "")),
+                ])] : issue.field ? [issue.field] : Object.keys(draft);
+                const manualStaged = !isIdentityReview(issue) && Boolean(guardianRemoved || selected && (isEmptyGuardian || pending[issue.id] !== currentValue)
+                  || reviewFields.some(field => draft[field] !== undefined && draft[field] !== (record?.fields[field] ?? "")));
+                const manualControl = group.automatic ? null : (isEmptySchool ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <input type="checkbox" aria-label={`Remove empty school ${currentValue || issue.schoolNumber || "record"}`} checked={pending[issue.id] === "REMOVE"} onChange={event => {
+                          <input type="checkbox" aria-label={"Remove empty school " + (currentValue || issue.schoolNumber || "record")} checked={pending[issue.id] === "REMOVE"} onChange={event => {
                             setPending(current => event.target.checked ? { ...current, [issue.id]: "REMOVE" } : Object.fromEntries(Object.entries(current).filter(([id]) => id !== issue.id)));
                           }} />
-                          <span>Remove school from corrected export</span>
+                          <SectionRemoval field="School" />
                         </label>
                       ) : guardianRemoved ? (
-                        <span className="student-removal-notice">Removal staged <button type="button" className="btn btn-ghost" onClick={() => toggleGuardianRemoval(record, guardian, false)}>Undo removal</button></span>
-                      ) : proposal && record && !group.automatic ? (
-                        <button type="button" className="review-context-action" aria-label={`Review address for ${recordLabel}`} onClick={event => {
+                        <span className="student-removal-notice">Removal staged <button type="button" className="btn btn-secondary" onClick={() => toggleGuardianRemoval(record, guardian, false)}>Undo removal</button></span>
+                      ) : proposal && record ? (
+                        <button type="button" className="btn btn-secondary" aria-label={`Review address for ${recordLabel}`} onClick={event => {
                           addressTrigger.current = event.currentTarget;
                           setActiveAddressId(issue.id);
                         }}>{ADDRESS_REPAIR_FIELDS.some(field => studentDrafts[record.id]?.[field] !== undefined && studentDrafts[record.id][field] !== (record.fields[field] ?? "")) ? "Edit staged address" : "Review address"}</button>
-                      ) : group.automatic || isEmptyGuardian ? (
+                      ) : isEmptyGuardian ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={pending[issue.id] !== undefined} disabled={suggestedValue === undefined} onChange={event => {
                             if (event.target.checked) stageIssue(issue, suggestedValue!);
                             else setPending(p => Object.fromEntries(Object.entries(p).filter(([id]) => id !== issue.id)));
                           }} />
-                          <span>{proposal ? proposal.changes.map(change => `${change.field}: ${change.proposedValue || "(clear)"}`).join(" · ") : isEmptyGuardian ? <SectionRemoval field={issue.field ?? "Guardian"} /> : suggestedValue === "" ? "Clear value" : suggestedValue ?? "No automatic correction available"}</span>
+                          <SectionRemoval field={issue.field ?? "Guardian"} />
                         </label>
                       ) : isIdentityReview(issue) ? (
                         <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Review in source</span>
                       ) : record && !issue.field ? (
                         studentReview(record, issue)
                       ) : issue.field ? (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <div className="manual-field-controls">
                           {isGuardianRelationship ? (
                             <select
                               className="input"
@@ -405,25 +384,41 @@ export default function FixView({
                               aria-label={`Correct ${issue.field} for ${recordLabel}`}
                               value={pendingVal}
                               onChange={e => stageIssue(issue, e.target.value)}
-                              placeholder="Enter corrected value…"
+                              placeholder="New value…"
                               style={{ fontSize: 12, padding: "5px 8px" }}
                             />
-                          )}
-                          {issue.field.includes("Phone") && (
-                            <button
-                              type="button"
-                              onClick={() => stageIssue(issue, "")}
-                              className="btn btn-ghost"
-                              style={{ fontSize: 11, padding: "4px 7px", whiteSpace: "nowrap" as const }}
-                            >
-                              Clear value
-                            </button>
                           )}
                         </div>
                       ) : (
                         <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>No field — review manually</span>
-                      )}
+                      ));
+                return (
+                  <tr key={issue.id} data-row-id={issue.id} className={group.automatic ? `autofix-row${selected && waveIndex >= 0 ? " autofix-row--selecting" : ""}` : undefined} data-selected={group.automatic ? selected : undefined} data-staged={!group.automatic ? manualStaged : undefined} onAnimationEnd={event => {
+                    if (event.animationName === "autofix-select-row" && waveIndex === selectionWave.length - 1) setSelectionWave([]);
+                  }} onClick={group.automatic ? event => {
+                    if ((event.target as HTMLElement).closest("button, input, label, a, select") || window.getSelection()?.toString()) return;
+                    toggleSelection();
+                  } : undefined} style={{ opacity: !record && !issue.field && !issue.repairProposal ? 0.5 : 1, "--selection-delay": `${Math.max(0, waveIndex) * 180 / Math.max(1, selectionWave.length - 1)}ms` } as CSSProperties}>
+                    <td data-sort-value={issue.severity === "error" ? 0 : issue.severity === "warning" ? 1 : 2}><SeverityBadge severity={issue.severity} /></td>
+                    <td className="fix-record-column" data-sort-value={recordLabel} style={{ fontSize: 12 }}>
+                      {record ? <StudentEntry record={record} /> : recordLabel}
                     </td>
+                    <td style={{ fontSize: 12 }}>{issue.message}</td>
+                    {group.automatic ? [
+                      <td key="comparison" data-sort-value={changes.map(change => `${change.field}: ${change.currentValue}`).join(" · ")}>
+                        {isEmptyGuardian || issue.ruleId === "EMPTY_STUDENTS" ? <SectionRemoval field={issue.field ?? "Guardian"} /> : <FixValues changes={changes} />}
+                      </td>,
+                      <td key="selection" className="fix-selection-column">
+                        <label className="fix-select-control" title={selected ? "Deselect fix" : "Select fix"}>
+                          <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={selected} disabled={suggestedValue === undefined} onChange={toggleSelection} />
+                        </label>
+                      </td>
+                    ] : [
+                      <td key="review" className={`manual-review-cell${proposal && record ? " manual-review-cell--address" : ""}`}>
+                        {proposal && record ? manualControl : issue.field && !isEmptyGuardian && !guardianRemoved ?
+                          <FixValues beforeLabel="Current" afterLabel="Edit" changes={[{ field: issue.field, currentValue, proposedValue: manualControl }]} />
+                          : manualControl}
+                      </td>
                     ]}
                   </tr>
                 );

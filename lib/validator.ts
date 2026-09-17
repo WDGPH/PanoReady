@@ -61,9 +61,9 @@ function issue(
   issues: ValidationIssue[],
   value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
 ) {
-  const autoFixable = value.repairProposal
+  const autoFixable = value.autoFixable ?? (value.repairProposal
     ? value.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
-    : value.suggestedFix !== undefined || (value.autoFixable ?? false);
+    : value.suggestedFix !== undefined);
   issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, ...value, autoFixable });
 }
 
@@ -478,7 +478,10 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   for (const fix of fixes) {
     if (fix.field === "RemoveSchool") {
       const schoolMatch = fix.recordId.match(/^school(\d+)$/);
-      if (fix.newValue === "REMOVE" && schoolMatch) removedSchools.add(Number(schoolMatch[1]));
+      if (fix.newValue === "REMOVE" && schoolMatch) {
+        const index = Number(schoolMatch[1]);
+        if (upload.schools[index]?.students.length === 0) removedSchools.add(index);
+      }
       continue;
     }
     if (fix.recordId === "metadata") {

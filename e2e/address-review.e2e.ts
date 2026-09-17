@@ -46,6 +46,7 @@ test("address reviews navigate between students and retain drafts", async ({ pag
   await footer.getByRole("button", { name: "1 field change staged — back to fixes", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
+  await expect(trigger.locator("xpath=ancestor::tr[@data-row-id]")).toHaveAttribute("data-staged", "true");
   await trigger.click();
   await expect(street).toHaveValue("42");
   for (let i = 1; i < 30; i++) await footer.getByRole("button", { name: "Next address", exact: true }).click();

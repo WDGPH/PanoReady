@@ -365,3 +365,22 @@ test("removes a populated first guardian while applying edits to the second guar
   assert.equal(fixed.schools[0].students[0].guardians.length, 1);
   assert.equal(fixed.schools[0].students[0].guardians[0].name.first, "Retained");
 });
+
+test("manual empty-school removal preserves populated schools and same-batch student edits", () => {
+  const source = xml().replace("</Metadata>", '</Metadata><School><SchoolNumber>EMPTY</SchoolNumber><Name>Empty</Name><Students/></School>');
+  const result = validateXml(source);
+  const removal = result.issues.find(issue => issue.ruleId === "EMPTY_STUDENTS")!;
+  assert.equal(removal.autoFixable, false);
+  const fix = {
+    issueId: removal.id, recordId: removal.recordId!, field: "RemoveSchool",
+    oldValue: removal.currentValue ?? "", newValue: "REMOVE", ruleId: removal.ruleId, appliedAt: 0,
+  };
+  const output = applyValidationFixes(source, [fix, {
+    issueId: "edit", recordId: result.records[0].id, field: "City", oldValue: "Guelph", newValue: "Toronto", ruleId: "MANUAL", appliedAt: 0,
+  }]);
+  const upload = parseCanonicalXml(output);
+  assert.equal(upload.schools.length, 1);
+  assert.equal(validateXml(output).records[0].fields.City, "Toronto");
+  const populatedRemoval = { ...fix, recordId: "school1" };
+  assert.equal(parseCanonicalXml(applyValidationFixes(source, [populatedRemoval])).schools.length, 2);
+});

@@ -16,7 +16,7 @@ const session: ValidateSession = {
 };
 const noop = () => {};
 
-it.each(["automatic", "manual"] as const)("shows individually selectable Guardian removals in the %s table", view => {
+it.each(["automatic"] as const)("shows individually selectable Guardian removals in the %s table", view => {
   const html = renderToStaticMarkup(<FixView session={session} view={view} onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
   expect(html).toContain('data-row-id="guardian-0"');
   expect(html).toContain('data-row-id="guardian-24"');
@@ -29,4 +29,10 @@ it.each(["automatic", "manual"] as const)("shows individually selectable Guardia
     expect(html).toContain('Select all on current page (25)');
     expect(html).toContain('Select all across all pages (27)');
   }
+});
+
+it("keeps structural deletions out of manual review", () => {
+  const html = renderToStaticMarkup(<FixView session={session} view="manual" onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
+  expect(html).not.toContain('data-row-id="guardian-0"');
+  expect(html).not.toContain("Remove Guardian");
 });
