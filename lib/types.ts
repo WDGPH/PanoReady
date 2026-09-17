@@ -286,6 +286,8 @@ export type ImportPreview = {
 };
 
 export type ValidateSession = {
+  /** Applied batches in review order, including actions subsequently undone. */
+  history?: ReviewAction[];
   /** Number of audit entries already reflected in finalXml. */
   appliedFixCount?: number;
   fileName: string;
@@ -295,4 +297,11 @@ export type ValidateSession = {
   validationRules?: RulesProfile;
   revalidatedResult?: ValidationResult;
   finalXml?: string;
+};
+
+export type ReviewAction = {
+  id: string;
+  label: "Automatic fixes" | "Manual fixes" | "Cleaning mappings";
+  changes: AppliedFix[];
+  status: "applied" | "undone";
 };

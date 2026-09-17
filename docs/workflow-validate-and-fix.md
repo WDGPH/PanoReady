@@ -11,6 +11,16 @@ Use this workflow when you need to:
 
 ## Step-by-Step Flow
 
+### Review history and Undo
+
+**Save progress** below the right-hand navigation button downloads unencrypted `_in_progress.xml` containing the current file and applied corrections, including unresolved issues. Upload it through normal intake to continue with a fresh assessment. Unapplied edits, cleaning previews, ruleset settings, exclusions and Undo history are not saved. Nothing is saved automatically; encrypted ZIP output remains available on the Output page.
+
+**History** opens from the right edge as a drawer, closed by default, without reserving space beside the centred review tables. Use the History control to open it and the close button, Escape, or the shaded area outside to close it. After applying corrections, it lists each automatic-fix batch, manual-fix submission, and confirmed cleaning mapping batch with its number of field changes. Address corrections submitted together stay in the same action. History shows aggregate labels and counts; it does not display student details or correction values.
+
+**Undo last action** reverses the most recent action still applied and rechecks the restored file using the currently selected ruleset. Repeat Undo to work backwards. Undone entries remain visible in History, while the output file and fix reports include only corrections still applied. There is no Redo; review and apply the findings again if needed.
+
+Undo returns to the fixes view and clears unapplied selections and address drafts so they cannot target findings from the previous file state. It is unavailable while corrections are being applied or a cleaning summary is awaiting confirmation. Ruleset choices and review exclusions are not undone. History belongs to the current review and is cleared when you start over or reload.
+
 ### Step 0 — Select rules and import
 
 Select **Validate & Fix**, choose the validation ruleset, and then drop or select a STIX XML or `.xlsm` workbook. Click **Validate & Fix** to process it.
