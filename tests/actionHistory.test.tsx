@@ -10,22 +10,24 @@ const action: ReviewAction = {
   changes: [{ issueId: "finding", recordId: "student", field: "City", oldValue: "Private old value", newValue: "Private new value", ruleId: "test", appliedAt: 1 }],
 };
 
-it("shows aggregate history without exposing correction values or record identifiers", () => {
+it("starts with only the history trigger and no correction data", () => {
   const html = renderToStaticMarkup(<ActionHistory history={[action]} disabled={false} onUndo={noop} />);
   expect(html).toContain("History (1)");
-  expect(html).toContain("Manual fixes (1)");
-  expect(html).toContain("Undo last action");
+  expect(html).not.toContain("Manual fixes (1)");
+  expect(html).not.toContain("Undo last action");
+  expect(html).toContain('aria-expanded="false"');
   expect(html).not.toContain("Private");
   expect(html).not.toContain("student");
   expect(html).not.toContain("disabled");
 });
 
-it("hides empty history and disables undo when busy or all actions are undone", () => {
+it("hides empty history and keeps history accessible while busy or after undo", () => {
   expect(renderToStaticMarkup(<ActionHistory history={[]} disabled={false} onUndo={noop} />)).toBe("");
-  expect(renderToStaticMarkup(<ActionHistory history={[action]} disabled onUndo={noop} />)).toContain("disabled");
-  const html = renderToStaticMarkup(<ActionHistory history={[{ ...action, status: "undone" }]} disabled={false} onUndo={noop} />);
-  expect(html).toContain("Undone");
-  expect(html).toContain("disabled");
+  for (const entry of [action, { ...action, status: "undone" as const }]) {
+    const html = renderToStaticMarkup(<ActionHistory history={[entry]} disabled onUndo={noop} />);
+    expect(html).toContain("History (1)");
+    expect(html).not.toContain("disabled");
+  }
 });
 
 it("uses indeterminate progress until the parent has a committed recheck result", () => {
