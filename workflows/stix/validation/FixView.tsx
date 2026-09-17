@@ -258,12 +258,12 @@ export default function FixView({
           <PagedTable className="data-table" headerControls={{ 0: <select className="input table-header-filter" aria-label="Filter severity" value={severityFilter} onChange={event => setSeverityFilter(event.target.value as typeof severityFilter)}>
             <option value="all">All severities</option><option value="error">Errors only</option><option value="warning">Warnings only</option><option value="info">Info only</option>
           </select> }} pageActions={ids => <div className="autofix-page-actions">
-            <button type="button" className="btn btn-ghost" disabled={!pendingCount} onClick={clearAll}>Clear all</button>
-            {group.automatic && <>
-            <button type="button" className="btn btn-primary" disabled={!automaticSelectedCount} onClick={() => applyAutomatic(automaticCandidates.filter(issue => pending[issue.id] !== undefined))}>Apply selected ({automaticSelectedCount})</button>
+            <button type="button" className="btn btn-secondary" disabled={!pendingCount} onClick={clearAll}>Clear all</button>
+            {group.automatic && <div className="autofix-apply-actions">
+            <button type="button" className="btn btn-secondary" disabled={!automaticSelectedCount} onClick={() => applyAutomatic(automaticCandidates.filter(issue => pending[issue.id] !== undefined))}>Apply selected ({automaticSelectedCount})</button>
             <button type="button" className="btn btn-secondary" disabled={!ids.length} onClick={() => applyAutomatic(automaticCandidates.filter(issue => ids.includes(issue.id)))}>Apply all on current page ({ids.length})</button>
-            <button type="button" className="btn btn-primary" disabled={!automaticCandidates.some(issue => severityFilter === "all" || issue.severity === severityFilter)} onClick={() => applyAutomatic(automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter))}><Wand2 size={18} /> Apply all across all pages ({automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter).length})</button>
-            </>}
+            <button type="button" className="btn btn-secondary" disabled={!automaticCandidates.some(issue => severityFilter === "all" || issue.severity === severityFilter)} onClick={() => applyAutomatic(automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter))}><Wand2 size={18} /> Apply all across all pages ({automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter).length})</button>
+            </div>}
           </div>}>
             <thead>
               <tr>
