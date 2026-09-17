@@ -1255,6 +1255,10 @@ h1, h2, h3 {
 
 
 .workflow-navigation { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; text-align: left; }
+.workflow-navigation-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.save-progress { background: transparent; color: var(--color-text-secondary); padding: 4px 0; }
+.save-progress:hover:not(:disabled) { color: var(--color-text-primary); text-decoration: underline; text-underline-offset: 3px; }
+.save-progress:disabled { opacity: .4; cursor: default; }
 .fix-operation > .workflow-navigation { max-width: var(--page-width); margin-left: auto; margin-right: auto; }
 .table-header-filter { display: block; margin-top: 8px; width: 150px; min-width: 150px; padding: 6px 8px; font-size: 12px; font-weight: 400; letter-spacing: normal; text-transform: none; }
 
