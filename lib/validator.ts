@@ -61,7 +61,10 @@ function issue(
   issues: ValidationIssue[],
   value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
 ) {
-  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, autoFixable: value.autoFixable ?? false, ...value });
+  const autoFixable = value.repairProposal
+    ? value.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
+    : value.suggestedFix !== undefined || (value.autoFixable ?? false);
+  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, ...value, autoFixable });
 }
 
 function validRealDate(value: string): boolean {

@@ -1330,3 +1330,66 @@ h1, h2, h3 {
 .student-dialog-header { align-items: center; margin-bottom: 16px; }
 .student-dialog-header h2 { margin: 0; padding: 6px 12px; border-radius: 6px; background: var(--color-surface-2); color: var(--color-text-primary); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .student-dialog-header > span { font-size: 12px; color: var(--color-text-muted); }
+
+.fix-table .fix-severity-column { width: 108px; white-space: nowrap; }
+.fix-table .fix-record-column, .fix-table .fix-record-column .review-context-action { white-space: nowrap; }
+.fix-table--automatic .fix-values-column { width: 46%; min-width: 360px; }
+.fix-table--automatic > tbody > tr > td { padding: 6px 12px; line-height: 1.45; transition: background-color 140ms ease; }
+.fix-table .fix-selection-column { width: 48px; padding-left: 4px; padding-right: 8px; }
+.fix-values { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; line-height: 1.4; }
+.fix-table .fix-values th, .fix-table .fix-values td { padding: 3px 8px; border: 0; background: transparent; text-align: left; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fix-table .fix-values th { color: var(--color-text-secondary); font-family: var(--font-sans), sans-serif; font-weight: 500; letter-spacing: normal; text-transform: none; font-size: 11.5px; }
+.fix-table .fix-values thead th { padding-bottom: 4px; font-size: 11px; font-weight: 600; }
+.fix-table .fix-values td { color: var(--color-text-primary); }
+.fix-table > tbody > .autofix-row:hover > td { background: var(--color-surface-2); }
+.fix-table > tbody > .autofix-row:hover .fix-values th,
+.fix-table > tbody > .autofix-row:hover .fix-values td { background: transparent; }
+.autofix-row { cursor: pointer; }
+.fix-table > tbody > .autofix-row[data-selected="true"] > td { background: var(--color-surface-2); }
+.fix-select-control { display: grid; place-items: center; min-width: 40px; min-height: 40px; border-radius: 6px; cursor: pointer; }
+.fix-select-control:hover { background: var(--color-surface-2); }
+.fix-controls .fix-select-control input[type="checkbox"] { width: 24px; height: 24px; border-radius: 6px; transition: background-color 140ms ease, transform 140ms ease; }
+.fix-select-control:active input { transform: scale(.88); }
+@media (prefers-reduced-motion: reduce) {
+  .fix-table--automatic > tbody > tr > td, .fix-controls .fix-select-control input[type="checkbox"] { transition: none; }
+  .fix-select-control:active input { transform: none; }
+}
+
+.severity-filter-trigger { display: inline-flex; vertical-align: middle; padding: 5px; margin-left: 3px; border: 0; border-radius: 3px; background: transparent; color: var(--color-text-muted); cursor: pointer; }
+.severity-filter-trigger:hover, .severity-filter-trigger[data-active="true"] { background: var(--color-surface-2); color: var(--color-text-primary); }
+.severity-filter-trigger[data-active="true"] { box-shadow: inset 0 -2px var(--color-brand-400); }
+.severity-filter-popup { position: fixed; margin: 0; padding: 12px; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-surface-1); color: var(--color-text-primary); box-shadow: 0 8px 24px #0002; text-transform: none; letter-spacing: normal; font-weight: 400; }
+.severity-filter-popup input { accent-color: var(--color-brand-400); }
+.severity-filter-popup fieldset { border: 0; padding: 0; margin: 0; }
+.severity-filter-popup legend { font-size: 11px; font-weight: 600; margin-bottom: 8px; }
+.severity-filter-popup label { display: flex; align-items: center; gap: 9px; padding: 7px 5px; font-size: 12px; cursor: pointer; }
+.severity-filter-popup label:hover { background: var(--color-surface-2); }
+
+.fix-section-removal { display: flex; align-items: flex-start; gap: 10px; padding: 8px; }
+.fix-section-removal > svg { margin-top: 2px; color: var(--color-text-secondary); flex-shrink: 0; }
+.fix-section-removal strong { display: block; font-size: 12px; font-weight: 600; }
+.fix-section-removal .fix-removal-description { display: block; margin-top: 3px; color: var(--color-text-muted); font-size: 11px; }
+
+.fix-table .fix-values thead th { border-bottom: 1px solid var(--color-border); }
+.fix-table .fix-values tbody > tr + tr > th,
+.fix-table .fix-values tbody > tr + tr > td { border-top: 1px solid var(--color-border); }
+.fix-table .fix-values tbody th, .fix-table .fix-values tbody td { padding-top: 4px; padding-bottom: 4px; }
+
+.fix-table--automatic { --severity-font: var(--font-sans), sans-serif; --severity-tracking: normal; }
+.fix-table--automatic > thead > tr > th { padding: 8px 12px; font-family: var(--font-sans), sans-serif; font-size: 12px; font-weight: 600; letter-spacing: normal; text-transform: none; color: var(--color-text-secondary); }
+.fix-table--automatic .fix-record-column { width: 112px; }
+.fix-table .fix-values tbody td:first-of-type { color: var(--color-text-secondary); }
+.fix-table .fix-values tbody td:last-of-type { font-weight: 500; }
+.fix-table--automatic .fix-section-removal { padding: 4px 8px; }
+
+.autofix-row--selecting > td { animation: autofix-select-row 120ms ease-out var(--selection-delay) backwards; }
+.fix-controls .autofix-row--selecting .fix-select-control input:checked { animation: autofix-select-check 120ms ease-out var(--selection-delay) backwards; }
+.fix-controls .autofix-row--selecting .fix-select-control input:checked::after { animation: autofix-select-mark 120ms ease-out var(--selection-delay) backwards; }
+@keyframes autofix-select-row { from { background: var(--color-surface-1); } to { background: var(--color-surface-2); } }
+@keyframes autofix-select-check { from { background: var(--color-surface-1); transform: scale(.9); } to { background: var(--verde); transform: scale(1); } }
+@keyframes autofix-select-mark { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .autofix-row--selecting > td,
+  .fix-controls .autofix-row--selecting .fix-select-control input:checked,
+  .fix-controls .autofix-row--selecting .fix-select-control input:checked::after { animation: none; }
+}

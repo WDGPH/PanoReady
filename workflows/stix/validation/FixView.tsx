@@ -1,10 +1,11 @@
 "use client";
 import WorkflowHeading from "@/components/WorkflowHeading";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
+import SeverityFilter from "@/components/SeverityFilter";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
-import { type ReactNode, useRef, useState } from "react";
-import { Wand2, CheckCircle2 } from "lucide-react";
+import { type CSSProperties, type ReactNode, useRef, useState } from "react";
+import { Wand2, CheckCircle2, Trash2 } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { guardianSectionForField } from "@/lib/fields";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
@@ -14,6 +15,27 @@ import { automaticFixes, isAutomaticIssue } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
 import { issueTypeLabel, matchesReviewFilter, isExcludedFromReview } from "./overview";
 import type { ReviewFilter, ReviewExclusion } from "./overview";
+
+function SectionRemoval({ field }: { field: string }) {
+  const name = guardianSectionForField(field) === "Guardian2" ? "Guardian 2" : "Guardian 1";
+  return <span className="fix-section-removal">
+    <Trash2 size={17} aria-hidden="true" />
+    <span><strong>Remove {name}</strong><span className="fix-removal-description">Entire empty section will be removed when applied.</span></span>
+  </span>;
+}
+
+function FixValues({ changes }: {
+  changes: { field: string; currentValue: string; proposedValue: string }[];
+}) {
+  return <table className="fix-values" aria-label="Suggested field changes">
+    <thead><tr><th scope="col">Field</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
+    <tbody>{changes.map(change => <tr key={change.field}>
+      <th scope="row">{change.field.replace(/([a-z])([A-Z])/g, "$1 $2")}</th>
+      <td>{change.currentValue}</td>
+      <td>{change.proposedValue}</td>
+    </tr>)}</tbody>
+  </table>;
+}
 
 const identityReviewFields: Record<string, string[]> = {
   OEN_DUPLICATE: ["OEN"],
@@ -62,6 +84,7 @@ export default function FixView({
 
   // pending: issueId → new value. A present empty value is an intentional removal.
   const [pending, setPending] = useState<Record<string, string>>({});
+  const [selectionWave, setSelectionWave] = useState<string[]>([]);
   const [operation, setOperation] = useState<{ phase: "applying" | "done"; count: number } | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [studentDrafts, setStudentDrafts] = useState<Record<string, Record<string, string>>>({});
@@ -98,6 +121,14 @@ export default function FixView({
   ];
 
   const automaticCandidates = issues.filter(issue => isAutomaticIssue(issue) && issue.recordId && issue.field && (issue.repairProposal || issue.ruleId === "EMPTY_GUARDIAN" || issue.suggestedFix !== undefined));
+  const selectAutomatic = (candidates: ValidationIssue[], visibleIds: string[]) => {
+    const values = Object.fromEntries(candidates.map(issue => [issue.id,
+      issue.ruleId === "EMPTY_GUARDIAN" ? "" : issue.suggestedFix
+        ?? issue.repairProposal!.changes.find(change => change.proposedValue !== change.currentValue)!.proposedValue,
+    ]));
+    setSelectionWave(visibleIds.filter(id => id in values && pending[id] === undefined));
+    setPending(current => ({ ...current, ...values }));
+  };
   const applyAutomatic = async (candidates: ValidationIssue[]) => {
     if (operation || !candidates.length) return;
     const batch = candidates.flatMap(issue => automaticFixes(issue, records, Date.now()));
@@ -108,6 +139,7 @@ export default function FixView({
     try {
       await new Promise(resolve => window.setTimeout(resolve, 120));
       onAutoApply(batch);
+      setSelectionWave([]);
       setPending({});
       setOperation({ phase: "done", count: batch.length });
       // Hold completed feedback briefly; never finish before processing does.
@@ -173,6 +205,7 @@ export default function FixView({
   };
 
   const clearAll = () => {
+    setSelectionWave([]);
     setPending({});
     setStudentDrafts({});
   };
@@ -255,24 +288,22 @@ export default function FixView({
       {/* Fix table */}
       <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
         <div style={{ overflowX: "auto" }}>
-          <PagedTable className="data-table" headerControls={{ 0: <select className="input table-header-filter" aria-label="Filter severity" value={severityFilter} onChange={event => setSeverityFilter(event.target.value as typeof severityFilter)}>
-            <option value="all">All severities</option><option value="error">Errors only</option><option value="warning">Warnings only</option><option value="info">Info only</option>
-          </select> }} pageActions={ids => <div className="autofix-page-actions">
+          <PagedTable className={`data-table fix-table${group.automatic ? " fix-table--automatic" : ""}`} headerControls={{ 0: <SeverityFilter value={severityFilter} onChange={setSeverityFilter} /> }} pageActions={ids => <div className="autofix-page-actions">
             <button type="button" className="btn btn-secondary" disabled={!pendingCount} onClick={clearAll}>Clear all</button>
             {group.automatic && <div className="autofix-apply-actions">
-            <button type="button" className="btn btn-secondary" disabled={!automaticSelectedCount} onClick={() => applyAutomatic(automaticCandidates.filter(issue => pending[issue.id] !== undefined))}>Apply selected ({automaticSelectedCount})</button>
-            <button type="button" className="btn btn-secondary" disabled={!ids.length} onClick={() => applyAutomatic(automaticCandidates.filter(issue => ids.includes(issue.id)))}>Apply all on current page ({ids.length})</button>
-            <button type="button" className="btn btn-secondary" disabled={!automaticCandidates.some(issue => severityFilter === "all" || issue.severity === severityFilter)} onClick={() => applyAutomatic(automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter))}><Wand2 size={18} /> Apply all across all pages ({automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter).length})</button>
+            <button type="button" className="btn btn-secondary" disabled={!ids.length} onClick={() => selectAutomatic(automaticCandidates.filter(issue => ids.includes(issue.id)), ids)}>Select all on current page ({ids.length})</button>
+            <button type="button" className="btn btn-secondary" disabled={!automaticCandidates.some(issue => severityFilter === "all" || issue.severity === severityFilter)} onClick={() => selectAutomatic(automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter), ids)}>Select all across all pages ({automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter).length})</button>
+            <button type="button" className="btn btn-secondary" disabled={!automaticSelectedCount} onClick={() => applyAutomatic(automaticCandidates.filter(issue => pending[issue.id] !== undefined))}><Wand2 size={16} aria-hidden="true" /> Apply selected ({automaticSelectedCount})</button>
             </div>}
           </div>}>
             <thead>
               <tr>
-                <th style={{ width: 178 }}>Severity</th>
+                <th className="fix-severity-column">Severity</th>
                 <th>Record</th>
                 <th>Issue</th>
-                <th>Field</th>
-                <th>Current Value</th>
-                <th data-sortable={false}>New Value</th>
+                {!group.automatic && <th>Field</th>}
+                <th className={group.automatic ? "fix-values-column" : undefined}>{group.automatic ? "Autofix" : "Current Value"}</th>
+                <th className={group.automatic ? "fix-selection-column" : undefined} data-sortable={false}>{group.automatic ? <span className="sr-only">Select</span> : "New Value"}</th>
               </tr>
             </thead>
             <tbody>
@@ -281,32 +312,58 @@ export default function FixView({
                 const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                 const isEmptyGuardian = issue.ruleId === "EMPTY_GUARDIAN";
                 const isEmptySchool = issue.ruleId === "EMPTY_STUDENTS";
-                const suggestedValue = isEmptyGuardian ? "" : issue.suggestedFix;
+                const suggestedValue = isEmptyGuardian ? "" : issue.suggestedFix ?? issue.repairProposal?.changes.find(change => change.proposedValue !== change.currentValue)?.proposedValue;
                 const pendingVal = (record && issue.field ? studentDrafts[record.id]?.[issue.field] : undefined) ?? pending[issue.id] ?? "";
                 const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
                 const guardian = guardianSectionForField(issue.field ?? "");
                 const guardianRemoved = record && guardian && studentDrafts[record.id]?.[guardian] === "";
 
                 const proposal = issue.repairProposal;
+                const changes = proposal?.changes ?? (issue.field ? [{
+                  field: issue.field, currentValue, proposedValue: suggestedValue ?? currentValue,
+                }] : []);
                 const recordLabel = record ? studentReference(record) : "File / unassigned";
+                const selected = pending[issue.id] !== undefined;
+                const waveIndex = selectionWave.indexOf(issue.id);
+                const toggleSelection = () => {
+                  setSelectionWave([]);
+                  if (suggestedValue === undefined) return;
+                  if (selected) setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => id !== issue.id)));
+                  else stageIssue(issue, suggestedValue);
+                };
                 return (
-                  <tr key={issue.id} data-row-id={issue.id} style={{ opacity: !record && !issue.field && !issue.repairProposal ? 0.5 : 1 }}>
+                  <tr key={issue.id} data-row-id={issue.id} className={group.automatic ? `autofix-row${selected && waveIndex >= 0 ? " autofix-row--selecting" : ""}` : undefined} data-selected={group.automatic ? selected : undefined} onAnimationEnd={event => {
+                    if (event.animationName === "autofix-select-row" && waveIndex === selectionWave.length - 1) setSelectionWave([]);
+                  }} onClick={group.automatic ? event => {
+                    if ((event.target as HTMLElement).closest("button, input, label, a, select") || window.getSelection()?.toString()) return;
+                    toggleSelection();
+                  } : undefined} style={{ opacity: !record && !issue.field && !issue.repairProposal ? 0.5 : 1, "--selection-delay": `${Math.max(0, waveIndex) * 180 / Math.max(1, selectionWave.length - 1)}ms` } as CSSProperties}>
                     <td data-sort-value={issue.severity === "error" ? 0 : issue.severity === "warning" ? 1 : 2}><SeverityBadge severity={issue.severity} /></td>
-                    <td data-sort-value={recordLabel} style={{ fontSize: 12 }}>
+                    <td className="fix-record-column" data-sort-value={recordLabel} style={{ fontSize: 12 }}>
                       {record ? <StudentEntry record={record} /> : recordLabel}
                     </td>
                     <td style={{ fontSize: 12 }}>{issue.message}</td>
-                    <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>
-                    <td>
+                    {group.automatic ? [
+                      <td key="comparison" data-sort-value={changes.map(change => `${change.field}: ${change.currentValue}`).join(" · ")}>
+                        {isEmptyGuardian ? <SectionRemoval field={issue.field ?? "Guardian"} /> : <FixValues changes={changes} />}
+                      </td>,
+                      <td key="selection" className="fix-selection-column">
+                        <label className="fix-select-control" title={selected ? "Deselect fix" : "Select fix"}>
+                          <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={selected} disabled={suggestedValue === undefined} onChange={toggleSelection} />
+                        </label>
+                      </td>
+                    ] : [
+                    <td key="field" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{issue.field || <span style={{ color: "var(--color-text-muted)", fontFamily: "inherit" }}>—</span>}</td>,
+                    <td key="before">
                       {currentValue ? (
                         <code style={{ background: "var(--color-surface-2)", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>{currentValue}</code>
                       ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
-                    </td>
-                    <td style={{ minWidth: 200 }}>
+                    </td>,
+                    <td key="after" style={{ minWidth: 200 }}>
                       {isEmptySchool ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" aria-label={`Remove empty school ${currentValue || issue.schoolNumber || "record"}`} checked={pending[issue.id] === "REMOVE"} onChange={event => {
-                            setPending(p => event.target.checked ? { ...p, [issue.id]: "REMOVE" } : Object.fromEntries(Object.entries(p).filter(([id]) => id !== issue.id)));
+                            setPending(current => event.target.checked ? { ...current, [issue.id]: "REMOVE" } : Object.fromEntries(Object.entries(current).filter(([id]) => id !== issue.id)));
                           }} />
                           <span>Remove school from corrected export</span>
                         </label>
@@ -323,7 +380,7 @@ export default function FixView({
                             if (event.target.checked) stageIssue(issue, suggestedValue!);
                             else setPending(p => Object.fromEntries(Object.entries(p).filter(([id]) => id !== issue.id)));
                           }} />
-                          <span>{proposal ? proposal.changes.map(change => `${change.field}: ${change.proposedValue || "(clear)"}`).join(" · ") : isEmptyGuardian ? "Remove empty Guardian placeholder" : suggestedValue === "" ? "Clear value" : suggestedValue ?? "No automatic correction available"}</span>
+                          <span>{proposal ? proposal.changes.map(change => `${change.field}: ${change.proposedValue || "(clear)"}`).join(" · ") : isEmptyGuardian ? <SectionRemoval field={issue.field ?? "Guardian"} /> : suggestedValue === "" ? "Clear value" : suggestedValue ?? "No automatic correction available"}</span>
                         </label>
                       ) : isIdentityReview(issue) ? (
                         <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Review in source</span>
@@ -367,6 +424,7 @@ export default function FixView({
                         <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>No field — review manually</span>
                       )}
                     </td>
+                    ]}
                   </tr>
                 );
               })}

@@ -58,7 +58,7 @@ test("address reviews navigate between students and retain drafts", async ({ pag
   await expect(trigger).toBeFocused();
 });
 
-for (const apply of [false, true]) test(`safe suggestions stay on automatic fixes (apply: ${apply})`, async ({ page }) => {
+for (const apply of [false, true]) test(`suggestions stay on automatic fixes (apply: ${apply})`, async ({ page }) => {
   const safeStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>51 Keats</ns1:StreetNumber><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
   const conflictStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>66 Downey</ns1:StreetNumber><ns1:StreetName>Rd</ns1:StreetName><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
   const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${safeStudent}${conflictStudent}</ns1:Students>`);
@@ -68,7 +68,27 @@ for (const apply of [false, true]) test(`safe suggestions stay on automatic fixe
   await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
   const safeFix = page.getByRole("checkbox", { name: "Select fix for Student 1.1: StreetNumber", exact: true });
   await expect(safeFix).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Select fix for Student 1.2: StreetNumber", exact: true })).toHaveCount(0);
+  const safeRow = page.getByRole("row").filter({ has: safeFix });
+  const comparison = safeRow.getByRole("table", { name: "Suggested field changes" });
+  const namePair = comparison.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Street Name", exact: true }) });
+  await expect(namePair.getByRole("cell").nth(0)).toBeEmpty();
+  await expect(namePair.getByRole("cell").nth(1)).toHaveText("Keats");
+  const values = await namePair.getByRole("cell").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
+  expect(values[0]).toBe(values[1]);
+  await namePair.getByRole("cell").nth(1).click();
+  await expect(safeFix).toBeChecked();
+  await expect(safeRow).toHaveAttribute("data-selected", "true");
+  await safeRow.scrollIntoViewIfNeeded();
+  await safeFix.focus();
+  await page.keyboard.press("Space");
+  await expect(safeFix).not.toBeChecked();
+  await expect(safeRow).toHaveAttribute("data-selected", "false");
+  await page.getByRole("button", { name: "Filter severity: All severities", exact: true }).click();
+  await page.getByRole("radio", { name: "Errors only", exact: true }).check();
+  await expect(page.getByRole("button", { name: "Filter severity: Errors only", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Filter severity: Errors only", exact: true }).click();
+  await page.getByRole("radio", { name: "All severities", exact: true }).check();
+  await expect(page.getByRole("checkbox", { name: "Select fix for Student 1.2: StreetNumber", exact: true })).toBeEnabled();
   await safeFix.check();
   if (apply) {
     await page.getByRole("button", { name: /Apply selected/ }).click();
@@ -110,4 +130,40 @@ for (const apply of [false, true]) test(`safe suggestions stay on automatic fixe
   expect(output).toContain(">Rd<");
   expect(output).toContain(">Waterloo<");
   if (!apply) expect(output).toContain(">51 Keats<");
+});
+
+for (const scope of ["selected", "page", "all"] as const) test(`review suggestions support ${scope} apply`, async ({ page }) => {
+  const reviewStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>34-8773</ns1:StreetNumber><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
+  const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${reviewStudent.repeat(30)}</ns1:Students>`);
+  await page.goto("./");
+  await page.locator("#xml-upload").setInputFiles({ name: "bulk-suggestions.xml", mimeType: "application/xml", buffer: Buffer.from(fixture) });
+  await page.getByRole("button", { name: "Validate & Fix", exact: true }).last().click();
+  await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
+  const candidate = page.getByRole("checkbox", { name: "Select fix for Student 1.1: StreetNumber", exact: true });
+  if (scope === "page") await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.getByRole("columnheader", { name: /Autofix/ })).toBeVisible();
+  const rowsBefore = await page.locator(".autofix-row").count();
+  if (scope === "selected") await candidate.check();
+  else {
+    await page.getByRole("button", { name: scope === "page" ? /Select all on current page/ : /Select all across all pages/ }).click();
+    await expect(page.locator(".autofix-row input:checked")).toHaveCount(rowsBefore);
+    await expect(page.locator(".autofix-feedback")).toHaveCount(0);
+    await expect(candidate).toBeVisible();
+    await page.getByRole("navigation", { name: "Table pages" }).getByRole("button", { name: "Next", exact: true }).click();
+    const nextPageChecks = page.locator(".autofix-row input:checked");
+    await expect(nextPageChecks).toHaveCount(scope === "all" ? await page.locator(".autofix-row").count() : 0);
+  }
+  await page.getByRole("button", { name: /Apply selected/ }).click();
+  await expect(page.getByRole("heading", { name: /fixes applied/ })).toBeVisible();
+  await page.getByRole("button", { name: "Manual fixes", exact: true }).click();
+  await page.getByRole("button", { name: "Apply fixes and view summary", exact: true }).click();
+  await page.getByRole("button", { name: "Output", exact: true }).click();
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download", exact: true }).first().click();
+  const output = readFileSync((await (await downloading).path())!, "utf8");
+  const applied = (output.match(/>8773</g) ?? []).length;
+  expect((output.match(/>34</g) ?? []).length).toBe(applied);
+  if (scope === "selected") expect(applied).toBe(1);
+  else if (scope === "all") expect(applied).toBe(30);
+  else { expect(applied).toBeGreaterThan(0); expect(applied).toBeLessThan(30); }
 });

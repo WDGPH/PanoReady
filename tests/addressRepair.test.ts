@@ -219,5 +219,11 @@ it("applies a safe automatic address correction as a complete repair", () => {
   const updated = validateXml(applyValidationFixes(xml, fixes));
   expect(updated.records[0].fields).toMatchObject({ StreetNumber: "51", StreetName: "Keats", City: "Guelph" });
   const conflict = validateXml(studentXml("<StreetNumber>66 Downey</StreetNumber><StreetName>Rd</StreetName>"));
-  expect(automaticFixes(conflict.issues.find(issue => issue.repairProposal)!, conflict.records, 1)).toEqual([]);
+  const conflictIssue = conflict.issues.find(issue => issue.repairProposal)!;
+  expect(conflictIssue.autoFixable).toBe(true);
+  expect(automaticFixes(conflictIssue, conflict.records, 1)).toMatchObject([{ field: "StreetNumber", oldValue: "66 Downey", newValue: "66" }]);
+  const noSuggestion = validateXml(studentXml("<Unit>437 Pine</Unit><StreetNumber>99</StreetNumber><StreetName>Main</StreetName>"));
+  const manualIssue = noSuggestion.issues.find(issue => issue.repairProposal)!;
+  expect(manualIssue.autoFixable).toBe(false);
+  expect(automaticFixes(manualIssue, noSuggestion.records, 1)).toEqual([]);
 });

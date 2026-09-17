@@ -1,14 +1,14 @@
 import type { AppliedFix, StudentRecord, ValidationIssue } from "@/lib/types";
 
 export function isAutomaticIssue(issue: ValidationIssue): boolean {
-  return issue.repairProposal ? issue.autoFixable && issue.repairProposal.confidence === "safe"
-    : issue.autoFixable || issue.ruleId === "EMPTY_GUARDIAN";
+  return issue.repairProposal ? issue.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
+    : issue.suggestedFix !== undefined || issue.autoFixable || issue.ruleId === "EMPTY_GUARDIAN";
 }
 
 export function automaticFixes(issue: ValidationIssue, records: StudentRecord[], now: number): AppliedFix[] {
   if (!isAutomaticIssue(issue) || !issue.recordId || !issue.field) return [];
   const base = { issueId: issue.id, recordId: issue.recordId, ruleId: issue.ruleId, appliedAt: now };
-  if (issue.repairProposal) return issue.repairProposal.changes.map(change => ({
+  if (issue.repairProposal) return issue.repairProposal.changes.filter(change => change.proposedValue !== change.currentValue).map(change => ({
     ...base, field: change.field, oldValue: change.currentValue, newValue: change.proposedValue,
     repairId: issue.repairProposal!.id,
   }));
