@@ -883,7 +883,60 @@ h1, h2, h3 {
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  transform: translateY(-3px);
+  transform: translateY(-3px) scale(1.1);
+  transform-origin: center;
+}
+/* The hoist stays anchored while the free edge and lettering catch the breeze. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .brand-logo:hover .brand-flag-fabric {
+    animation: brand-flag-wave 1.6s linear infinite;
+  }
+  .brand-logo:hover .brand-flag-letter {
+    transform-origin: 80px 115px;
+    animation: brand-flag-letter 1.6s linear infinite;
+  }
+}
+/* Move both fabric edges together to preserve the pennant's fullness.
+   Two distinct waves repeat every 1.6s, preserving the 0.8s pace per wave. */
+@keyframes brand-flag-wave {
+  0%, 50%, 100% {
+    d: path("M79 68 C108 51 134 56 158 72 C181 87 201 88 218 93 C234 98 191 125 168 138 C140 156 113 165 91 168 Z");
+  }
+  10% {
+    d: path("M79 68 C108 57 134 66 157 80 C180 90 200 84 216 87 C232 92 190 128 167 146 C140 166 113 171 91 168 Z");
+  }
+  20% {
+    d: path("M79 68 C108 52 134 62 155 83 C178 98 198 93 213 93 C229 98 188 136 165 149 C140 162 113 166 91 168 Z");
+  }
+  30% {
+    d: path("M79 68 C108 46 134 50 155 73 C178 96 198 103 213 103 C229 108 188 134 165 139 C140 150 113 160 91 168 Z");
+  }
+  40% {
+    d: path("M79 68 C108 47 134 47 157 64 C180 83 200 96 216 100 C232 106 190 121 167 130 C140 147 113 161 91 168 Z");
+  }
+  60% {
+    d: path("M79 68 C108 55 134 63 157 77 C180 86 200 80 216 84 C232 89 190 124 167 143 C140 163 113 169 91 168 Z");
+  }
+  70% {
+    d: path("M79 68 C108 52 134 60 156 79 C179 94 199 92 214 97 C230 102 189 132 166 145 C140 160 113 166 91 168 Z");
+  }
+  80% {
+    d: path("M79 68 C108 48 134 52 156 73 C179 96 199 105 214 106 C230 111 189 134 166 139 C140 152 113 162 91 168 Z");
+  }
+  90% {
+    d: path("M79 68 C108 48 134 50 157 66 C180 85 200 98 216 102 C232 107 190 123 167 132 C140 150 113 162 91 168 Z");
+  }
+}
+@keyframes brand-flag-letter {
+  0%, 50%, 100% { transform: skewY(0deg); }
+  10% { transform: skewY(4deg); }
+  20% { transform: skewY(2deg); }
+  30% { transform: skewY(-2deg); }
+  40% { transform: skewY(-4deg); }
+  60% { transform: skewY(3deg); }
+  70% { transform: skewY(1.5deg); }
+  80% { transform: skewY(-1.5deg); }
+  90% { transform: skewY(-3deg); }
 }
 .brand-tagline {
   color: var(--color-text-muted);
