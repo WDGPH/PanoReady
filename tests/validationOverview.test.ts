@@ -53,8 +53,8 @@ describe("validation overview", () => {
     expect(matchesReviewFilter(result.issues[3], { schoolNumber: "" })).toBe(true);
     expect(issueTypeLabel("FIELD_LENGTH", "Unit")).toBe("Value too long · Unit");
   });
-  it("does not count address proposals as automatic corrections", () => {
-    const issue = { ...finding("repair", "a"), repairProposal: { kind: "address" as const, id: "repair", confidence: "safe" as const, title: "Repair", explanation: "", changes: [] } };
-    expect(summarizeValidation({ ...result, issues: [issue] }).automatic).toBe(0);
+  it.each(["safe", "review", "manual"] as const)("counts only safe address proposals as automatic corrections (%s)", confidence => {
+    const issue = { ...finding("repair", "a"), repairProposal: { kind: "address" as const, id: "repair", confidence, title: "Repair", explanation: "", changes: [] } };
+    expect(summarizeValidation({ ...result, issues: [issue] }).automatic).toBe(confidence === "safe" ? 1 : 0);
   });
 });

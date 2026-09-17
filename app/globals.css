@@ -1283,11 +1283,9 @@ h1, h2, h3 {
 .review-context-action { background: none; border: 0; padding: 6px 0; color: var(--color-text-primary); text-align: left; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
 .review-context-action:hover { color: var(--color-brand-400); }
 .review-context-action:focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 3px; }
-.student-dialog-close { position: absolute; top: 20px; right: 20px; }
 .student-section { margin-top: 16px; }
 .student-section:first-of-type { margin-top: 0; }
 .student-section summary { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 0; border-bottom: 1px solid var(--color-border); cursor: pointer; list-style: none; }
-.student-section:first-of-type summary { padding-right: 125px; }
 .student-section summary::-webkit-details-marker { display: none; }
 .student-section summary:focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 3px; }
 .student-section h3 { font-size: 15px; margin: 0; }
@@ -1303,7 +1301,6 @@ h1, h2, h3 {
 
 .student-entry-dialog .input { width: 100%; }
 .student-entry-dialog .student-field-changed { border-color: var(--color-success-border); background: var(--color-success-bg); }
-.student-edit-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; font-size: 12px; }
 
 .student-entry-dialog .student-field-review { border-color: var(--color-warning-border); background: var(--color-warning-bg); }
 .student-field-findings { color: var(--color-warning-text); font-size: 11px; }
@@ -1315,3 +1312,20 @@ h1, h2, h3 {
 .student-section-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; }
 .student-address-editor { margin-top: 12px; }
 .student-removal-notice { font-size: 12px; color: var(--color-warning-text); }
+
+.address-review-navigation { position: sticky; bottom: -20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 20px -20px -20px; padding: 16px 20px; background: var(--color-surface-1); z-index: 1; }
+.address-review-buttons .btn { padding: 8px 10px; font-size: 12px; gap: 6px; }
+.address-review-buttons { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; width: 100%; }
+.address-review-buttons > .btn:first-child { margin-right: auto; }
+.review-shortcut { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; }
+.address-review-buttons kbd { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px; border: 1px solid currentColor; border-radius: 4px; font-family: var(--font-mono); font-size: 9px; line-height: 1.2; opacity: .65; }
+@media (max-width: 600px) {
+  .address-review-buttons { justify-content: flex-start; }
+  .address-review-buttons > .btn:first-child { margin-right: 0; }
+  .review-shortcut { display: none; }
+}
+
+.student-entry-dialog { scroll-padding-top: 88px; }
+.student-dialog-header { align-items: center; margin-bottom: 16px; }
+.student-dialog-header h2 { margin: 0; padding: 6px 12px; border-radius: 6px; background: var(--color-surface-2); color: var(--color-text-primary); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.student-dialog-header > span { font-size: 12px; color: var(--color-text-muted); }

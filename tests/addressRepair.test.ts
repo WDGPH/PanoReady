@@ -1,3 +1,4 @@
+import { automaticFixes } from "../workflows/stix/validation/helpers";
 import { describe, expect, it } from "vitest";
 import {
   analyzeAlternateDeliveryInStreetFields,
@@ -206,4 +207,17 @@ describe("PO Box and rural route text in street fields", () => {
   it("does not fire on ordinary street names", () => {
     expect(analyzeAlternateDeliveryInStreetFields({ StreetName: "Boxwood Lane", PoBoxNumber: "" })).toBeUndefined();
   });
+});
+
+it("applies a safe automatic address correction as a complete repair", () => {
+  const xml = studentXml("<StreetNumber>51 Keats</StreetNumber><City>Guelph</City><Province>ON</Province>");
+  const result = validateXml(xml);
+  const issue = result.issues.find(issue => issue.repairProposal?.confidence === "safe")!;
+  const fixes = automaticFixes(issue, result.records, 1);
+  expect(fixes.map(fix => [fix.field, fix.newValue])).toEqual([["StreetNumber", "51"], ["StreetName", "Keats"]]);
+  expect(new Set(fixes.map(fix => fix.repairId))).toEqual(new Set([issue.repairProposal!.id]));
+  const updated = validateXml(applyValidationFixes(xml, fixes));
+  expect(updated.records[0].fields).toMatchObject({ StreetNumber: "51", StreetName: "Keats", City: "Guelph" });
+  const conflict = validateXml(studentXml("<StreetNumber>66 Downey</StreetNumber><StreetName>Rd</StreetName>"));
+  expect(automaticFixes(conflict.issues.find(issue => issue.repairProposal)!, conflict.records, 1)).toEqual([]);
 });

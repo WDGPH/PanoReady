@@ -37,7 +37,7 @@ describe("review dialogs", () => {
     const html = render("manual", { ...session, initialResult: { ...result, issues: [issue] } });
     expect(html).toContain(`data-row-id="${issue.id}"`);
     expect(html).toContain("Review address");
-    expect(html).not.toContain("CORRECTED PREVIEW");
+    expect(html).not.toContain("EDITED PREVIEW");
     expect(html).not.toContain("Address repairs</h2>");
     expect(render("automatic", { ...session, initialResult: { ...result, issues: [issue] } })).not.toContain("Review address");
   });

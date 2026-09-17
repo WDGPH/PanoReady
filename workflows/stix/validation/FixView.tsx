@@ -3,14 +3,14 @@ import WorkflowHeading from "@/components/WorkflowHeading";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Wand2, CheckCircle2 } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { guardianSectionForField } from "@/lib/fields";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 import { defaultRules } from "@/lib/rulesets";
 import type { AppliedFix, StudentRecord, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
-import { suggestedAddressDraft } from "./helpers";
+import { automaticFixes, isAutomaticIssue } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
 import { issueTypeLabel, matchesReviewFilter, isExcludedFromReview } from "./overview";
 import type { ReviewFilter, ReviewExclusion } from "./overview";
@@ -64,13 +64,6 @@ export default function FixView({
   const [pending, setPending] = useState<Record<string, string>>({});
   const [operation, setOperation] = useState<{ phase: "applying" | "done"; count: number } | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [addressDrafts, setAddressDrafts] = useState<Record<string, Record<string, string>>>(() =>
-    Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, suggestedAddressDraft(issue, records)])),
-  );
-  const [selectedAddressRepairs, setSelectedAddressRepairs] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(addressIssues.map((issue) => [issue.repairProposal!.id, false])),
-  );
-
   const [studentDrafts, setStudentDrafts] = useState<Record<string, Record<string, string>>>({});
   const studentFixes = (now: number): AppliedFix[] => records.flatMap(record => {
     const draft = studentDrafts[record.id] ?? {};
@@ -84,8 +77,6 @@ export default function FixView({
   });
 
   const studentDraft = (record: StudentRecord): Record<string, string> => ({
-    ...Object.assign({}, ...addressIssues.filter(issue => issue.recordId === record.id && selectedAddressRepairs[issue.repairProposal!.id])
-      .map(issue => addressDrafts[issue.repairProposal!.id] ?? suggestedAddressDraft(issue, records))),
     ...Object.fromEntries(issues.filter(issue => issue.recordId === record.id && issue.field && pending[issue.id] !== undefined)
       .map(issue => [issue.field!, pending[issue.id]])),
     ...studentDrafts[record.id],
@@ -93,16 +84,23 @@ export default function FixView({
 
   const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
 
-  const isAutomatic = (issue: ValidationIssue) => !issue.repairProposal && (issue.autoFixable || issue.ruleId === "EMPTY_GUARDIAN");
+  const [activeAddressId, setActiveAddressId] = useState<string | null>(null);
+  const addressTrigger = useRef<HTMLButtonElement | null>(null);
+  const activeAddress = addressIssues.find(issue => issue.id === activeAddressId);
+  const addressQueue = addressIssues.filter(issue => issue.ruleId === activeAddress?.ruleId && issue.field === activeAddress.field
+    && (severityFilter === "all" || issue.severity === severityFilter)
+    && records.some(record => record.id === issue.recordId));
+  const activeAddressIndex = addressQueue.findIndex(issue => issue.id === activeAddressId);
+
   const groups = [
-    { label: "Automatic fixes", items: issues.filter(isAutomatic), automatic: true },
+    { label: "Automatic fixes", items: issues.filter(isAutomaticIssue), automatic: true },
     { label: "Needs review", items: issues, automatic: false },
   ];
 
-  const automaticCandidates = issues.filter(issue => isAutomatic(issue) && issue.recordId && issue.field && (issue.ruleId === "EMPTY_GUARDIAN" || issue.suggestedFix !== undefined));
+  const automaticCandidates = issues.filter(issue => isAutomaticIssue(issue) && issue.recordId && issue.field && (issue.repairProposal || issue.ruleId === "EMPTY_GUARDIAN" || issue.suggestedFix !== undefined));
   const applyAutomatic = async (candidates: ValidationIssue[]) => {
     if (operation || !candidates.length) return;
-    const batch: AppliedFix[] = candidates.map(issue => ({ issueId: issue.id, recordId: issue.recordId!, field: issue.field!, oldValue: issue.currentValue ?? records.find(record => record.id === issue.recordId)?.fields[issue.field!] ?? "", newValue: issue.ruleId === "EMPTY_GUARDIAN" ? "" : issue.suggestedFix!, ruleId: issue.ruleId, appliedAt: Date.now() }));
+    const batch = candidates.flatMap(issue => automaticFixes(issue, records, Date.now()));
     const started = performance.now();
     setApplyError(null);
     setOperation({ phase: "applying", count: batch.length });
@@ -140,45 +138,42 @@ export default function FixView({
       issue.id === id && issue.recordId === record.id && issue.field === guardian))));
   };
 
+  const stageIssueField = (record: StudentRecord, field: string, value: string) => {
+    setStudentDrafts(current => ({ ...current, [record.id]: { ...current[record.id], [field]: value } }));
+    setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => !issues.some(candidate =>
+      candidate.id === id && candidate.recordId === record.id && candidate.field === field))));
+  };
+
   const studentReview = (record: StudentRecord, issue: ValidationIssue) => {
     const proposal = issue.repairProposal;
-    return <StudentEntry record={record} editor={{
+    return <StudentEntry record={record} navigation={issue.id === activeAddressId ? {
+      position: activeAddressIndex + 1,
+      total: addressQueue.length,
+      onPrevious: () => setActiveAddressId(addressQueue[activeAddressIndex - 1].id),
+      onNext: () => setActiveAddressId(addressQueue[activeAddressIndex + 1].id),
+      onClose: () => setActiveAddressId(null),
+      onReturnFocus: () => addressTrigger.current?.focus(),
+    } : undefined} editor={{
       rules, issue, draft: studentDraft(record),
       issues: currentResult.issues.filter(candidate => candidate.recordId === record.id),
       readOnlyFields: currentResult.issues.filter(candidate => candidate.recordId === record.id).flatMap(candidate => identityReviewFields[candidate.ruleId] ?? []),
-      triggerLabel: proposal ? (selectedAddressRepairs[proposal.id] ? "Edit staged address" : "Review address") : undefined,
-      onDraftChange: (field, value) => {
-        setStudentDrafts(current => ({ ...current, [record.id]: { ...current[record.id], [field]: value } }));
-        setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => !issues.some(candidate =>
-          candidate.id === id && candidate.recordId === record.id && candidate.field === field))));
-      },
+      triggerLabel: proposal ? "Review address" : undefined,
+      onDraftChange: (field, value) => stageIssueField(record, field, value),
       onGuardianRemoval: (guardian, remove) => toggleGuardianRemoval(record, guardian, remove),
       onReset: () => {
         setStudentDrafts(current => ({ ...current, [record.id]: {} }));
         setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => !issues.some(candidate => candidate.id === id && candidate.recordId === record.id))));
-        setSelectedAddressRepairs(current => Object.fromEntries(Object.entries(current).filter(([id]) => !addressIssues.some(candidate => candidate.recordId === record.id && candidate.repairProposal!.id === id))));
       },
       addressEditor: proposal && <AddressRepairCard
         proposal={proposal} record={record} rules={rules}
-        draft={{ ...(addressDrafts[proposal.id] ?? suggestedAddressDraft(issue, records)), ...Object.fromEntries(Object.entries(studentDrafts[record.id] ?? {}).filter(([field]) => ADDRESS_REPAIR_FIELDS.some(candidate => candidate === field))) }}
-        selected={selectedAddressRepairs[proposal.id] ?? false}
-        onDraftChange={(field, value) => {
-          setStudentDrafts(current => ({ ...current, [record.id]: Object.fromEntries(Object.entries(current[record.id] ?? {}).filter(([key]) => key !== field)) }));
-          setAddressDrafts(current => ({ ...current, [proposal.id]: { ...(current[proposal.id] ?? suggestedAddressDraft(issue, records)), [field]: value } }));
-          setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => !issues.some(candidate => candidate.id === id && candidate.recordId === record.id && candidate.field === field))));
-        }}
-        onSelectedChange={selected => setSelectedAddressRepairs(current => ({ ...current, [proposal.id]: selected }))}
-        onReset={() => {
-          setAddressDrafts(current => ({ ...current, [proposal.id]: suggestedAddressDraft(issue, records) }));
-          setSelectedAddressRepairs(current => ({ ...current, [proposal.id]: false }));
-        }}
+        draft={{ ...record.fields, ...studentDraft(record) }}
+        onDraftChange={(field, value) => stageIssueField(record, field, value)}
       />,
     }} />;
   };
 
   const clearAll = () => {
     setPending({});
-    setSelectedAddressRepairs({});
     setStudentDrafts({});
   };
 
@@ -217,28 +212,6 @@ export default function FixView({
         appliedAt: now,
       });
     }
-    for (const issue of addressIssues) {
-      const proposal = issue.repairProposal!;
-      if (!selectedAddressRepairs[proposal.id]) continue;
-      const record = records.find((candidate) => candidate.id === issue.recordId);
-      if (!record || !issue.recordId) continue;
-      const draft = addressDrafts[proposal.id] ?? suggestedAddressDraft(issue, records);
-      for (const field of ADDRESS_REPAIR_FIELDS) {
-        const oldValue = record.fields[field] ?? "";
-        const newValue = draft[field] ?? "";
-        if (newValue === oldValue) continue;
-        fixes.push({
-          issueId: issue.id,
-          recordId: issue.recordId,
-          field,
-          oldValue,
-          newValue,
-          ruleId: issue.ruleId,
-          appliedAt: now,
-          repairId: proposal.id,
-        });
-      }
-    }
     const edits = studentFixes(now);
     onApply([...session.fixes, ...fixes.filter(fix => {
       const draft = studentDrafts[fix.recordId] ?? {};
@@ -247,16 +220,8 @@ export default function FixView({
     }), ...edits]);
   };
 
-  const addressChangeCount = addressIssues.reduce((count, issue) => {
-    const proposal = issue.repairProposal!;
-    if (!selectedAddressRepairs[proposal.id]) return count;
-    const record = records.find((candidate) => candidate.id === issue.recordId);
-    const draft = addressDrafts[proposal.id];
-    if (!record || !draft) return count;
-    return count + ADDRESS_REPAIR_FIELDS.filter((field) => (draft[field] ?? "") !== (record.fields[field] ?? "")).length;
-  }, 0);
   const automaticSelectedCount = automaticCandidates.filter(issue => pending[issue.id] !== undefined).length;
-  const pendingCount = Object.keys(pending).length + addressChangeCount + studentFixes(0).length;
+  const pendingCount = Object.keys(pending).length + studentFixes(0).length;
 
   return (
     <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>
@@ -347,15 +312,18 @@ export default function FixView({
                         </label>
                       ) : guardianRemoved ? (
                         <span className="student-removal-notice">Removal staged <button type="button" className="btn btn-ghost" onClick={() => toggleGuardianRemoval(record, guardian, false)}>Undo removal</button></span>
-                      ) : proposal && record ? (
-                        studentReview(record, issue)
+                      ) : proposal && record && !group.automatic ? (
+                        <button type="button" className="review-context-action" aria-label={`Review address for ${recordLabel}`} onClick={event => {
+                          addressTrigger.current = event.currentTarget;
+                          setActiveAddressId(issue.id);
+                        }}>{ADDRESS_REPAIR_FIELDS.some(field => studentDrafts[record.id]?.[field] !== undefined && studentDrafts[record.id][field] !== (record.fields[field] ?? "")) ? "Edit staged address" : "Review address"}</button>
                       ) : group.automatic || isEmptyGuardian ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" aria-label={`Select fix for ${recordLabel}: ${issue.field}`} checked={pending[issue.id] !== undefined} disabled={suggestedValue === undefined} onChange={event => {
                             if (event.target.checked) stageIssue(issue, suggestedValue!);
                             else setPending(p => Object.fromEntries(Object.entries(p).filter(([id]) => id !== issue.id)));
                           }} />
-                          <span>{isEmptyGuardian ? "Remove empty Guardian placeholder" : suggestedValue === "" ? "Clear value" : suggestedValue ?? "No automatic correction available"}</span>
+                          <span>{proposal ? proposal.changes.map(change => `${change.field}: ${change.proposedValue || "(clear)"}`).join(" · ") : isEmptyGuardian ? "Remove empty Guardian placeholder" : suggestedValue === "" ? "Clear value" : suggestedValue ?? "No automatic correction available"}</span>
                         </label>
                       ) : isIdentityReview(issue) ? (
                         <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Review in source</span>
@@ -380,19 +348,9 @@ export default function FixView({
                               aria-label={`Correct ${issue.field} for ${recordLabel}`}
                               value={pendingVal}
                               onChange={e => stageIssue(issue, e.target.value)}
-                              placeholder={issue.suggestedFix ?? "Enter corrected value…"}
+                              placeholder="Enter corrected value…"
                               style={{ fontSize: 12, padding: "5px 8px" }}
                             />
-                          )}
-                          {issue.suggestedFix && pendingVal !== issue.suggestedFix && (
-                            <button
-                              onClick={() => stageIssue(issue, issue.suggestedFix!)}
-                              className="btn btn-ghost"
-                              style={{ fontSize: 11, padding: "4px 7px", whiteSpace: "nowrap" as const }}
-                              title={`Use suggested: ${issue.suggestedFix}`}
-                            >
-                              Use suggested
-                            </button>
                           )}
                           {issue.field.includes("Phone") && (
                             <button
@@ -420,6 +378,7 @@ export default function FixView({
         </section>;
       })}
 
+      {activeAddress && studentReview(records.find(record => record.id === activeAddress.recordId)!, activeAddress)}
       </fieldset>
     </main>
   );

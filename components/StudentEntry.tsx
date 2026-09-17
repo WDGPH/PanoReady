@@ -1,10 +1,15 @@
 "use client";
 
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useEffect, useId } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronRight, ChevronsDown, ChevronsUp, RotateCcw } from "lucide-react";
 import { guardianSectionForField, REQUIRED_FIELD_GROUPS } from "@/lib/fields";
 import type { RulesProfile, StudentRecord, ValidationIssue } from "@/lib/types";
+
+const dialogFieldGroups = [
+  ...REQUIRED_FIELD_GROUPS.filter(group => group.label === "School"),
+  ...REQUIRED_FIELD_GROUPS.filter(group => group.label !== "School"),
+];
 
 export function studentReference(record: StudentRecord): string {
   const position = record.id.match(/^school(\d+):student(\d+)$/);
@@ -24,14 +29,35 @@ type StudentEditor = {
   triggerLabel?: string;
 };
 
-export default function StudentEntry({ record, editor }: { record: StudentRecord; editor?: StudentEditor }) {
+type ReviewNavigation = {
+  position: number;
+  total: number;
+  onPrevious: () => void;
+  onNext: () => void;
+  onClose: () => void;
+  onReturnFocus: () => void;
+};
+
+export default function StudentEntry({ record, editor, navigation }: { record: StudentRecord; editor?: StudentEditor; navigation?: ReviewNavigation }) {
   const id = useId();
+  const isNavigating = Boolean(navigation);
+  useEffect(() => {
+    if (!isNavigating) return;
+    const target = document.getElementById(`${id}-review-section`);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "nearest" });
+  }, [record.id, id, isNavigating]);
   const draft = editor?.draft ?? {};
   const changedCount = Object.keys(draft).filter(field => {
     const guardian = guardianSectionForField(field);
     return !(guardian && draft[guardian] === "") && draft[field] !== (record.fields[field] ?? "");
   }).length;
   const removedCount = ["Guardian", "Guardian2"].filter(field => draft[field] === "").length;
+  const hasChanges = changedCount > 0 || removedCount > 0;
+  const stagedLabel = [
+    changedCount ? `${changedCount} field change${changedCount === 1 ? "" : "s"}` : "",
+    removedCount ? `${removedCount} guardian removal${removedCount === 1 ? "" : "s"}` : "",
+  ].filter(Boolean).join(" · ") + " staged";
   const optionsFor = (field: string): string[] | undefined => {
     if (!editor) return;
     const { rules } = editor;
@@ -45,15 +71,24 @@ export default function StudentEntry({ record, editor }: { record: StudentRecord
   const label = studentReference(record);
   const targetChanged = editor?.issue.field && draft[editor.issue.field] !== undefined
     && draft[editor.issue.field] !== (record.fields[editor.issue.field] ?? "");
-  return <Dialog.Root>
-    <Dialog.Trigger asChild>
+  return <Dialog.Root open={navigation ? true : undefined} onOpenChange={open => { if (!open) navigation?.onClose(); }}>
+    {!navigation && <Dialog.Trigger asChild>
       <button type="button" className="review-context-action" aria-label={editor ? `Review ${editor.issue.repairProposal ? "address" : "student"} for ${label}` : `View ${label.toLowerCase()}`}>
         {editor ? (editor.triggerLabel ?? (targetChanged || changedCount || removedCount ? "Edit staged changes" : "Review and edit")) : label}
       </button>
-    </Dialog.Trigger>
+    </Dialog.Trigger>}
     <Dialog.Portal>
       <Dialog.Overlay className="review-dialog-overlay" />
-      <Dialog.Content className="review-dialog student-entry-dialog" aria-describedby={undefined} onOpenAutoFocus={event => {
+      <Dialog.Content className="review-dialog student-entry-dialog" aria-describedby={undefined}
+        onCloseAutoFocus={navigation ? event => { event.preventDefault(); navigation.onReturnFocus(); } : undefined}
+        onKeyDown={event => {
+          if (!navigation || event.defaultPrevented || event.nativeEvent.isComposing || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+          if (event.key !== "PageDown" && event.key !== "PageUp") return;
+          event.preventDefault();
+          if (event.repeat) return;
+          if (event.key === "PageDown" && navigation.position < navigation.total) navigation.onNext();
+          if (event.key === "PageUp" && navigation.position > 1) navigation.onPrevious();
+        }} onOpenAutoFocus={event => {
         if (!editor) return;
         const target = document.getElementById(`${id}-${editor.issue.field}`) ?? document.getElementById(`${id}-review-section`);
         if (target) {
@@ -62,15 +97,17 @@ export default function StudentEntry({ record, editor }: { record: StudentRecord
           target.scrollIntoView({ block: "nearest" });
         }
       }}>
-        <Dialog.Title className="sr-only">{editor ? "Edit student" : "Student details"}</Dialog.Title>
-        <Dialog.Close asChild><button type="button" className="btn btn-ghost student-dialog-close">Back to fixes</button></Dialog.Close>
-        {REQUIRED_FIELD_GROUPS.map((group, index) => {
+        <header className="review-dialog-header student-dialog-header">
+          <Dialog.Title>{label}</Dialog.Title>
+          {navigation && <span role="status">Address {navigation.position} of {navigation.total}</span>}
+        </header>
+        <div key={record.id}>{dialogFieldGroups.map((group) => {
           const guardian = group.label === "Guardian 1" ? "Guardian" : group.label === "Guardian 2" ? "Guardian2" : undefined;
           const removed = guardian !== undefined && draft[guardian] === "";
           const groupIssues = editor?.issues.filter(issue => group.fields.some(field => field === issue.field)
-            || guardian !== undefined && issue.field === guardian || index === 0 && !issue.field) ?? [];
+            || guardian !== undefined && issue.field === guardian || group.label === "Student" && !issue.field) ?? [];
           const needsReview = groupIssues.some(issue => !editor?.readOnlyFields.includes(issue.field!));
-          const expanded = editor ? group.fields.some(field => field === editor.issue.field) || !editor.issue.field && index === 0 : index === 0;
+          const expanded = editor?.addressEditor ? group.label === "Address" : editor ? group.fields.some(field => field === editor.issue.field) || !editor.issue.field && group.label === "Student" : group.label === "Student";
           const canRemove = editor && guardian && (group.fields.some(field => record.fields[field] || draft[field]) || groupIssues.some(issue => issue.field === guardian));
           return <details key={group.label} className="student-section" open={expanded}>
             <summary id={expanded ? `${id}-review-section` : undefined}>
@@ -91,7 +128,6 @@ export default function StudentEntry({ record, editor }: { record: StudentRecord
               const changed = value !== (record.fields[field] ?? "");
               const editable = editor && !removed && group.label !== "School" && !editor.readOnlyFields.includes(field);
               const findings = groupIssues.filter(issue => issue.field === field);
-              const suggestion = findings.find(issue => issue.suggestedFix !== undefined && issue.suggestedFix !== value)?.suggestedFix;
               const fieldId = `${id}-${field}`;
               const controlProps = {
                 id: fieldId,
@@ -111,8 +147,7 @@ export default function StudentEntry({ record, editor }: { record: StudentRecord
                   {findings.length > 0 && <div id={`${fieldId}-issues`} className="student-field-findings">
                     {findings.map(issue => <p key={issue.id}>{issue.message}</p>)}
                   </div>}
-                  {editable && (suggestion !== undefined || field.includes("Phone") && !field.endsWith("Type")) && <div className="student-field-actions">
-                    {suggestion !== undefined && <button type="button" className="btn btn-ghost" onClick={() => editor.onDraftChange(field, suggestion)}>Use suggested</button>}
+                  {editable && (field.includes("Phone") && !field.endsWith("Type")) && <div className="student-field-actions">
                     {field.includes("Phone") && !field.endsWith("Type") && <button type="button" className="btn btn-ghost" disabled={!value} onClick={() => editor.onDraftChange(field, "")}>Clear value</button>}
                   </div>}
                 </dd>
@@ -120,10 +155,22 @@ export default function StudentEntry({ record, editor }: { record: StudentRecord
             })}</dl>}
           </details>;
         })}
-        {editor && <div className="student-edit-actions">
-          <span role="status">{changedCount || removedCount ? [changedCount ? `${changedCount} field change${changedCount === 1 ? "" : "s"}` : "", removedCount ? `${removedCount} guardian removal${removedCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") + " staged" : "No student changes staged"}</span>
-          <button type="button" className="btn btn-ghost" disabled={!changedCount && !removedCount} onClick={editor.onReset}>Reset changes</button>
-        </div>}
+        </div>
+        <footer className="address-review-navigation">
+          <div className="address-review-buttons">
+            {editor && <button type="button" className="btn btn-secondary" disabled={!hasChanges} onClick={() => {
+              editor.onReset();
+              document.getElementById(`${id}-review-section`)?.focus({ preventScroll: true });
+            }} title="Reset this student's edits to the current record"><RotateCcw size={14} aria-hidden="true" /> Reset changes</button>}
+            <Dialog.Close asChild><button type="button" className="btn btn-secondary" aria-label={hasChanges ? `${stagedLabel} — back to fixes` : "Back to fixes"} aria-keyshortcuts="Escape" title="Back to fixes (Escape)">
+              {hasChanges && <Check size={16} aria-hidden="true" />}{hasChanges ? stagedLabel : "Back to fixes"}<kbd aria-hidden="true">Esc</kbd>
+            </button></Dialog.Close>
+            {navigation && <>
+              <button type="button" className="btn btn-secondary" aria-label="Previous" title="Previous address (Alt + Page Up)" aria-keyshortcuts="Alt+PageUp" disabled={navigation.position === 1} onClick={navigation.onPrevious}><ArrowLeft size={16} aria-hidden="true" /> Previous <span className="review-shortcut" aria-hidden="true"><kbd>Alt</kbd><kbd><ChevronsUp size={12} />PgUp</kbd></span></button>
+              <button type="button" className="btn btn-secondary" aria-label="Next address" title="Next address (Alt + Page Down)" aria-keyshortcuts="Alt+PageDown" disabled={navigation.position === navigation.total} onClick={navigation.onNext}>Next address <ArrowRight size={16} aria-hidden="true" /><span className="review-shortcut" aria-hidden="true"><kbd>Alt</kbd><kbd><ChevronsDown size={12} />PgDn</kbd></span></button>
+            </>}
+          </div>
+        </footer>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
