@@ -1,0 +1,13 @@
+.workflow {
+  flex: 1;
+  min-width: 0;
+}
+
+.layout {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.layout > main {
+  min-width: 0;
+}
