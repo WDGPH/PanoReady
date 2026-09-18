@@ -220,8 +220,20 @@ it("applies a safe automatic address correction as a complete repair", () => {
   expect(updated.records[0].fields).toMatchObject({ StreetNumber: "51", StreetName: "Keats", City: "Guelph" });
   const conflict = validateXml(studentXml("<StreetNumber>66 Downey</StreetNumber><StreetName>Rd</StreetName>"));
   const conflictIssue = conflict.issues.find(issue => issue.repairProposal)!;
-  expect(conflictIssue.autoFixable).toBe(true);
-  expect(automaticFixes(conflictIssue, conflict.records, 1)).toMatchObject([{ field: "StreetNumber", oldValue: "66 Downey", newValue: "66" }]);
+  expect(conflictIssue.autoFixable).toBe(false);
+  expect(automaticFixes(conflictIssue, conflict.records, 1)).toEqual([]);
+  for (const [streetNumber, streetName] of [
+    ["9 Redwood", "Pl"],
+    ["92 Pear", "Circle"],
+    ["1097 Mos", "Mosey"],
+    ["9200 7th", "line"],
+  ]) {
+    const partial = validateXml(studentXml("<StreetNumber>" + streetNumber + "</StreetNumber><StreetName>" + streetName + "</StreetName>"));
+    const partialIssue = partial.issues.find(candidate => candidate.field === "StreetNumber" && candidate.repairProposal)!;
+    expect(partialIssue.repairProposal, streetNumber).toMatchObject({ confidence: "review" });
+    expect(partialIssue.autoFixable, streetNumber).toBe(false);
+    expect(automaticFixes(partialIssue, partial.records, 1), streetNumber).toEqual([]);
+  }
   const noSuggestion = validateXml(studentXml("<Unit>437 Pine</Unit><StreetNumber>99</StreetNumber><StreetName>Main</StreetName>"));
   const manualIssue = noSuggestion.issues.find(issue => issue.repairProposal)!;
   expect(manualIssue.autoFixable).toBe(false);

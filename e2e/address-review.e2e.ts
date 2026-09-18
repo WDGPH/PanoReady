@@ -89,7 +89,7 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   await expect(page.getByRole("button", { name: "Filter severity: Errors only", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Filter severity: Errors only", exact: true }).click();
   await page.getByRole("radio", { name: "All severities", exact: true }).check();
-  await expect(page.getByRole("checkbox", { name: "Select fix for Student 1.2: StreetNumber", exact: true })).toBeEnabled();
+  await expect(page.getByRole("checkbox", { name: "Select fix for Student 1.2: StreetNumber", exact: true })).toHaveCount(0);
   await safeFix.check();
   if (apply) {
     await page.getByRole("button", { name: /Apply selected/ }).click();
@@ -133,9 +133,9 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   if (!apply) expect(output).toContain(">51 Keats<");
 });
 
-for (const scope of ["selected", "page", "all"] as const) test(`review suggestions support ${scope} apply`, async ({ page }) => {
-  const reviewStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>34-8773</ns1:StreetNumber><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
-  const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${reviewStudent.repeat(30)}</ns1:Students>`);
+for (const scope of ["selected", "page", "all"] as const) test(`safe address repairs support ${scope} apply`, async ({ page }) => {
+  const repairStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>654321 Qwerty</ns1:StreetNumber><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
+  const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${repairStudent.repeat(30)}</ns1:Students>`);
   await page.goto("./");
   await page.locator("#xml-upload").setInputFiles({ name: "bulk-suggestions.xml", mimeType: "application/xml", buffer: Buffer.from(fixture) });
   await page.getByRole("button", { name: "Validate & Fix", exact: true }).last().click();
@@ -162,8 +162,8 @@ for (const scope of ["selected", "page", "all"] as const) test(`review suggestio
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download", exact: true }).first().click();
   const output = readFileSync((await (await downloading).path())!, "utf8");
-  const applied = (output.match(/>8773</g) ?? []).length;
-  expect((output.match(/>34</g) ?? []).length).toBe(applied);
+  const applied = (output.match(/>Qwerty</g) ?? []).length;
+  expect((output.match(/>654321</g) ?? []).length).toBe(applied);
   if (scope === "selected") expect(applied).toBe(1);
   else if (scope === "all") expect(applied).toBe(30);
   else { expect(applied).toBeGreaterThan(0); expect(applied).toBeLessThan(30); }

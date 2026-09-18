@@ -1,7 +1,8 @@
 import type { AppliedFix, StudentRecord, ValidationIssue } from "@/lib/types";
 
 export function isAutomaticIssue(issue: ValidationIssue): boolean {
-  return issue.repairProposal ? issue.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
+  return issue.repairProposal ? issue.autoFixable && issue.repairProposal.confidence === "safe"
+    && issue.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
     : issue.suggestedFix !== undefined || issue.autoFixable || issue.ruleId === "EMPTY_GUARDIAN";
 }
 

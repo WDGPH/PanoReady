@@ -61,9 +61,10 @@ function issue(
   issues: ValidationIssue[],
   value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
 ) {
-  const autoFixable = value.autoFixable ?? (value.repairProposal
-    ? value.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
-    : value.suggestedFix !== undefined);
+  const autoFixable = value.repairProposal
+    ? value.repairProposal.confidence === "safe"
+      && value.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
+    : value.autoFixable ?? value.suggestedFix !== undefined;
   issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, ...value, autoFixable });
 }
 
