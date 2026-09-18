@@ -28,6 +28,16 @@ test("default and arbitrary namespace prefixes parse to the same canonical model
   }
 });
 
+test("canonical round-trips decode XML entities instead of double-escaping them", () => {
+  const source = xml().replace("<Last>Lovelace</Last>", "<Last>O&amp;amp;apos;Example &amp; Sons</Last>");
+  const upload = parseCanonicalXml(source);
+  const lastName = upload.schools[0].students[0].name.last;
+  assert.equal(lastName, "O'Example & Sons");
+  const serialized = serializeCanonicalXml(upload);
+  assert.match(serialized, /<ns1:Last>O&apos;Example &amp; Sons<\/ns1:Last>/);
+  assert.doesNotMatch(serialized, /amp;apos/);
+});
+
 test("canonical XML round trip preserves nested guardians, address, and typed phones", () => {
   const upload = parseCanonicalXml(xml());
   const roundTrip = parseCanonicalXml(serializeCanonicalXml(upload));
