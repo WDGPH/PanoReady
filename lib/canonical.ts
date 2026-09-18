@@ -84,7 +84,18 @@ function node(value: unknown): XmlNode {
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return text((value as XmlNode)["#text"]);
-  return String(value).trim();
+  let decoded = String(value).trim();
+  // Some legacy exports contain entities encoded more than once.
+  // Unwrap only standard XML entities, and cap the passes so malformed input
+  // cannot cause unbounded work.
+  for (let pass = 0; pass < 4; pass++) {
+    const next = decoded.replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => ({
+      "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&apos;": "'",
+    }[entity] ?? entity));
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
 }
 
 function phone(value: unknown): CanonicalPhone | null {
@@ -134,7 +145,9 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
     parseTagValue: false,
     parseAttributeValue: false,
     removeNSPrefix: true,
-    processEntities: false,
+    // Decode standard XML entities before canonical serialization so repeated
+    // round-trips do not expose entity markup as visible text.
+    processEntities: true,
     isArray: (tagName) => tagName === "School" || tagName === "Student" || tagName === "Guardian",
   });
   const parsed = parser.parse(xml) as XmlNode;
