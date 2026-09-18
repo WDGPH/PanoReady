@@ -354,3 +354,33 @@ test("fixes operate through the canonical model for default-namespace XML", () =
   const fixed = applyValidationFixes(xml(), [{ issueId: "manual", recordId: "school0:student0", field: "FirstName", oldValue: "Ada", newValue: "Augusta", ruleId: "MANUAL", appliedAt: 1 }]);
   assert.equal(parseSTIXXml(fixed)[0].fields.FirstName, "Augusta");
 });
+
+test("removes a populated first guardian while applying edits to the second guardian", () => {
+  const source = xml().replace("</Guardian>", "</Guardian><Guardian><Name><First>Second</First></Name><Relationship>OTHER</Relationship></Guardian>");
+  const changes = [
+    { field: "Guardian", newValue: "" },
+    { field: "Guardian2FirstName", newValue: "Retained" },
+  ].map(change => ({ ...change, issueId: change.field, recordId: "school0:student0", oldValue: "", ruleId: "MANUAL_STUDENT_EDIT", appliedAt: 0 }));
+  const fixed = parseCanonicalXml(applyValidationFixes(source, changes));
+  assert.equal(fixed.schools[0].students[0].guardians.length, 1);
+  assert.equal(fixed.schools[0].students[0].guardians[0].name.first, "Retained");
+});
+
+test("manual empty-school removal preserves populated schools and same-batch student edits", () => {
+  const source = xml().replace("</Metadata>", '</Metadata><School><SchoolNumber>EMPTY</SchoolNumber><Name>Empty</Name><Students/></School>');
+  const result = validateXml(source);
+  const removal = result.issues.find(issue => issue.ruleId === "EMPTY_STUDENTS")!;
+  assert.equal(removal.autoFixable, false);
+  const fix = {
+    issueId: removal.id, recordId: removal.recordId!, field: "RemoveSchool",
+    oldValue: removal.currentValue ?? "", newValue: "REMOVE", ruleId: removal.ruleId, appliedAt: 0,
+  };
+  const output = applyValidationFixes(source, [fix, {
+    issueId: "edit", recordId: result.records[0].id, field: "City", oldValue: "Guelph", newValue: "Toronto", ruleId: "MANUAL", appliedAt: 0,
+  }]);
+  const upload = parseCanonicalXml(output);
+  assert.equal(upload.schools.length, 1);
+  assert.equal(validateXml(output).records[0].fields.City, "Toronto");
+  const populatedRemoval = { ...fix, recordId: "school1" };
+  assert.equal(parseCanonicalXml(applyValidationFixes(source, [populatedRemoval])).schools.length, 2);
+});
