@@ -18,6 +18,10 @@ test("address reviews navigate between students and retain drafts", async ({ pag
   const dialog = page.getByRole("dialog");
   const footer = dialog.locator("footer");
   await expect(dialog).toContainText("Address 1 of 30");
+  await expect(dialog.locator(".student-section")).toHaveCount(1);
+  await expect(dialog.getByRole("heading", { name: "Address", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "School", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("heading", { name: "Student", exact: true })).toHaveCount(0);
   await expect(footer.getByRole("button", { name: "Previous", exact: true })).toBeDisabled();
   const street = dialog.getByRole("textbox", { name: /^Street number/i });
   const originalStreet = await street.inputValue();

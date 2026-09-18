@@ -36,3 +36,48 @@ it("keeps structural deletions out of manual review", () => {
   expect(html).not.toContain('data-row-id="guardian-0"');
   expect(html).not.toContain("Remove Guardian");
 });
+
+it("keeps 1,000 safe compound street repairs in the 25-row paged table", () => {
+  const count = 1000;
+  const streetSession: ValidateSession = {
+    fileName: "streets.xml", originalXml: "", fixes: [],
+    initialResult: {
+      schoolCount: 1, studentCount: count, gate: "REVIEW_REQUIRED",
+      records: Array.from({ length: count }, (_, index) => ({
+        id: "student-" + index,
+        xmlPath: "",
+        fields: { StreetName: "Example " + index + " St.", StreetType: "", StreetDirection: "" },
+      })),
+      issues: Array.from({ length: count }, (_, index) => ({
+        id: "street-" + index,
+        recordId: "student-" + index,
+        studentName: "Student " + (index + 1),
+        field: "StreetName",
+        ruleId: "STREET_TYPE_IN_STREET_NAME",
+        message: "Street type found in StreetName",
+        severity: "warning" as const,
+        autoFixable: true,
+        repairProposal: {
+          kind: "address" as const,
+          id: "street-repair-" + index,
+          confidence: "safe" as const,
+          title: "Move the street type out of the street name",
+          explanation: "",
+          changes: [
+            { field: "StreetName", currentValue: "Example " + index + " St.", proposedValue: "Example " + index },
+            { field: "StreetType", currentValue: "", proposedValue: "ST" },
+          ],
+        },
+      })),
+    },
+  };
+
+  const html = renderToStaticMarkup(<FixView session={streetSession} view="automatic" onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
+  expect(html).toContain('data-row-id="street-0"');
+  expect(html).toContain('data-row-id="street-24"');
+  expect(html).not.toContain('data-row-id="street-25"');
+  expect(html).not.toContain("Address repairs");
+  expect(html).toContain("1–25 of 1000");
+  expect(html).toContain("Select all on current page (25)");
+  expect(html).toContain("Select all across all pages (1000)");
+});

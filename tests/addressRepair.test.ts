@@ -2,6 +2,7 @@ import { automaticFixes } from "../workflows/stix/validation/helpers";
 import { describe, expect, it } from "vitest";
 import {
   analyzeAlternateDeliveryInStreetFields,
+  analyzeStreetNameSuffix,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
@@ -100,6 +101,78 @@ describe("address repair proposals", () => {
         ["StreetName", "Keats"],
       ]);
     }
+  });
+});
+
+describe("street type and direction found in StreetName", () => {
+  const types = ["ST", "RD", "AVE", "CRES", "DR", "BLVD", "CRT", "LANE", "HWY", "PL", "PKY", "TERR", "TRAIL", "CIR", "WAY"];
+  const directions = ["E", "N", "NE", "NW", "S", "SE", "SW", "W"];
+
+  it.each([
+    ["Gilkison St.", "Gilkison", "ST", undefined],
+    ["Chartwell Cres.", "Chartwell", "CRES", undefined],
+    ["Coventry Dr.", "Coventry", "DR", undefined],
+    ["St. Patrick Street East", "St. Patrick", "ST", "E"],
+    ["Victoria Rd. N", "Victoria", "RD", "N"],
+    ["Elliot Ave. West", "Elliot", "AVE", "W"],
+    ["shadybrook cres.", "shadybrook", "CRES", undefined],
+  ])("separates %s into canonical address fields", (raw, name, type, direction) => {
+    const proposal = analyzeStreetNameSuffix(
+      { StreetName: raw, StreetType: "", StreetDirection: "" },
+      types,
+      directions,
+    );
+    expect(proposal).toMatchObject({ confidence: "safe" });
+    expect(proposal?.changes).toEqual([
+      { field: "StreetName", currentValue: raw, proposedValue: name },
+      { field: "StreetType", currentValue: "", proposedValue: type },
+      ...(direction ? [{ field: "StreetDirection", currentValue: "", proposedValue: direction }] : []),
+    ]);
+  });
+
+  it("does not mistake an internal type word for a suffix", () => {
+    expect(analyzeStreetNameSuffix(
+      { StreetName: "Road to Avonlea", StreetType: "", StreetDirection: "" },
+      types,
+      directions,
+    )).toBeUndefined();
+  });
+
+  it("does not overwrite a conflicting populated destination field", () => {
+    const proposal = analyzeStreetNameSuffix(
+      { StreetName: "Victoria Rd N", StreetType: "ST", StreetDirection: "S" },
+      types,
+      directions,
+    );
+    expect(proposal).toMatchObject({ confidence: "review", changes: [] });
+    expect(proposal?.explanation).toContain("StreetType is already “ST”");
+    expect(proposal?.explanation).toContain("StreetDirection is already “S”");
+  });
+
+  it("respects the active ruleset's allowed codes", () => {
+    expect(analyzeStreetNameSuffix(
+      { StreetName: "Gilkison St", StreetType: "", StreetDirection: "" },
+      ["RD"],
+      directions,
+    )).toBeUndefined();
+  });
+
+  it("emits one warning with a coordinated autofix that clears after application", () => {
+    const xml = studentXml("<StreetName>St. Patrick Street East</StreetName><City>Guelph</City><Province>ON</Province>");
+    const initial = validateXml(xml);
+    const issue = initial.issues.find(candidate => candidate.ruleId === "STREET_TYPE_IN_STREET_NAME");
+    expect(issue).toMatchObject({ severity: "warning", autoFixable: true, field: "StreetName" });
+
+    const fixes: AppliedFix[] = issue!.repairProposal!.changes.map(change => ({
+      issueId: issue!.id, recordId: issue!.recordId!, field: change.field,
+      oldValue: change.currentValue, newValue: change.proposedValue,
+      ruleId: issue!.ruleId, repairId: issue!.repairProposal!.id, appliedAt: 1,
+    }));
+    const fixedXml = applyValidationFixes(xml, fixes);
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({
+      StreetName: "St. Patrick", StreetType: "ST", StreetDirection: "E",
+    });
+    expect(validateXml(fixedXml).issues.some(candidate => candidate.ruleId === "STREET_TYPE_IN_STREET_NAME")).toBe(false);
   });
 });
 
