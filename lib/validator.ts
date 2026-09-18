@@ -27,6 +27,7 @@ import {
   serializeCanonicalXml,
   type CanonicalStudent,
   type CanonicalSchool,
+  type CanonicalMetadata,
 } from "./canonical";
 import {
   ADDRESS_REPAIR_FIELDS,
@@ -194,17 +195,28 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
   const records: StudentRecord[] = [];
   issues.push(...upload.diagnostics);
   const metadata = upload.metadata;
+  const boardNumberSuggestion = /^\d{5}$/.test(metadata.boardNumber) ? `B${metadata.boardNumber}` : undefined;
   const metadataRequired: Array<[string, string]> = [
     ["CreateDate", metadata.createDate], ["CreateTime", metadata.createTime], ["CreatedBy", metadata.createdBy],
     ["ContactPhone", metadata.contactPhone?.number ?? ""], ["ContactEmail", metadata.contactEmail], ["FullUpload", metadata.fullUpload],
   ];
-  for (const [field, value] of metadataRequired) if (!value.trim()) issue(issues, { severity: "error", field, ruleId: "METADATA_REQUIRED", layer: "CANONICAL", message: `${field} is required but missing.` });
+  for (const [field, value] of metadataRequired) if (!value.trim()) issue(issues, {
+    severity: "error", field, recordId: "metadata", studentName: "File metadata", schoolNumber: "SchoolUpload/Metadata", currentValue: value,
+    autoFixable: false, ruleId: "METADATA_REQUIRED", layer: "CANONICAL",
+    message: field === "ContactPhone"
+      ? "ContactPhone is required in file metadata. Enter the phone number for the person or team responsible for this upload; this is not a student or guardian phone."
+      : `${field} is required in file metadata.`,
+  });
   if (metadata.createDate && (!validRealDate(metadata.createDate) || metadata.createDate > new Date().toISOString().slice(0, 10))) issue(issues, { severity: "error", field: "CreateDate", ruleId: "METADATA_DATE", layer: "CANONICAL", message: "CreateDate must be a real YYYY-MM-DD date no later than today." });
   if (metadata.createTime && !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(metadata.createTime)) issue(issues, { severity: "error", field: "CreateTime", ruleId: "METADATA_TIME", layer: "CANONICAL", message: "CreateTime must use HH:mm:ss." });
   if (metadata.createdBy && (metadata.createdBy.length < 1 || metadata.createdBy.length > 100)) issue(issues, { severity: "error", field: "CreatedBy", ruleId: "METADATA_CREATED_BY", layer: "CANONICAL", message: "CreatedBy must contain 1–100 characters." });
   if (metadata.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(metadata.contactEmail)) issue(issues, { severity: "error", field: "ContactEmail", ruleId: "METADATA_EMAIL", layer: "CANONICAL", message: "ContactEmail is not a valid email address." });
   if (metadata.fullUpload && !rules.allowedFullLoadTypeValues.includes(metadata.fullUpload)) issue(issues, { severity: "error", field: "FullUpload", ruleId: "FULL_UPLOAD_ALLOWED_VALUE", layer: "CANONICAL", message: `FullUpload "${metadata.fullUpload}" is not allowed.` });
-  if (metadata.boardNumber && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(metadata.boardNumber)) issue(issues, { severity: "error", field: "BoardNumber", ruleId: "BOARD_NUMBER_FORMAT", layer: "CANONICAL", message: "BoardNumber must be B plus 5 digits or D plus 2 letters and 3 digits." });
+  if (metadata.boardNumber && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(metadata.boardNumber)) issue(issues, {
+    severity: "error", field: "BoardNumber", recordId: "metadata", studentName: "File metadata", schoolNumber: "SchoolUpload/Metadata", currentValue: metadata.boardNumber,
+    suggestedFix: boardNumberSuggestion, autoFixable: false,
+    ruleId: "BOARD_NUMBER_FORMAT", layer: "CANONICAL", message: "BoardNumber must be B plus 5 digits or D plus 2 letters and 3 digits.",
+  });
   if (metadata.contactPhone) {
     for (const finding of canonicalPhoneFindings(metadata.contactPhone.number, "Metadata ContactPhone", rules)) {
       issue(issues, {
@@ -235,7 +247,11 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
     if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
     if (rules.requiredFields.includes("SchoolName") && !school.name) issue(issues, { severity: "error", field: "SchoolName", schoolNumber: school.schoolNumber, ruleId: "REQUIRED_FIELD", layer: "CANONICAL", message: "SchoolName is required but missing or empty." });
     if (school.schoolNumber.length > 100) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: school.schoolNumber, ruleId: "SCHOOL_NUMBER_LENGTH", layer: "CANONICAL", message: "SchoolNumber exceeds 100 characters." });
-    if (school.students.length === 0) issue(issues, { severity: "error", schoolNumber: school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL", message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records.` });
+    if (school.students.length === 0) issue(issues, {
+      severity: "error", recordId: `school${schoolIndex}`, field: "School", schoolNumber: school.schoolNumber,
+      currentValue: school.name || school.schoolNumber, ruleId: "EMPTY_STUDENTS", layer: "CANONICAL",
+      message: `School "${school.name || school.schoolNumber}" has no students. Panorama rejects a Students element with no Student records. Select “Remove school” to omit it from the corrected export, or review the source data if the school should contain students.`,
+    });
     for (let studentIndex = 0; studentIndex < school.students.length; studentIndex++) {
       const student = school.students[studentIndex];
       const fields = flattenCanonicalStudent(student, school);
@@ -441,14 +457,29 @@ function setCanonicalStudentField(student: CanonicalStudent, school: CanonicalSc
   }
 }
 
+function setCanonicalMetadataField(metadata: CanonicalMetadata, field: string, value: string) {
+  if (field === "ContactPhone" || field === "MetadataContactPhone") {
+    metadata.contactPhone = { number: value, type: metadata.contactPhone?.type ?? "WORK" };
+  } else if (field === "PhoneType") {
+    metadata.contactPhone = { number: metadata.contactPhone?.number ?? "", type: value };
+  } else if (field === "BoardNumber") {
+    metadata.boardNumber = value;
+  }
+}
+
 /** Apply fixes through the canonical model so every namespace-prefix form behaves identically. */
 export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
-  if (fixes.length === 0) return xmlText;
   const upload = parseCanonicalXml(xmlText);
   const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
+  const removedSchools = new Set<number>();
   for (const fix of fixes) {
-    if (fix.recordId === "metadata" && fix.field === "MetadataContactPhone") {
-      upload.metadata.contactPhone = { number: fix.newValue, type: upload.metadata.contactPhone?.type ?? "" };
+    if (fix.field === "RemoveSchool") {
+      const schoolMatch = fix.recordId.match(/^school(\d+)$/);
+      if (fix.newValue === "REMOVE" && schoolMatch) removedSchools.add(Number(schoolMatch[1]));
+      continue;
+    }
+    if (fix.recordId === "metadata") {
+      setCanonicalMetadataField(upload.metadata, fix.field, fix.newValue);
       continue;
     }
     const coordinates = decodeRecordId(fix.recordId);
@@ -467,6 +498,7 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   for (const [student, indexes] of guardianRemovals) {
     for (const index of [...indexes].sort((a, b) => b - a)) student.guardians.splice(index, 1);
   }
+  upload.schools = upload.schools.filter((_, index) => !removedSchools.has(index));
   return serializeCanonicalXml(upload);
 }
 

@@ -257,6 +257,34 @@ test("an empty Students element is an error, matching Panorama's real rejection 
   assert.equal(result.gate, "BLOCKED");
 });
 
+test("the correction pipeline repairs board metadata and drops empty schools without inventing contact data", () => {
+  const wcdsbMetadata = metadata
+    .replace(`<ContactPhone type="WORK">519-555-1234</ContactPhone>`, "")
+    .replace("</Metadata>", "<SchoolBoard><BoardNumber>67130</BoardNumber><Name>Wellington Catholic District School Board</Name></SchoolBoard></Metadata>");
+  const source = xml()
+    .replace(metadata, wcdsbMetadata)
+    .replace("</SchoolUpload>", "<School><SchoolNumber>EMPTY</SchoolNumber><Name>Virtual School</Name><Students></Students></School></SchoolUpload>");
+  const fixed = applyValidationFixes(source, []);
+  const upload = parseCanonicalXml(fixed);
+  const issues = validateXml(source).issues;
+  assert.equal(issues.find((issue) => issue.field === "ContactPhone")?.recordId, "metadata");
+  assert.equal(issues.find((issue) => issue.field === "ContactPhone")?.autoFixable, false);
+  assert.equal(issues.find((issue) => issue.field === "BoardNumber")?.autoFixable, false);
+  assert.equal(upload.metadata.contactPhone, null);
+  assert.equal(upload.metadata.boardNumber, "67130");
+  assert.equal(upload.schools.length, 2);
+  assert.equal(upload.schools[0].students.length, 1);
+
+  const manuallyFixed = applyValidationFixes(source, [
+    { issueId: "contact", recordId: "metadata", field: "ContactPhone", oldValue: "", newValue: "519-821-4600", ruleId: "METADATA_REQUIRED", appliedAt: 0 },
+    { issueId: "board", recordId: "metadata", field: "BoardNumber", oldValue: "67130", newValue: "B67130", ruleId: "BOARD_NUMBER_FORMAT", appliedAt: 0 },
+    { issueId: "empty-school", recordId: "school1", field: "RemoveSchool", oldValue: "Virtual School", newValue: "REMOVE", ruleId: "EMPTY_STUDENTS", appliedAt: 0 },
+  ]);
+  const repaired = parseCanonicalXml(manuallyFixed);
+  assert.equal(repaired.metadata.contactPhone?.number, "519-821-4600");
+  assert.equal(repaired.metadata.boardNumber, "B67130");
+});
+
 test("phone fixes strip real-world trailing call notes and recognize 'ex' as an extension marker", () => {
   const cases: Array<[string, string]> = [
     ["519-938-0734 call 1st", "519-938-0734"],
