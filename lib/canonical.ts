@@ -85,8 +85,8 @@ function text(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return text((value as XmlNode)["#text"]);
   let decoded = String(value).trim();
-  // Some legacy exports contain entities encoded more than once
-  // (for example D&amp;amp;apos;Costa). Unwrap only standard XML entities,
+  // Some legacy exports contain entities encoded more than once.
+  // Unwrap only standard XML entities,
   // and cap the passes so malformed input cannot cause unbounded work.
   for (let pass = 0; pass < 4; pass++) {
     const next = decoded.replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => ({
@@ -147,7 +147,7 @@ export function parseCanonicalXml(xml: string): CanonicalUpload {
     removeNSPrefix: true,
     // Decode standard XML entities before canonical serialization. Keeping
     // values such as &apos; literal causes each round-trip to escape the ampersand
-    // again, producing visible text like D&amp;apos;Costa.
+    // again, producing visible text with the entity markup exposed.
     processEntities: true,
     isArray: (tagName) => tagName === "School" || tagName === "Student" || tagName === "Guardian",
   });
