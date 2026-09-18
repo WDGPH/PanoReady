@@ -3,15 +3,22 @@
 import { useState, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, ChevronDown, ChevronRight, Plus } from "lucide-react";
-import type { CustomRuleset, RulesProfile, CleaningProfile, CleaningMapping } from "@/lib/types";
+import type { CustomRuleset, RulesProfile, CleaningProfile, CleaningMapping, FreeTextCharacterCheck } from "@/lib/types";
 import { BUILTIN_ID, defaultRules, listCustomRulesets, saveCustomRuleset } from "@/lib/rulesets";
 import { getCleanableFields } from "@/lib/cleaning";
-import { REQUIRED_FIELD_GROUPS } from "@/lib/fields";
+import { FREE_TEXT_FIELD_GROUPS, REQUIRED_FIELD_GROUPS } from "@/lib/fields";
 
 const FIELD_LENGTH_KEYS = [
   "FirstName", "LastName", "MiddleName", "AliasFirstName",
   "AliasMiddleName", "AliasLastName", "OEN", "PostalCode",
   "City", "StreetName", "StreetNumber", "StreetNumberSuffix", "Unit",
+];
+
+const FREE_TEXT_CHARACTER_CHECKS: Array<{ key: FreeTextCharacterCheck; label: string; description: string }> = [
+  { key: "apostrophe", label: "Apostrophes", description: "Remove straight and curly apostrophes." },
+  { key: "quotation", label: "Quotation marks", description: "Remove straight and curly quotation marks." },
+  { key: "accent", label: "Accented letters", description: "Replace accented Latin letters with their unaccented form." },
+  { key: "other", label: "Other special characters", description: "Remove other characters not allowed for that field." },
 ];
 
 type TabId = "general" | "required" | "values" | "lengths" | "format" | "duplication" | "cleaning";
@@ -620,6 +627,50 @@ export default function RulesetEditor({ initial, onSave, onClose }: RulesetEdito
                     onRemove={(v) => setRules((r) => ({ ...r, dateFields: r.dateFields.filter((x) => x !== v) }))}
                     placeholder="e.g. BirthDate"
                   />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Free-text Character Checks</label>
+                  <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 10 }}>
+                    Each info-level check is enabled independently by field. Parenthetical text is preserved; short dashes, spaces, letters, numbers, and configured field exceptions are allowed.
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {FREE_TEXT_CHARACTER_CHECKS.map(({ key, label, description }) => {
+                      const selected = rules.freeTextCharacterChecks?.[key] ?? defaultRules.freeTextCharacterChecks?.[key] ?? [];
+                      return <section key={key} style={{ padding: "12px 14px", background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+                        <div style={{ fontSize: 12, color: "var(--color-text-muted)", margin: "2px 0 8px" }}>{description}</div>
+                        {FREE_TEXT_FIELD_GROUPS.map((group) => <div key={group.label} style={{ marginTop: 7 }}>
+                          <div style={{ ...labelStyle, marginBottom: 2 }}>{group.label}</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 2 }}>
+                            {group.fields.map((field) => <label key={field} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px", cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={selected.includes(field)}
+                                onChange={(event) => setRules((currentRules) => {
+                                  const current = currentRules.freeTextCharacterChecks?.[key]
+                                    ?? defaultRules.freeTextCharacterChecks?.[key]
+                                    ?? [];
+                                  const fields = event.target.checked
+                                    ? [...new Set([...current, field])]
+                                    : current.filter((candidate) => candidate !== field);
+                                  return {
+                                    ...currentRules,
+                                    freeTextCharacterChecks: {
+                                      ...currentRules.freeTextCharacterChecks,
+                                      [key]: fields,
+                                    },
+                                  };
+                                })}
+                                style={{ accentColor: "var(--color-brand-500)", cursor: "pointer" }}
+                              />
+                              <span style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{field}</span>
+                            </label>)}
+                          </div>
+                        </div>)}
+                      </section>;
+                    })}
+                  </div>
                 </div>
               </div>
             )}
