@@ -35,7 +35,7 @@ test("validation, corrections and encrypted output keep records and passwords lo
   await expect(page.getByRole("heading", { name: "Import readiness" })).toBeVisible();
   await guard.assertPrivate();
   await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
-  await page.getByLabel(`Select fix for ${markers.record} Student: Phone`, { exact: true }).check();
+  await page.getByRole("checkbox", { name: "Select fix for Student 1.1: Phone", exact: true }).check();
   await page.getByRole("button", { name: /Apply selected/ }).click();
   const historyTrigger = page.getByRole("button", { name: /^History \(/ });
   await expect(historyTrigger).toBeVisible();
@@ -58,10 +58,10 @@ test("validation, corrections and encrypted output keep records and passwords lo
   await historyTrigger.click();
   await history.getByRole("button", { name: "Close history" }).click();
   await expect(history).toBeHidden();
-  await page.getByLabel(`Select fix for ${markers.record} Student: Phone`, { exact: true }).check();
+  await page.getByRole("checkbox", { name: "Select fix for Student 1.1: Phone", exact: true }).check();
   await page.getByRole("button", { name: /Apply selected/ }).click();
   await page.getByRole("button", { name: "Manual fixes", exact: true }).click();
-  await page.getByRole("row").filter({ hasText: markers.record }).filter({ hasText: "BAD" }).getByRole("textbox").fill("GR5");
+  await page.getByRole("textbox", { name: "Correct Grade for Student 1.1", exact: true }).fill("GR5");
   await page.getByRole("button", { name: "Apply fixes and view summary", exact: true }).click();
   await page.getByRole("button", { name: "Output", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Output", exact: true })).toBeVisible();

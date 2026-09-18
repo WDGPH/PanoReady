@@ -11,9 +11,122 @@ function comparable(value: string): string {
   return value.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+const COMMON_STREET_TYPES: Record<string, string> = {
+  ST: "ST", STREET: "ST",
+  RD: "RD", ROAD: "RD",
+  AV: "AVE", AVE: "AVE", AVENUE: "AVE",
+  CRES: "CRES", CRESCENT: "CRES",
+  DR: "DR", DRIVE: "DR",
+  BLVD: "BLVD", BOULEVARD: "BLVD",
+  CRT: "CRT", CT: "CRT", COURT: "CRT",
+  LANE: "LANE", LN: "LANE",
+  HWY: "HWY", HIGHWAY: "HWY",
+  PL: "PL", PLACE: "PL",
+  PKY: "PKY", PARKWAY: "PKY",
+  TERR: "TERR", TERRACE: "TERR",
+  TRAIL: "TRAIL", TRL: "TRAIL",
+  CIR: "CIR", CIRCLE: "CIR",
+  WAY: "WAY",
+};
+
+const COMMON_STREET_DIRECTIONS: Record<string, string> = {
+  N: "N", NORTH: "N",
+  S: "S", SOUTH: "S",
+  E: "E", EAST: "E",
+  W: "W", WEST: "W",
+  NE: "NE", NORTHEAST: "NE", "NORTH EAST": "NE",
+  NW: "NW", NORTHWEST: "NW", "NORTH WEST": "NW",
+  SE: "SE", SOUTHEAST: "SE", "SOUTH EAST": "SE",
+  SW: "SW", SOUTHWEST: "SW", "SOUTH WEST": "SW",
+};
+
+function suffixKey(value: string): string {
+  return value.toUpperCase().replace(/[.,]/g, "").trim();
+}
+
+/**
+ * Detect a common street type, optionally followed by a direction, at the end
+ * of StreetName. The proposal is safe only when populated destination fields
+ * already agree; conflicting address data is surfaced without guessing.
+ */
+export function analyzeStreetNameSuffix(
+  fields: Record<string, string>,
+  allowedStreetTypes: readonly string[],
+  allowedStreetDirections: readonly string[],
+  proposalId = "address-street-name-suffix",
+): AddressRepairProposal | undefined {
+  const rawName = (fields.StreetName ?? "").trim();
+  const words = rawName.split(/\s+/);
+  if (words.length < 2) return undefined;
+
+  let direction: string | undefined;
+  let directionWordCount = 0;
+  for (const count of [2, 1]) {
+    if (words.length <= count) continue;
+    const candidate = suffixKey(words.slice(-count).join(" "));
+    const canonical = COMMON_STREET_DIRECTIONS[candidate];
+    if (canonical && allowedStreetDirections.includes(canonical)) {
+      direction = canonical;
+      directionWordCount = count;
+      break;
+    }
+  }
+
+  const typeIndex = words.length - directionWordCount - 1;
+  if (typeIndex < 1) return undefined;
+  const streetType = COMMON_STREET_TYPES[suffixKey(words[typeIndex])];
+  if (!streetType || !allowedStreetTypes.includes(streetType)) return undefined;
+
+  const streetName = words.slice(0, typeIndex).join(" ").trim();
+  if (!streetName || !/[A-Za-z]/.test(streetName)) return undefined;
+
+  const currentType = (fields.StreetType ?? "").trim();
+  const currentDirection = (fields.StreetDirection ?? "").trim();
+  const typeConflict = currentType !== "" && suffixKey(currentType) !== streetType;
+  const directionConflict = direction !== undefined
+    && currentDirection !== ""
+    && suffixKey(currentDirection) !== direction;
+
+  if (typeConflict || directionConflict) {
+    const conflicts = [
+      typeConflict ? "StreetType is already “" + currentType + "”" : "",
+      directionConflict ? "StreetDirection is already “" + currentDirection + "”" : "",
+    ].filter(Boolean).join("; ");
+    return {
+      kind: "address",
+      id: proposalId,
+      confidence: "review",
+      title: "Review a street type found in the street name",
+      explanation: "“" + rawName + "” ends with street type “" + streetType + "”"
+        + (direction ? " and direction “" + direction + "”" : "")
+        + ", but " + conflicts + ". Review the complete address before applying changes.",
+      changes: [],
+    };
+  }
+
+  const changes: AddressRepairProposal["changes"] = [
+    { field: "StreetName", currentValue: fields.StreetName ?? "", proposedValue: streetName },
+  ];
+  if (!currentType) changes.push({ field: "StreetType", currentValue: fields.StreetType ?? "", proposedValue: streetType });
+  if (direction && !currentDirection) {
+    changes.push({ field: "StreetDirection", currentValue: fields.StreetDirection ?? "", proposedValue: direction });
+  }
+
+  return {
+    kind: "address",
+    id: proposalId,
+    confidence: "safe",
+    title: "Move the street type out of the street name",
+    explanation: "“" + rawName + "” can be separated into street name “" + streetName
+      + "”, street type “" + streetType + "”"
+      + (direction ? ", and direction “" + direction + "”" : "") + ".",
+    changes,
+  };
+}
+
 /**
  * Detect a street number with a street-name fragment accidentally pasted into it.
- * Suggestions are automatic only when they preserve or fill the companion fields.
+ * Confidence distinguishes unambiguous splits from suggestions with field conflicts.
  */
 export function analyzeStreetNumberRepair(
   fields: Record<string, string>,

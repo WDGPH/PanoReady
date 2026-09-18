@@ -61,3 +61,9 @@ export const REQUIRED_FIELD_GROUPS: ReadonlyArray<{
 export const REQUIRED_FIELDS: readonly RequiredField[] = REQUIRED_FIELD_GROUPS.flatMap(
   ({ fields }) => fields,
 );
+
+/** Whole-guardian edits use the same section keys as guardian removal fixes. */
+export function guardianSectionForField(field: string): "Guardian" | "Guardian2" | undefined {
+  if (field === "Guardian" || GUARDIAN_FIELDS.some(candidate => candidate === field)) return "Guardian";
+  if (field === "Guardian2" || SECOND_GUARDIAN_FIELDS.some(candidate => candidate === field)) return "Guardian2";
+}

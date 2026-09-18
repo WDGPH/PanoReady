@@ -32,6 +32,7 @@ import {
 import {
   ADDRESS_REPAIR_FIELDS,
   analyzeAlternateDeliveryInStreetFields,
+  analyzeStreetNameSuffix,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
@@ -61,7 +62,11 @@ function issue(
   issues: ValidationIssue[],
   value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
 ) {
-  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, autoFixable: value.autoFixable ?? false, ...value });
+  const autoFixable = value.repairProposal
+    ? value.repairProposal.confidence === "safe"
+      && value.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
+    : value.autoFixable ?? value.suggestedFix !== undefined;
+  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, ...value, autoFixable });
 }
 
 function validRealDate(value: string): boolean {
@@ -279,6 +284,25 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         });
       }
 
+      const streetNameSuffixProposal = analyzeStreetNameSuffix(
+        fields,
+        rules.allowedStreetTypeValues,
+        rules.allowedStreetDirectionValues,
+        recordId + "-address-street-name-suffix",
+      );
+      if (streetNameSuffixProposal) {
+        const safe = streetNameSuffixProposal.confidence === "safe";
+        issue(issues, {
+          ...base,
+          severity: "warning",
+          field: "StreetName",
+          ruleId: "STREET_TYPE_IN_STREET_NAME",
+          message: streetNameSuffixProposal.explanation,
+          autoFixable: safe,
+          repairProposal: streetNameSuffixProposal,
+        });
+      }
+
       for (const field of rules.requiredFields.filter((required) => !schoolFields.has(required))) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
       for (const [field, allowed] of Object.entries(allowedByField)) {
         const value = fields[field];
@@ -475,7 +499,10 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   for (const fix of fixes) {
     if (fix.field === "RemoveSchool") {
       const schoolMatch = fix.recordId.match(/^school(\d+)$/);
-      if (fix.newValue === "REMOVE" && schoolMatch) removedSchools.add(Number(schoolMatch[1]));
+      if (fix.newValue === "REMOVE" && schoolMatch) {
+        const index = Number(schoolMatch[1]);
+        if (upload.schools[index]?.students.length === 0) removedSchools.add(index);
+      }
       continue;
     }
     if (fix.recordId === "metadata") {
