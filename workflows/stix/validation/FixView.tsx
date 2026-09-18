@@ -106,6 +106,19 @@ export default function FixView({
       // removing an invalid phone. Only untouched fields are skipped.
       if (newValue === undefined) continue;
       if (!issue.recordId || !issue.field) continue;
+      if (issue.ruleId === "EMPTY_STUDENTS") {
+        if (newValue !== "REMOVE") continue;
+        fixes.push({
+          issueId: issue.id,
+          recordId: issue.recordId,
+          field: "RemoveSchool",
+          oldValue: issue.currentValue ?? issue.schoolNumber ?? "",
+          newValue: "REMOVE",
+          ruleId: issue.ruleId,
+          appliedAt: now,
+        });
+        continue;
+      }
       const record = records.find(r => r.id === issue.recordId);
       const oldValue = issue.currentValue ?? (record ? (record.fields[issue.field] ?? "") : "");
       if (!record && issue.currentValue === undefined) continue;
@@ -251,6 +264,7 @@ export default function FixView({
                 const record = records.find(r => r.id === issue.recordId);
                 const currentValue = issue.currentValue ?? (issue.field && record ? (record.fields[issue.field] ?? "") : "");
                 const isEmptyGuardian = issue.ruleId === "EMPTY_GUARDIAN";
+                const isEmptySchool = issue.ruleId === "EMPTY_STUDENTS";
                 const suggestedValue = isEmptyGuardian ? "" : issue.suggestedFix;
                 const pendingVal = pending[issue.id] ?? "";
                 const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
@@ -279,7 +293,14 @@ export default function FixView({
                       ) : <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>—</span>}
                     </td>
                     <td style={{ minWidth: 200 }}>
-                      {group.automatic || isEmptyGuardian ? (
+                      {isEmptySchool ? (
+                        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input type="checkbox" aria-label={`Remove empty school ${currentValue || issue.schoolNumber || "record"}`} checked={pending[issue.id] === "REMOVE"} onChange={event => {
+                            setPending(p => event.target.checked ? { ...p, [issue.id]: "REMOVE" } : Object.fromEntries(Object.entries(p).filter(([id]) => id !== issue.id)));
+                          }} />
+                          <span>Remove school from corrected export</span>
+                        </label>
+                      ) : group.automatic || isEmptyGuardian ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" aria-label={`Select fix for ${issue.studentName || "student"}: ${issue.field}`} checked={pending[issue.id] !== undefined} disabled={suggestedValue === undefined} onChange={event => {
                             if (event.target.checked) setPending(p => ({ ...p, [issue.id]: suggestedValue! }));

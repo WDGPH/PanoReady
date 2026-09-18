@@ -6,7 +6,7 @@ import { importWorkbook } from "../lib/excel";
 import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
 import { standardizeUnit } from "../lib/cleaner";
 
-const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-1234</ContactPhone><ContactEmail>analyst@example.ca</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
+const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-0100</ContactPhone><ContactEmail>analyst@example.invalid</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
 const student = `<Student><Name><First>Ada</First><Last>Lovelace</Last></Name><Gender>F</Gender><BirthDate>2015-04-12</BirthDate><Language>en</Language><CountryOfOrigin>CA</CountryOfOrigin><Guardian><Name><First>Ann</First><Last>Lovelace</Last></Name><Relationship>MOTHER</Relationship><Phone type="MOBILE">519-555-2222</Phone></Guardian><Address><StreetName>Main</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G1A1</PostalCode></Address><Phone type="HOME">519-555-3333</Phone></Student>`;
 
 function xml(prefix = "") {
@@ -265,6 +265,34 @@ test("an empty Students element is an error, matching Panorama's real rejection 
   const issue = result.issues.find((i) => i.ruleId === "EMPTY_STUDENTS");
   assert.equal(issue?.severity, "error");
   assert.equal(result.gate, "BLOCKED");
+});
+
+test("the correction pipeline repairs board metadata and drops empty schools without inventing contact data", () => {
+  const boardMetadata = metadata
+    .replace(`<ContactPhone type="WORK">519-555-0100</ContactPhone>`, "")
+    .replace("</Metadata>", "<SchoolBoard><BoardNumber>12345</BoardNumber><Name>Synthetic Catholic District School Board</Name></SchoolBoard></Metadata>");
+  const source = xml()
+    .replace(metadata, boardMetadata)
+    .replace("</SchoolUpload>", "<School><SchoolNumber>EMPTY</SchoolNumber><Name>Virtual School</Name><Students></Students></School></SchoolUpload>");
+  const fixed = applyValidationFixes(source, []);
+  const upload = parseCanonicalXml(fixed);
+  const issues = validateXml(source).issues;
+  assert.equal(issues.find((issue) => issue.field === "ContactPhone")?.recordId, "metadata");
+  assert.equal(issues.find((issue) => issue.field === "ContactPhone")?.autoFixable, false);
+  assert.equal(issues.find((issue) => issue.field === "BoardNumber")?.autoFixable, false);
+  assert.equal(upload.metadata.contactPhone, null);
+  assert.equal(upload.metadata.boardNumber, "12345");
+  assert.equal(upload.schools.length, 2);
+  assert.equal(upload.schools[0].students.length, 1);
+
+  const manuallyFixed = applyValidationFixes(source, [
+    { issueId: "contact", recordId: "metadata", field: "ContactPhone", oldValue: "", newValue: "519-555-0101", ruleId: "METADATA_REQUIRED", appliedAt: 0 },
+    { issueId: "board", recordId: "metadata", field: "BoardNumber", oldValue: "12345", newValue: "B12345", ruleId: "BOARD_NUMBER_FORMAT", appliedAt: 0 },
+    { issueId: "empty-school", recordId: "school1", field: "RemoveSchool", oldValue: "Virtual School", newValue: "REMOVE", ruleId: "EMPTY_STUDENTS", appliedAt: 0 },
+  ]);
+  const repaired = parseCanonicalXml(manuallyFixed);
+  assert.equal(repaired.metadata.contactPhone?.number, "519-555-0101");
+  assert.equal(repaired.metadata.boardNumber, "B12345");
 });
 
 test("phone fixes strip real-world trailing call notes and recognize 'ex' as an extension marker", () => {
