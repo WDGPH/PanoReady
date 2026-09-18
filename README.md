@@ -83,7 +83,7 @@ pinned to the same version; update them together. Badge status reflects `main`.
 
 ## Documentation
 
-The application is published at <https://wdgph.github.io/PanoReady/>. The documentation is published from the same Pages deployment at <https://wdgph.github.io/PanoReady/docs/> and is maintained in the [`docs`](docs/) directory.
+The latest tagged release is published at <https://wdgph.github.io/PanoReady/> (redirecting to `/stable/`). The current main build is at <https://wdgph.github.io/PanoReady/latest/>. Both display their version and source commit. See [Deployment](docs/deployment.md) for release selection and URL casing. The documentation is published from the same Pages deployment at <https://wdgph.github.io/PanoReady/docs/> and is maintained in the [`docs`](docs/) directory.
 
 To preview the documentation locally:
 

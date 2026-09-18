@@ -3,13 +3,14 @@ name: GitHub Pages
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -17,43 +18,40 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           # Published output must not depend on caches written by other jobs.
           package-manager-cache: false
-      - name: Install application dependencies
-        run: npm ci
-      - name: Build static application
-        run: npm run build
-        env:
-          GITHUB_PAGES: "true"
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Install documentation dependencies
-        run: >-
-          python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
-      - name: Build documentation
-        run: mkdocs build --strict --site-dir out/docs
-      - name: Disable Jekyll processing
-        run: touch out/.nojekyll
+      - name: Build stable and latest sites
+        env:
+          PREVIEW: ${{ github.event_name == 'pull_request' }}
+          PAGES_BASE_PATH: /PanoReady
+        run: |
+          latest_ref=origin/main
+          if [ "$PREVIEW" = "true" ]; then latest_ref=HEAD; fi
+          python scripts/build-pages.py --latest-ref "$latest_ref" --base-path "$PAGES_BASE_PATH"
       - name: Upload Pages artifact
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: out
+          path: pages-out
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     timeout-minutes: 15
     needs: build
     runs-on: ubuntu-latest

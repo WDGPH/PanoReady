@@ -67,3 +67,6 @@ next-env.d.ts
 *.doc
 *.docx
 *.pdf
+
+# Combined GitHub Pages artifact
+/pages-out/
