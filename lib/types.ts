@@ -150,7 +150,13 @@ export interface RulesProfile {
   gradeAliases: Record<string, string>;
   genderAliases: Record<string, string>;
   duplicateDetection: { checkOen: boolean; checkNameDobSchool: boolean };
+  /** Info-level character checks, independently enabled for each free-text field. */
+  freeTextCharacterChecks?: Partial<Record<FreeTextCharacterCheck, string[]>>;
+  /** Additional literal characters permitted in specific free-text fields. */
+  freeTextAllowedCharacters?: Record<string, string>;
 }
+
+export type FreeTextCharacterCheck = "apostrophe" | "quotation" | "accent" | "other";
 
 // ─── Cleaning types ───────────────────────────────────────────────────────────
 

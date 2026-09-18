@@ -353,6 +353,44 @@ issue.
 
 ---
 
+### Rules: free-text characters
+
+**Severity:** info
+**Fields:** configured independently in `freeTextCharacterChecks`
+
+Four separate rules identify characters that are accepted in STIX but may make
+downstream reporting or matching less reliable:
+
+| Rule ID | Characters | Suggested fix |
+|---|---|---|
+| `FREE_TEXT_APOSTROPHE` | Straight and curly apostrophes | Remove |
+| `FREE_TEXT_QUOTATION` | Straight and curly quotation marks | Remove |
+| `FREE_TEXT_ACCENT` | Accented Latin letters, including `é è à ù ä ö ü` | Replace with the unaccented letter |
+| `FREE_TEXT_SPECIAL_CHARACTER` | Anything outside ASCII letters, numbers, whitespace, `-`, round brackets, or the field's configured exceptions | Remove |
+
+Each category has its own field list. The built-in profile permits apostrophes,
+periods, and ampersands in `SchoolName`, while the other enabled checks still
+apply there.
+Periods and slashes are also preserved in the street-address fields `Unit`,
+`StreetNumber`, `StreetNumberSuffix`, and `StreetName`.
+The slash is preserved in `City` as well, but a period is not.
+Profiles can enable or disable every category for every supported free-text
+field. When one field contains multiple categories, the findings remain
+separate but share the same composed suggestion so applying any or all of them
+produces the complete safe value.
+
+Balanced parenthetical spans are excluded entirely: the brackets and their
+contents are preserved for possible future handling as aliases or former names.
+An unmatched round bracket is allowed but does not shield the remaining text.
+
+Character checks run last and act only as a fallback. If another validator
+already reports the same record field, its specialized correction owns that
+field and no character finding is added.
+
+**Auto-fix:** Yes. These findings never change the validation gate.
+
+---
+
 ### Rule: `duplicate-oen`
 
 **Severity:** error
@@ -389,6 +427,10 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
+| `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
+| `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
+| `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |
+| `FREE_TEXT_SPECIAL_CHARACTER` | Yes | Other special character removed |
 | `xml-wellformed` | No | — |
 | `root-element` | No | — |
 | `school-structure` | No | — |

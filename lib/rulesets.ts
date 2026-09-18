@@ -169,6 +169,26 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
   if (typeof dd.checkNameDobSchool !== "boolean") {
     throw new Error("'rules.duplicateDetection.checkNameDobSchool' must be a boolean.");
   }
+  if ("freeTextCharacterChecks" in r && r.freeTextCharacterChecks !== undefined) {
+    if (
+      typeof r.freeTextCharacterChecks !== "object" ||
+      r.freeTextCharacterChecks === null ||
+      Array.isArray(r.freeTextCharacterChecks)
+    ) {
+      throw new Error("'rules.freeTextCharacterChecks' must be an object.");
+    }
+    const checks = r.freeTextCharacterChecks as Record<string, unknown>;
+    const knownChecks = new Set(["apostrophe", "quotation", "accent", "other"]);
+    for (const [check, fields] of Object.entries(checks)) {
+      if (!knownChecks.has(check)) throw new Error(`Unknown free-text character check '${check}'.`);
+      if (!Array.isArray(fields) || !fields.every((field) => typeof field === "string")) {
+        throw new Error(`'rules.freeTextCharacterChecks.${check}' must be an array of strings.`);
+      }
+    }
+  }
+  if ("freeTextAllowedCharacters" in r && r.freeTextAllowedCharacters !== undefined) {
+    requireRecordOf(r, "freeTextAllowedCharacters", "string");
+  }
 
   // Collects extra warnings from cleaning validation, merged with rules warnings below
   const extraWarnings: string[] = [];
@@ -219,7 +239,7 @@ export function validateRulesetSchema(raw: unknown): CustomRuleset {
     "allowedLanguageValues", "allowedCountryValues", "allowedStreetTypeValues",
     "allowedRelationshipValues", "allowedPhoneTypeValues", "allowedStreetDirectionValues",
     "allowedFullLoadTypeValues", "dateFields", "fieldLengths", "postalCodePattern",
-    "gradeAliases", "genderAliases", "phoneConfig", "duplicateDetection",
+    "gradeAliases", "genderAliases", "phoneConfig", "duplicateDetection", "freeTextCharacterChecks", "freeTextAllowedCharacters",
   ]);
   const unknownKeys = Object.keys(r).filter((k) => !knownRulesKeys.has(k));
   const allWarnings: string[] = [

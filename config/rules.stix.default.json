@@ -93,5 +93,19 @@
   "duplicateDetection": {
     "checkOen": true,
     "checkNameDobSchool": true
+  },
+  "freeTextCharacterChecks": {
+    "apostrophe": ["Class", "FirstName", "MiddleName", "LastName", "AliasFirstName", "AliasMiddleName", "AliasLastName", "GuardianFirstName", "GuardianLastName", "Guardian2FirstName", "Guardian2LastName", "Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "RuralRoute", "PoBoxNumber", "City"],
+    "quotation": ["SchoolName", "Class", "FirstName", "MiddleName", "LastName", "AliasFirstName", "AliasMiddleName", "AliasLastName", "GuardianFirstName", "GuardianLastName", "Guardian2FirstName", "Guardian2LastName", "Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "RuralRoute", "PoBoxNumber", "City"],
+    "accent": ["SchoolName", "Class", "FirstName", "MiddleName", "LastName", "AliasFirstName", "AliasMiddleName", "AliasLastName", "GuardianFirstName", "GuardianLastName", "Guardian2FirstName", "Guardian2LastName", "Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "RuralRoute", "PoBoxNumber", "City"],
+    "other": ["SchoolName", "Class", "FirstName", "MiddleName", "LastName", "AliasFirstName", "AliasMiddleName", "AliasLastName", "GuardianFirstName", "GuardianLastName", "Guardian2FirstName", "Guardian2LastName", "Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "RuralRoute", "PoBoxNumber", "City"]
+  },
+  "freeTextAllowedCharacters": {
+    "SchoolName": ".&",
+    "Unit": "./",
+    "StreetNumber": "./",
+    "StreetNumberSuffix": "./",
+    "StreetName": "./",
+    "City": "/"
   }
 }

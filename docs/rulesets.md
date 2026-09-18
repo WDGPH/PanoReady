@@ -279,6 +279,62 @@ the structural/policy distinction, source provenance, and verification date.
 
 ---
 
+### `freeTextCharacterChecks`
+
+**Controls:** `FREE_TEXT_APOSTROPHE`, `FREE_TEXT_QUOTATION`,
+`FREE_TEXT_ACCENT`, and `FREE_TEXT_SPECIAL_CHARACTER`
+**Type:** object — character category → array of field names
+
+```json
+"freeTextCharacterChecks": {
+  "apostrophe": ["FirstName", "LastName", "City"],
+  "quotation": ["SchoolName", "FirstName", "LastName", "City"],
+  "accent": ["SchoolName", "FirstName", "LastName", "City"],
+  "other": ["SchoolName", "FirstName", "LastName", "City"]
+}
+```
+
+Each category is configured independently for each free-text field. Omitting a
+field from one category allows that category in that field; for example, the
+built-in profile omits `SchoolName` from `apostrophe`, so a school such as
+`King's Academy` is not flagged for its apostrophe. Spaces, the short dash
+(`-`), and round brackets are allowed. A balanced parenthetical span and all
+of its contents are excluded from these checks so aliases and former names are
+preserved for possible future handling.
+
+All four rules are informational and have deterministic suggestions. Apostrophes
+and quotation marks are removed, accented Latin letters are converted to their
+unaccented form, and other disallowed characters are removed. Legacy profiles
+that omit `freeTextCharacterChecks` remain valid and inherit the built-in
+field lists at validation time.
+
+`freeTextAllowedCharacters` adds literal exceptions to the base character set:
+
+```json
+"freeTextAllowedCharacters": {
+  "SchoolName": ".&",
+  "Unit": "./",
+  "StreetNumber": "./",
+  "StreetNumberSuffix": "./",
+  "StreetName": "./",
+  "City": "/"
+}
+```
+
+The built-in profile therefore preserves periods and ampersands in school names,
+and preserves periods and slashes in `Unit`, `StreetNumber`,
+`StreetNumberSuffix`, and `StreetName`.
+A custom profile may replace the exception string for a field. Legacy profiles
+The slash is also preserved in `City`; periods are not.
+that omit either free-text property remain valid and inherit the built-in policy
+at validation time.
+
+Character checks run after all other validation. If a specialized rule already
+reports the same record field—for example, an address-repair rule owns
+`StreetName`—PanoReady does not add a competing character finding.
+
+---
+
 ### `gradeAliases`
 
 **Controls:** `grade-value` rule (auto-fix step)
