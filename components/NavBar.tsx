@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import logo from "@/assets/panoready-nav-logo.png";
+import BrandFlag from "./BrandFlag";
 
 export default function NavBar() {
   return (
@@ -9,7 +8,7 @@ export default function NavBar() {
       <div className="topbar-inner">
         <div className="brand-lockup">
           <span className="brand">
-            <Image src={logo} alt="" width={40} height={40} unoptimized className="brand-logo" />
+            <BrandFlag />
             <span className="brand-name">PanoReady</span>
           </span>
           <span className="brand-tagline">Tools for faster, more reliable Panorama imports</span>

@@ -13,7 +13,7 @@ function comparable(value: string): string {
 
 /**
  * Detect a street number with a street-name fragment accidentally pasted into it.
- * Suggestions are automatic only when they preserve or fill the companion fields.
+ * Confidence distinguishes unambiguous splits from suggestions with field conflicts.
  */
 export function analyzeStreetNumberRepair(
   fields: Record<string, string>,

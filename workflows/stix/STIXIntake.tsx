@@ -8,6 +8,8 @@ import type { XlsmMetadata, ColumnOverrides, CanonicalField } from "@/lib/excel"
 import { parseSTIXXml } from "@/lib/validator";
 import type { ImportPreview, STIXComparison, StudentRecord, Workflow } from "@/lib/types";
 import StatCard from "@/components/StatCard";
+import WorkbookDateReview from "@/components/WorkbookDateReview";
+import type { DateConvention, WorkbookDateAnalysis } from "@/lib/workbookDates";
 
 export interface ValidateWorkflowInput {
   xml: string;
@@ -102,6 +104,10 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const [processing, setProcessing] = useState(false);
   const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
   const [xlsmPreview, setXlsmPreview] = useState<ImportPreview | null>(null);
+  const [dateConvention, setDateConvention] = useState<DateConvention>();
+  const [dateAnalysis, setDateAnalysis] = useState<WorkbookDateAnalysis | null>(null);
+  const [currentDateConvention, setCurrentDateConvention] = useState<DateConvention>();
+  const [currentDateAnalysis, setCurrentDateAnalysis] = useState<WorkbookDateAnalysis | null>(null);
   const [columnOverrides, setColumnOverrides] = useState<ColumnOverrides>({});
   const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
 
@@ -110,6 +116,8 @@ export default function STIXIntake({ onValidate, onCompare }: {
     setFile(f);
     setXlsmMeta(null);
     setXlsmPreview(null);
+    setDateConvention(undefined);
+    setDateAnalysis(null);
     setColumnOverrides({});
   }, []);
 
@@ -141,12 +149,14 @@ export default function STIXIntake({ onValidate, onCompare }: {
     let cancelled = false;
     file.arrayBuffer().then((data) => {
       if (cancelled) return;
-      setXlsmPreview(importWorkbook(data, file.name, xlsmMeta, columnOverrides).preview);
+      const imported = importWorkbook(data, file.name, xlsmMeta, columnOverrides, dateConvention);
+      setXlsmPreview(imported.preview);
+      setDateAnalysis(imported.dateAnalysis);
     }).catch((err) => {
       if (!cancelled) setError(`Could not read workbook: ${err instanceof Error ? err.message : String(err)}`);
     });
     return () => { cancelled = true; };
-  }, [file, xlsmMeta, columnOverrides]);
+  }, [file, xlsmMeta, columnOverrides, dateConvention]);
 
   useEffect(() => {
     if (!file || !xlsmMeta || !/\.xlsm?$/i.test(file.name)) return;
@@ -170,6 +180,8 @@ export default function STIXIntake({ onValidate, onCompare }: {
     setError(null);
     setCurrentFile(f);
     setCurrentXlsmMeta(null);
+    setCurrentDateConvention(undefined);
+    setCurrentDateAnalysis(null);
   }, []);
 
   useEffect(() => {
@@ -202,6 +214,15 @@ export default function STIXIntake({ onValidate, onCompare }: {
       // Storage may be disabled or full; workbook processing still works.
     }
   }, [currentFile, currentXlsmMeta]);
+
+  useEffect(() => {
+    if (!currentFile || !currentXlsmMeta || !/\.xlsm?$/i.test(currentFile.name)) return;
+    let cancelled = false;
+    currentFile.arrayBuffer().then(data => {
+      if (!cancelled) setCurrentDateAnalysis(importWorkbook(data, currentFile.name, currentXlsmMeta, undefined, currentDateConvention).dateAnalysis);
+    }).catch(() => { if (!cancelled) setError("Could not inspect current workbook dates."); });
+    return () => { cancelled = true; };
+  }, [currentFile, currentXlsmMeta, currentDateConvention]);
 
   const handleCurrentFileSelect = useCallback((target: HTMLInputElement) => {
     const selectedFile = target.files?.[0];
@@ -266,12 +287,12 @@ export default function STIXIntake({ onValidate, onCompare }: {
     if (!selectedFile) { setError("Please select a file first."); return; }
     setProcessing(true); setError(null);
     try {
-      const xmlText = await readInputAsSTIXXml(selectedFile, xlsmMeta ?? undefined, columnOverrides);
+      const xmlText = await readInputAsSTIXXml(selectedFile, xlsmMeta ?? undefined, columnOverrides, dateConvention);
 
       if (workflow === "compare") {
         const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
         if (!selectedCurrentFile) throw new Error("Please select the current XML file as well.");
-        const currentXmlText = await readInputAsSTIXXml(selectedCurrentFile, currentXlsmMeta ?? undefined);
+        const currentXmlText = await readInputAsSTIXXml(selectedCurrentFile, currentXlsmMeta ?? undefined, undefined, currentDateConvention);
         onCompare(compareSTIXFiles(xmlText, currentXmlText, selectedFile.name, selectedCurrentFile.name));
         return;
       }
@@ -347,6 +368,9 @@ export default function STIXIntake({ onValidate, onCompare }: {
         </div>
 
 
+
+        {dateAnalysis && <WorkbookDateReview label={workflow === "compare" ? "Previous file" : "File"} analysis={dateAnalysis} convention={dateConvention} onChange={value => { setDateConvention(value); setError(null); }} />}
+        {workflow === "compare" && currentDateAnalysis && <WorkbookDateReview label="Current file" analysis={currentDateAnalysis} convention={currentDateConvention} onChange={value => { setCurrentDateConvention(value); setError(null); }} />}
 
         {(xlsmMeta || xlsmPreview || (workflow === "compare" && currentXlsmMeta)) && (
           <details className="advanced-options">
@@ -491,11 +515,11 @@ export default function STIXIntake({ onValidate, onCompare }: {
   );
 }
 
-async function readInputAsSTIXXml(f: File, metadata?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides): Promise<string> {
+async function readInputAsSTIXXml(f: File, metadata?: Partial<XlsmMetadata>, columnOverrides?: ColumnOverrides, dateConvention?: DateConvention): Promise<string> {
   if (/\.xlsm?$/i.test(f.name)) {
     const data = await f.arrayBuffer();
-    const result = importWorkbook(data, f.name, metadata, columnOverrides);
-    const structuralBlockers = new Set(["IMPORT_UNMAPPED_COLUMN", "IMPORT_DUPLICATE_COLUMN", "IMPORT_DATE_AMBIGUOUS", "IMPORT_PHONE_AMBIGUOUS", "IMPORT_FORMULA", "RECONCILIATION_COUNT"]);
+    const result = importWorkbook(data, f.name, metadata, columnOverrides, dateConvention);
+    const structuralBlockers = new Set(["IMPORT_UNMAPPED_COLUMN", "IMPORT_DUPLICATE_COLUMN", "IMPORT_DATE_AMBIGUOUS", "IMPORT_DATE_INVALID", "IMPORT_DATE_CONFLICT", "IMPORT_PHONE_AMBIGUOUS", "IMPORT_FORMULA", "RECONCILIATION_COUNT"]);
     const blockers = result.preview.diagnostics.filter((finding) => finding.severity === "error" && structuralBlockers.has(finding.ruleId));
     if (blockers.length) throw new Error(`Workbook import is blocked: ${blockers[0].message}${blockers.length > 1 ? ` (+${blockers.length - 1} more)` : ""}`);
     return result.xml;
