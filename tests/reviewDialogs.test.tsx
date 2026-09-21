@@ -55,7 +55,7 @@ describe("review dialogs", () => {
     const issue = { id: "single-field", recordId: record.id, field: "GuardianRelationship", currentValue: record.fields.GuardianRelationship, ruleId: "GUARDIAN_RELATIONSHIP_REQUIRED", message: "Relationship required", severity: "error" as const, autoFixable: false };
     const html = render("manual", { ...session, initialResult: { ...result, issues: [issue] } });
     expect(html).toContain(`aria-label="GuardianRelationship for Student 1.1"`);
-    expect(html).toContain("<th scope=\"col\">Field</th><th scope=\"col\">Edit</th>");
+    expect(html).toContain("<th scope=\"col\">Field</th><th scope=\"col\">Edit</th><th scope=\"col\">Status</th>");
     expect(html).not.toContain("<th scope=\"col\">Current</th>");
     expect(html).toContain(`value="${record.fields.GuardianRelationship}"`);
     expect(html).not.toContain("Review and edit");

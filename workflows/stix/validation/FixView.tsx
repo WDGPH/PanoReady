@@ -53,13 +53,11 @@ function ManualFieldEditor({ field, control, status }: {
         ? { label: "Check value", Icon: TriangleAlert }
         : null;
   return <table className="fix-values manual-field-editor" aria-label="Manual field review">
-    <thead><tr><th scope="col">Field</th><th scope="col">Edit</th></tr></thead>
+    <thead><tr><th scope="col">Field</th><th scope="col">Edit</th><th scope="col">Status</th></tr></thead>
     <tbody><tr>
       <th scope="row">{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</th>
-      <td>
-        {control}
-        {detail && <span className={`manual-edit-status manual-edit-status--${status}`} role="status"><detail.Icon size={13} aria-hidden="true" />{detail.label}</span>}
-      </td>
+      <td>{control}</td>
+      <td>{detail && <span className={`manual-edit-status manual-edit-status--${status}`} role="status"><detail.Icon size={13} aria-hidden="true" />{detail.label}</span>}</td>
     </tr></tbody>
   </table>;
 }
