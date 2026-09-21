@@ -29,6 +29,16 @@ export const ADDRESS_FIELDS = [
 
 export const SCHOOL_FIELDS = ["SchoolNumber", "SchoolName"] as const;
 
+/** Fields whose values are descriptive text rather than identifiers or controlled codes. */
+export const FREE_TEXT_FIELD_GROUPS = [
+  { label: "School and class", fields: ["SchoolName", "Class"] },
+  { label: "Student names", fields: ["FirstName", "MiddleName", "LastName", "AliasFirstName", "AliasMiddleName", "AliasLastName"] },
+  { label: "Guardian names", fields: ["GuardianFirstName", "GuardianLastName", "Guardian2FirstName", "Guardian2LastName"] },
+  { label: "Address", fields: ["Unit", "StreetNumber", "StreetNumberSuffix", "StreetName", "RuralRoute", "PoBoxNumber", "City"] },
+] as const;
+
+export const FREE_TEXT_FIELDS: readonly string[] = FREE_TEXT_FIELD_GROUPS.flatMap(({ fields }) => fields);
+
 export type CanonicalField =
   | (typeof STUDENT_FIELDS)[number]
   | (typeof STUDENT_PHONE_FIELDS)[number]
