@@ -7,6 +7,28 @@ const sample = readFileSync("public/samples/stix-validation-demo.stix", "utf8");
 const student = sample.match(/<ns1:Student>[\s\S]*?<\/ns1:Student>/g)![1];
 const xml = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${student.repeat(30)}</ns1:Students>`);
 
+test("manual fields edit the current value and can remove it", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#xml-upload").setInputFiles({ name: "manual-delete.xml", mimeType: "application/xml", buffer: Buffer.from(sample) });
+  await page.getByRole("button", { name: "Validate & Fix", exact: true }).last().click();
+  await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
+  await page.getByRole("button", { name: "Manual fixes", exact: true }).click();
+
+  const phone = page.getByRole("textbox", { name: "Correct GuardianPhoneNumber for Student 1.1", exact: true });
+  await expect(phone).toHaveValue("416-555-1111x");
+  await phone.fill("416-555-1111");
+  await expect(phone.locator("xpath=ancestor::td").getByText("Meets field rules", { exact: true })).toBeVisible();
+  await phone.fill("");
+  await expect(phone.locator("xpath=ancestor::td").getByText("Removed", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Apply fixes and view summary", exact: true }).click();
+  await page.getByRole("button", { name: "Output", exact: true }).click();
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download", exact: true }).first().click();
+  const output = readFileSync((await (await downloading).path())!, "utf8");
+  expect(output).not.toContain("416-555-1111x");
+});
+
 test("address reviews navigate between students and retain drafts", async ({ page }) => {
   await page.goto("./");
   await page.locator("#xml-upload").setInputFiles({ name: "address-review.xml", mimeType: "application/xml", buffer: Buffer.from(xml) });
@@ -120,6 +142,8 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   await dialog.getByRole("button", { name: "Reset changes", exact: true }).click();
   await expect(street).toHaveValue("66 Downey");
   await dialog.getByRole("textbox", { name: /^City/i }).fill("Waterloo");
+  await dialog.getByRole("textbox", { name: /^Street name/i }).fill("");
+  await expect(dialog.getByText("Removed", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Apply fixes and view summary", exact: true }).click();
   await page.getByRole("button", { name: "Output", exact: true }).click();
@@ -128,7 +152,7 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   const file = await (await downloading).path();
   const output = readFileSync(file!, "utf8");
   expect(output).toContain(">66 Downey<");
-  expect(output).toContain(">Rd<");
+  expect(output).not.toContain(">Rd<");
   expect(output).toContain(">Waterloo<");
   if (!apply) expect(output).toContain(">51 Keats<");
 });
