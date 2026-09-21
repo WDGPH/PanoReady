@@ -9,14 +9,16 @@ test("logo protects active work and can save before returning home", async ({ pa
   await page.getByRole("button", { name: "Validate & Fix", exact: true }).click();
   await expect(page.getByRole("progressbar", { name: "File assessment" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Return to PanoReady home" }).click();
+  const homeButton = page.getByRole("button", { name: "Return to PanoReady home" });
+  await homeButton.click();
   const dialog = page.getByRole("dialog", { name: "Start over?" });
   await expect(dialog).toContainText("abandon the current file");
   await expect(dialog.getByRole("button", { name: "Save progress and start over" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Keep working" }).click();
+  await expect(homeButton).toBeFocused();
 
   await expect(page.getByRole("button", { name: "Save progress", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Return to PanoReady home" }).click();
+  await homeButton.click();
   const downloadPromise = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Save progress and start over" }).click();
   const download = await downloadPromise;

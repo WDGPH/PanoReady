@@ -18,6 +18,7 @@ type ActiveWorkflow =
 export default function PanoReady() {
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow>({ kind: "home" });
   const [startOverOpen, setStartOverOpen] = useState(false);
+  const homeButtonRef = useRef<HTMLButtonElement>(null);
   const saveProgressRef = useRef<(() => void) | null>(null);
   const [canSaveProgress, setCanSaveProgress] = useState(false);
   const registerSaveProgress = useCallback<SaveProgressRegistration>((save) => {
@@ -45,7 +46,7 @@ export default function PanoReady() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <NavBar onHome={handleLogoClick} />
+      <NavBar onHome={handleLogoClick} homeButtonRef={homeButtonRef} />
       {activeWorkflow.kind === "home" && (
         <STIXIntake
           onCompare={(comparison) => setActiveWorkflow({ kind: "compare", comparison })}
@@ -59,7 +60,7 @@ export default function PanoReady() {
         <CompareWorkflow comparison={activeWorkflow.comparison} onStartOver={returnHome} onSaveProgressChange={registerSaveProgress} />
       )}
       <StartOverDialog open={startOverOpen} onOpenChange={setStartOverOpen} onStartOver={returnHome}
-        onSaveAndStartOver={canSaveProgress ? saveAndReturnHome : undefined} />
+        onSaveAndStartOver={canSaveProgress ? saveAndReturnHome : undefined} returnFocusRef={homeButtonRef} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

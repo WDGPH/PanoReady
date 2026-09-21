@@ -1,23 +1,29 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import type { RefObject } from "react";
 
 export default function StartOverDialog({
   open,
   onOpenChange,
   onStartOver,
   onSaveAndStartOver,
+  returnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStartOver: () => void;
   onSaveAndStartOver?: () => void;
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="start-over-dialog-overlay" />
-        <Dialog.Content className="start-over-dialog">
+        <Dialog.Content className="start-over-dialog" onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus();
+        }}>
           <Dialog.Title>Start over?</Dialog.Title>
           <Dialog.Description>
             This will abandon the current file and any unsaved changes, then return to the landing page.

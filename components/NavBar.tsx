@@ -1,13 +1,14 @@
 "use client";
 
+import type { Ref } from "react";
 import BrandFlag from "./BrandFlag";
 
-export default function NavBar({ onHome }: { onHome: () => void }) {
+export default function NavBar({ onHome, homeButtonRef }: { onHome: () => void; homeButtonRef?: Ref<HTMLButtonElement> }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
         <div className="brand-lockup">
-          <button type="button" className="brand brand-home" onClick={onHome} aria-label="Return to PanoReady home">
+          <button ref={homeButtonRef} type="button" className="brand brand-home" onClick={onHome} aria-label="Return to PanoReady home">
             <BrandFlag />
             <span className="brand-name">PanoReady</span>
           </button>
