@@ -8,7 +8,7 @@ import {
   analyzeUnitOverflow,
 } from "../lib/addressRepair";
 import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
-import type { AppliedFix } from "../lib/types";
+import type { AddressRepairProposal, AppliedFix } from "../lib/types";
 
 const address = (streetNumber: string, streetName = "", suffix = "") => ({
   Unit: "", StreetNumber: streetNumber, StreetNumberSuffix: suffix, StreetName: streetName,
@@ -69,7 +69,7 @@ describe("address repair proposals", () => {
     const xml = `<?xml version="1.0"?><SchoolUpload xmlns="http://ontario.ca"><Metadata><CreateDate>2026-09-01</CreateDate><CreateTime>12:00:00</CreateTime><CreatedBy>Synthetic Test</CreatedBy><ContactPhone type="WORK">204-555-0100</ContactPhone><ContactEmail>test@example.invalid</ContactEmail><FullUpload>YES</FullUpload></Metadata><School><SchoolNumber>123</SchoolNumber><Name>Synthetic School</Name><Students><Student><Name><First>Sample</First><Last>Student</Last></Name><Gender>F</Gender><BirthDate>2015-01-01</BirthDate><Address><StreetNumber>51 Example</StreetNumber><City>Exampleville</City><Province>ON</Province></Address></Student></Students></School></SchoolUpload>`;
     const initial = validateXml(xml);
     const issue = initial.issues.find((candidate) => candidate.repairProposal);
-    const fixes: AppliedFix[] = issue!.repairProposal!.changes.map((change) => ({
+    const fixes: AppliedFix[] = (issue!.repairProposal! as AddressRepairProposal).changes.map((change) => ({
       issueId: issue!.id,
       recordId: issue!.recordId!,
       field: change.field,
@@ -96,7 +96,7 @@ describe("address repair proposals", () => {
       const result = validateXml(studentXml(addr, prefix));
       const issue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
       expect(issue?.repairProposal?.confidence, `prefix "${prefix}"`).toBe("safe");
-      expect(issue?.repairProposal?.changes.map((c) => [c.field, c.proposedValue]), `prefix "${prefix}"`).toEqual([
+      expect((issue?.repairProposal as AddressRepairProposal | undefined)?.changes.map((c) => [c.field, c.proposedValue]), `prefix "${prefix}"`).toEqual([
         ["StreetNumber", "51"],
         ["StreetName", "Example"],
       ]);
@@ -205,7 +205,7 @@ describe("unit number fused to the street number", () => {
     const issue = result.issues.find((candidate) => candidate.field === "StreetNumber" && candidate.ruleId === "FIELD_LENGTH");
 
     expect(issue?.repairProposal).toMatchObject({ confidence: "review" });
-    expect(issue?.repairProposal?.changes).toEqual([
+    expect((issue?.repairProposal as AddressRepairProposal | undefined)?.changes).toEqual([
       { field: "StreetNumber", currentValue: "34-8773", proposedValue: "8773" },
       { field: "Unit", currentValue: "", proposedValue: "34" },
     ]);

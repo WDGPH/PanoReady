@@ -1,4 +1,4 @@
-export type Workflow = "validate" | "compare";
+export type Workflow = "validate" | "compare" | "phix";
 
 export interface Student {
   SchoolName: string;
@@ -220,6 +220,22 @@ export type AddressRepairProposal = {
   changes: RepairChange[];
 };
 
+export type PhixRepairProposal = {
+  kind: "phix";
+  id: string;
+  confidence: RepairConfidence;
+  title: string;
+  explanation: string;
+  /** The CSV column this card operates on (UPPER CASE, matching PhixRecord.fields keys). */
+  field: string;
+  currentValue: string;
+  proposedValue: string;
+  /** Ordered options to show in a <select> when the field has an allowed-value list. */
+  options?: string[];
+  /** Additional field changes applied alongside the primary field change (e.g. writing a comment). */
+  additionalChanges?: RepairChange[];
+};
+
 export type ValidationIssue = {
   id: string;
   severity: ValidationSeverity;
@@ -237,7 +253,8 @@ export type ValidationIssue = {
   layer?: DiagnosticLayer;
   sourceLocation?: string;
   /** A coordinated, multi-field correction that can be reviewed as one unit. */
-  repairProposal?: AddressRepairProposal;
+  repairProposal?: AddressRepairProposal | PhixRepairProposal;
+  rowPath?: string;
 };
 
 export type AppliedFix = {
@@ -311,3 +328,62 @@ export type ReviewAction = {
   changes: AppliedFix[];
   status: "applied" | "undone";
 };
+
+export type PhixSession = {
+  fileName: string;
+  originalCsv: string;
+  initialResult: PhixValidationResult;
+  fixes: AppliedFix[];
+  revalidatedResult?: PhixValidationResult;
+  finalCsv?: string;
+};
+
+// ─── PHIX types ───────────────────────────────────────────────────────────────
+
+export type PhixRecord = {
+  id: string;       // "row1", "row2", … (1-indexed CSV row number)
+  rowPath: string;  // human-readable label, e.g. "Row 1"
+  fields: Record<string, string>;
+};
+
+export type PhixValidationResult = {
+  issues: ValidationIssue[];
+  records: PhixRecord[];
+  clientCount: number;   // distinct HCNs (or name+dob combos when HCN absent)
+  recordCount: number;   // total data rows parsed
+  gate: GateState;
+};
+
+export interface PhixRulesProfile {
+  allowedGenderValues: string[];
+  allowedAddressTypeValues: string[];
+  allowedStreetTypeValues: string[];
+  allowedStreetDirectionValues: string[];
+  allowedRelationshipValues: string[];
+  allowedPhoneTypeValues: string[];
+  allowedProvinceValues: string[];
+  allowedCityValues: string[];
+  cityByProvince: Record<string, string[]>;
+  allowedSchoolValues: string[];
+  schoolsByPhu: Record<string, string[]>;
+  allowedImmunizingAgentValues: string[];
+  immunizingAgentMap: Array<{ snomed: string; name: string }>;
+  allowedTradeNameValues: string[];
+  tradeNameMap: Array<{ snomed: string; immunizingAgent: string; tradeName: string; ontarioAvailability: string }>;
+  allowedEstimatedIndicatorValues: string[];
+  allowedTimezoneValues: string[];
+  allowedDosageUomValues: string[];
+  allowedSiteValues: string[];
+  allowedRouteValues: string[];
+  allowedReasonValues: string[];
+  allowedProviderRoleValues: string[];
+  allowedOrganizationValues: string[];
+  allowedServiceDeliveryLocationValues: string[];
+  serviceDeliveryLocationsByPhu: Record<string, string[]>;
+  requiredFields: string[];
+  fieldLengths: Record<string, number>;
+  postalCodePattern: string;
+  phoneConfig: { placeholderNumbers: string[] };
+  genderAliases: Record<string, string>;
+  duplicateDetection: { checkHcn: boolean; checkNameDobAgent: boolean };
+}

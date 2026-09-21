@@ -7,6 +7,7 @@ import { ageOnDate, analyzeCalendarDate, validRealDate } from "./calendarDate";
  */
 
 import { isOenIdentityFinding } from "./identityRules";
+import { isValidISODate } from "./date";
 import { standardizeUnit } from "./cleaner";
 import { normalizeCanadianPostalCode } from "./postalCode";
 import {

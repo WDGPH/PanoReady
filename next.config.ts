@@ -66,7 +66,9 @@ const nextConfig: NextConfig = {
     : {}),
   // Additional development proxy hosts; localhost remains allowed by Next.js.
   // See docs/development.md when using a different proxy hostname.
-  allowedDevOrigins: ["*.wdgpublichealth.ca"],
+  // The JupyterHub pod hostname is also added so the browser can reach the dev
+  // server through the workspace proxy (e.g. claude-code-0, jhub-*, etc.).
+  allowedDevOrigins: ["*.wdgpublichealth.ca", "ai.wdgpublichealth.ca", process.env.HOSTNAME ?? ""].filter(Boolean),
 };
 
 export default nextConfig;

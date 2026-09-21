@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import type { AddressRepairProposal } from "../lib/types";
 import * as XLSX from "xlsx";
 import { flattenCanonicalStudent, parseCanonicalXml, serializeCanonicalXml } from "../lib/canonical";
 import { importWorkbook } from "../lib/excel";
@@ -331,7 +332,7 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
     const numberIssue = result.issues.find((i) => i.field === "StreetNumber" && i.ruleId === "FIELD_LENGTH");
     assert.equal(numberIssue?.suggestedFix, expectedNumber, `expected StreetNumber fix for "${raw}"`);
     assert.equal(numberIssue?.repairProposal?.confidence, "safe");
-    assert.deepEqual(numberIssue?.repairProposal?.changes.map((change) => [change.field, change.proposedValue]), [
+    assert.deepEqual((numberIssue?.repairProposal as AddressRepairProposal | undefined)?.changes.map((change) => [change.field, change.proposedValue]), [
       ["StreetNumber", expectedNumber],
       ["StreetName", expectedName],
     ]);
@@ -344,7 +345,7 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
     // No confident split, but still surfaced as a manual repair card (not a dead-end "Manual" label)
     // so the address can be reviewed and fixed inline instead of in the source file.
     assert.equal(numberIssue?.repairProposal?.confidence, "manual");
-    assert.deepEqual(numberIssue?.repairProposal?.changes, []);
+    assert.deepEqual((numberIssue?.repairProposal as AddressRepairProposal | undefined)?.changes, []);
   }
 });
 

@@ -6,10 +6,15 @@ import { compareSTIXFiles } from "@/lib/compare";
 import { importWorkbook, xlsmMetadata, CANONICAL_FIELDS } from "@/lib/excel";
 import type { XlsmMetadata, ColumnOverrides, CanonicalField } from "@/lib/excel";
 import { parseSTIXXml } from "@/lib/validator";
+import { readFileText } from "@/lib/utils";
 import type { ImportPreview, STIXComparison, StudentRecord, Workflow } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 import WorkbookDateReview from "@/components/WorkbookDateReview";
 import type { DateConvention, WorkbookDateAnalysis } from "@/lib/workbookDates";
+import { validatePhix } from "@/lib/phixValidator";
+import defaultPhixRules from "@/config/rules.phix.default.json";
+import type { PHIXWorkflowInput } from "@/workflows/phix/PHIXIntake";
+
 
 export interface ValidateWorkflowInput {
   xml: string;
@@ -20,8 +25,9 @@ export interface ValidateWorkflowInput {
 // ─── Workflows config ────────────────────────────────────────────────────────
 
 const WORKFLOWS: { id: Workflow; label: string; description: string }[] = [
-  { id: "validate", label: "Validate & Fix",  description: "Find STIX issues, review automatic corrections, and download your corrected file." },
-  { id: "compare",  label: "Compare Files",   description: "Compare two files and inspect record, field, and school-level changes." },
+  { id: "validate", label: "Validate & Fix",    description: "Find STIX issues, review automatic corrections, and download your corrected file." },
+  { id: "compare",  label: "Compare Files",     description: "Compare two files and inspect record, field, and school-level changes." },
+  { id: "phix",     label: "Validate PHIX CSV", description: "Validate a PHIX immunization CSV." },
 ];
 
 const FILE_ACCEPT = ".xml,.xls,.xlsm,text/xml,application/xml,application/vnd.ms-excel,application/vnd.ms-excel.sheet.macroEnabled.12";
@@ -89,17 +95,21 @@ function FileDropZone({
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 
-export default function STIXIntake({ onValidate, onCompare }: {
+export default function STIXIntake({ onValidate, onCompare, onPhix }: {
   onValidate: (input: ValidateWorkflowInput) => void;
   onCompare: (comparison: STIXComparison) => void;
+  onPhix?: (input: PHIXWorkflowInput) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const currentInputRef = useRef<HTMLInputElement>(null);
+  const phixInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile]           = useState<File | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [phixFile, setPhixFile]   = useState<File | null>(null);
   const [workflow, setWorkflow]   = useState<Workflow>("validate");
   const [dragging, setDragging]   = useState(false);
   const [currentDragging, setCurrentDragging] = useState(false);
+  const [phixDragging, setPhixDragging] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
@@ -283,6 +293,22 @@ export default function STIXIntake({ onValidate, onCompare }: {
   }, [handleFile]);
 
   const run = async () => {
+    if (workflow === "phix") {
+      const selected = phixInputRef.current?.files?.[0] ?? phixFile;
+      if (!selected) { setError("Please select a CSV file first."); return; }
+      if (!onPhix) return;
+      setProcessing(true); setError(null);
+      try {
+        const csvText = await readFileText(selected);
+        const result = validatePhix(csvText, defaultPhixRules as Parameters<typeof validatePhix>[1]);
+        onPhix({ result, fileName: selected.name, csvText });
+      } catch (err) {
+        setError(`Processing failed: ${err instanceof Error ? err.message : String(err)}`);
+        setProcessing(false);
+      }
+      return;
+    }
+
     const selectedFile = inputRef.current?.files?.[0] ?? file ?? syncFileFromInput();
     if (!selectedFile) { setError("Please select a file first."); return; }
     setProcessing(true); setError(null);
@@ -307,7 +333,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
     }
   };
 
-  const wLabel = workflow === "validate" ? "Validate & Fix" : "Compare Files";
+  const wLabel = workflow === "validate" ? "Validate & Fix" : workflow === "compare" ? "Compare Files" : "Validate PHIX CSV";
 
   return (
     <main className="intake-main">
@@ -322,48 +348,84 @@ export default function STIXIntake({ onValidate, onCompare }: {
         <header className="workflow-context">
           <div className="workflow-tabs" role="group" aria-label="Workflow">
             {WORKFLOWS.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                aria-pressed={workflow === w.id}
-                onClick={() => {
-                  setWorkflow(w.id);
-                  setError(null);
-                }}
-                className={`workflow-tab${workflow === w.id ? " selected" : ""}`}
-              >
-                {w.label}
-              </button>
+              (w.id !== "phix" || onPhix) && (
+                <button
+                  key={w.id}
+                  type="button"
+                  aria-pressed={workflow === w.id}
+                  onClick={() => {
+                    setWorkflow(w.id);
+                    setError(null);
+                  }}
+                  className={`workflow-tab${workflow === w.id ? " selected" : ""}`}
+                >
+                  {w.label}
+                </button>
+              )
             ))}
           </div>
           <p>{WORKFLOWS.find((candidate) => candidate.id === workflow)?.description}</p>
         </header>
 
         <div className={`file-fields${workflow === "compare" ? " compare" : ""}`}>
-          <FileDropZone
-            id="xml-upload"
-            label={workflow === "compare" ? "Previous file" : undefined}
-            emptyLabel="Drop an XML, XLS, or XLSM file here"
-            file={file}
-            inputRef={inputRef}
-            dragging={dragging}
-            onSelect={handleNativeFileSelect}
-            onDrop={onDrop}
-            onDraggingChange={setDragging}
-          />
+          {workflow === "phix" ? (
+            <section className="file-field">
+              <input
+                id="phix-upload"
+                ref={phixInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                aria-describedby="phix-upload-help"
+                onChange={(e) => { const f = e.currentTarget.files?.[0]; if (f) { setError(null); setPhixFile(f); } }}
+                onInput={(e) => { const f = e.currentTarget.files?.[0]; if (f) { setError(null); setPhixFile(f); } }}
+                hidden
+              />
+              <div
+                className={`file-dropzone${phixDragging ? " dragging" : ""}`}
+                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setPhixDragging(false); const f = e.dataTransfer.files[0]; if (f) { setError(null); setPhixFile(f); } }}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setPhixDragging(true); }}
+                onDragLeave={() => setPhixDragging(false)}
+              >
+                <FileText className="file-dropzone-icon" size={34} strokeWidth={1.4} aria-hidden="true" />
+                <div className="file-dropzone-copy">
+                  <p>{phixFile?.name ?? "Drop a CSV file here"}</p>
+                  <span id="phix-upload-help">
+                    {phixFile ? `${(phixFile.size / 1024).toFixed(1)} KB · drop another file to change` : "or click Browse"}
+                  </span>
+                </div>
+                <button type="button" className="file-browse" onClick={() => phixInputRef.current?.click()}>
+                  Browse
+                </button>
+              </div>
+            </section>
+          ) : (
+            <>
+              <FileDropZone
+                id="xml-upload"
+                label={workflow === "compare" ? "Previous file" : undefined}
+                emptyLabel="Drop an XML, XLS, or XLSM file here"
+                file={file}
+                inputRef={inputRef}
+                dragging={dragging}
+                onSelect={handleNativeFileSelect}
+                onDrop={onDrop}
+                onDraggingChange={setDragging}
+              />
 
-          {workflow === "compare" && (
-            <FileDropZone
-              id="xml-upload-current"
-              label="Current file"
-              emptyLabel="Drop an XML, XLS, or XLSM file here"
-              file={currentFile}
-              inputRef={currentInputRef}
-              dragging={currentDragging}
-              onSelect={handleCurrentFileSelect}
-              onDrop={onCurrentDrop}
-              onDraggingChange={setCurrentDragging}
-            />
+              {workflow === "compare" && (
+                <FileDropZone
+                  id="xml-upload-current"
+                  label="Current file"
+                  emptyLabel="Drop an XML, XLS, or XLSM file here"
+                  file={currentFile}
+                  inputRef={currentInputRef}
+                  dragging={currentDragging}
+                  onSelect={handleCurrentFileSelect}
+                  onDrop={onCurrentDrop}
+                  onDraggingChange={setCurrentDragging}
+                />
+              )}
+            </>
           )}
         </div>
 
@@ -532,22 +594,4 @@ async function readInputAsSTIXXml(f: File, metadata?: Partial<XlsmMetadata>, col
   const xmlText = await readFileText(f);
   if (!xmlText.trim().startsWith("<")) throw new Error("Selected file is neither XML nor a supported Excel workbook.");
   return xmlText;
-}
-
-async function readFileText(f: File): Promise<string> {
-  try {
-    if (typeof f.text === "function") return await f.text();
-  } catch {
-    // Fall through to FileReader path.
-  }
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") { resolve(reader.result); return; }
-      if (reader.result instanceof ArrayBuffer) { resolve(new TextDecoder().decode(reader.result)); return; }
-      reject(new Error("Unable to read file as text."));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
-    reader.readAsText(f);
-  });
 }

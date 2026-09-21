@@ -67,3 +67,22 @@ export function loadSession<T>(): T | null {
 export function clearSession() {
   sessionStorage.removeItem(SESSION_KEY);
 }
+
+/** Read a File object as a UTF-8 string. Uses f.text() when available, falls back to FileReader. */
+export async function readFileText(f: File): Promise<string> {
+  try {
+    if (typeof f.text === "function") return await f.text();
+  } catch {
+    // Fall through to FileReader path.
+  }
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") { resolve(reader.result); return; }
+      if (reader.result instanceof ArrayBuffer) { resolve(new TextDecoder().decode(reader.result)); return; }
+      reject(new Error("Unable to read file as text."));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
+    reader.readAsText(f);
+  });
+}
