@@ -257,12 +257,21 @@ describe("PO Box and rural route text in street fields", () => {
     ]);
   });
 
-  it("moves a clean rural route match out of StreetNumber", () => {
+  it("moves a clean rural route match out of StreetNumber as a safe repair", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetNumber: "RR 2", RuralRoute: "" });
-    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal).toMatchObject({ confidence: "safe" });
     expect(proposal?.changes).toEqual([
       { field: "StreetNumber", currentValue: "RR 2", proposedValue: "" },
       { field: "RuralRoute", currentValue: "", proposedValue: "RR 2" },
+    ]);
+  });
+
+  it("normalizes an equivalent existing rural route without treating it as a conflict", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetNumber: "RR01", RuralRoute: "R.R. 1" });
+    expect(proposal).toMatchObject({ confidence: "safe" });
+    expect(proposal?.changes).toEqual([
+      { field: "StreetNumber", currentValue: "RR01", proposedValue: "" },
+      { field: "RuralRoute", currentValue: "R.R. 1", proposedValue: "RR 1" },
     ]);
   });
 
@@ -270,6 +279,12 @@ describe("PO Box and rural route text in street fields", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "PO Box 42", PoBoxNumber: "99" });
     expect(proposal).toMatchObject({ confidence: "review", changes: [] });
     expect(proposal?.explanation).toContain("PoBoxNumber is already “99”");
+  });
+
+  it("keeps a conflicting rural route in review", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "Rural Route 2", RuralRoute: "RR 9" });
+    expect(proposal).toMatchObject({ confidence: "review", changes: [] });
+    expect(proposal?.explanation).toContain("RuralRoute is already “RR 9”");
   });
 
   it("falls back to a manual, no-guess finding when the box number can't be parsed", () => {
@@ -311,4 +326,22 @@ it("applies a safe automatic address correction as a complete repair", () => {
   const manualIssue = noSuggestion.issues.find(issue => issue.repairProposal)!;
   expect(manualIssue.autoFixable).toBe(false);
   expect(automaticFixes(manualIssue, noSuggestion.records, 1)).toEqual([]);
+});
+
+it("offers a clean rural route as an automatic multi-field address repair", () => {
+  const xml = studentXml("<StreetNumber>RR1</StreetNumber><City>Exampleville</City><Province>ON</Province>");
+  const result = validateXml(xml);
+  const issue = result.issues.find(candidate => candidate.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD");
+  expect(issue).toMatchObject({ autoFixable: true, repairProposal: { confidence: "safe" } });
+
+  const fixes = automaticFixes(issue!, result.records, 1);
+  expect(fixes.map(fix => [fix.field, fix.newValue])).toEqual([
+    ["StreetNumber", ""],
+    ["RuralRoute", "RR 1"],
+  ]);
+  expect(new Set(fixes.map(fix => fix.repairId))).toEqual(new Set([issue!.repairProposal!.id]));
+
+  const updated = validateXml(applyValidationFixes(xml, fixes));
+  expect(updated.records[0].fields).toMatchObject({ StreetNumber: "", RuralRoute: "RR 1" });
+  expect(updated.issues.some(candidate => candidate.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD")).toBe(false);
 });

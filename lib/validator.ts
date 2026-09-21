@@ -312,7 +312,9 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       if (alternateDeliveryProposal) {
         issue(issues, {
           ...base, severity: "warning", field: "StreetName", ruleId: "ALTERNATE_DELIVERY_IN_STREET_FIELD",
-          message: alternateDeliveryProposal.explanation, autoFixable: false, repairProposal: alternateDeliveryProposal,
+          message: alternateDeliveryProposal.explanation,
+          autoFixable: alternateDeliveryProposal.confidence === "safe",
+          repairProposal: alternateDeliveryProposal,
         });
       }
 

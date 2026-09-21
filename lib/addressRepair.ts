@@ -279,12 +279,17 @@ const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
 const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
 const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
 
+function ruralRouteNumber(value: string): string | undefined {
+  const match = value.trim().match(RURAL_ROUTE_PATTERN);
+  return match?.[1] === undefined ? undefined : String(Number(match[1]));
+}
+
 /**
  * Detect PO Box / rural-route delivery text typed into a street field instead
- * of PoBoxNumber/RuralRoute. A clean match proposes moving it (confirmation
- * required — clearing a street field is a bigger structural change than a
- * same-field split); a recognizable-but-unparsable prefix is surfaced as a
- * "manual" finding with no guessed value, per the three-tier confidence model.
+ * of PoBoxNumber/RuralRoute. A clean rural-route match is safe to move into
+ * RuralRoute; a PO Box match still requires confirmation because clearing a
+ * street field is a bigger structural change. A recognizable-but-unparsable
+ * prefix is surfaced as a manual finding with no guessed value.
  */
 export function analyzeAlternateDeliveryInStreetFields(
   fields: Record<string, string>,
@@ -322,15 +327,16 @@ export function analyzeAlternateDeliveryInStreetFields(
       };
     }
 
-    const rrMatch = raw.match(RURAL_ROUTE_PATTERN);
-    if (rrMatch) {
-      const proposedRoute = `RR ${rrMatch[1]}`;
+    const routeNumber = ruralRouteNumber(raw);
+    if (routeNumber) {
+      const proposedRoute = `RR ${routeNumber}`;
       const currentRoute = (fields.RuralRoute ?? "").trim();
-      const conflict = currentRoute !== "" && currentRoute.toUpperCase() !== proposedRoute.toUpperCase();
+      const conflict = currentRoute !== ""
+        && ruralRouteNumber(currentRoute) !== routeNumber;
       return {
         kind: "address",
         id: proposalId,
-        confidence: "review",
+        confidence: conflict ? "review" : "safe",
         title: conflict ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
         explanation: conflict
           ? `“${raw}” in ${field} looks like a rural route, but RuralRoute is already “${currentRoute}”. Review the complete address before applying changes.`
