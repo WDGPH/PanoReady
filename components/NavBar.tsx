@@ -2,15 +2,15 @@
 
 import BrandFlag from "./BrandFlag";
 
-export default function NavBar() {
+export default function NavBar({ onHome }: { onHome: () => void }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
         <div className="brand-lockup">
-          <span className="brand">
+          <button type="button" className="brand brand-home" onClick={onHome} aria-label="Return to PanoReady home">
             <BrandFlag />
             <span className="brand-name">PanoReady</span>
-          </span>
+          </button>
           <span className="brand-tagline">Tools for faster, more reliable Panorama imports</span>
         </div>
         <nav aria-label="Primary navigation" style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
