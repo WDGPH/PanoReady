@@ -6,7 +6,7 @@ const sample = path.join(process.cwd(), "public/samples/stix-validation-demo.sti
 test("logo protects active work before returning home", async ({ page }) => {
   await page.goto("./");
   await page.locator("#xml-upload").setInputFiles(sample);
-  await page.getByRole("button", { name: "Validate & Fix", exact: true }).click();
+  await page.getByRole("button", { name: "Validate & Fix", exact: true }).last().click();
   await expect(page.getByRole("progressbar", { name: "File assessment" })).toBeVisible();
 
   const homeButton = page.getByRole("button", { name: "Return to PanoReady home" });
