@@ -102,4 +102,3 @@ export function assertSupportedXmlStructure(xml: string): void {
   if (roots.length !== 1 || splitQName(roots[0].qName).local !== "SchoolUpload") throw new Error("Expected exactly one root element named SchoolUpload.");
   validateElement(roots[0].qName, roots[0].value, roots[0].attributes, new Map(), "SchoolUpload");
 }
-
