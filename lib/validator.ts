@@ -38,7 +38,8 @@ import {
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
 } from "./addressRepair";
-import { SCHOOL_FIELDS } from "./fields";
+import { FREE_TEXT_FIELDS, SCHOOL_FIELDS } from "./fields";
+import { freeTextCharacterFindings } from "./freeTextCharacters";
 
 // ─── XML parser (standalone) ──────────────────────────────────────────────────
 
@@ -180,6 +181,11 @@ function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFind
 /** Namespace-aware validation of the canonical STIX model. */
 export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
   const issues: ValidationIssue[] = [];
+  const effectiveRules: RulesProfile = {
+    ...rules,
+    freeTextCharacterChecks: { ...defaultRules.freeTextCharacterChecks, ...rules.freeTextCharacterChecks },
+    freeTextAllowedCharacters: { ...defaultRules.freeTextAllowedCharacters, ...rules.freeTextAllowedCharacters },
+  };
   let upload;
   try {
     upload = parseCanonicalXml(xmlText);
@@ -254,7 +260,6 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       const studentName = [fields.FirstName, fields.LastName].filter(Boolean).join(" ") || `Student #${studentIndex + 1}`;
       const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
       records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
-
       // Only a standalone finding when StreetNumber is within its length limit — an over-length
       // value gets this same proposal attached to the blocking FIELD_LENGTH error instead.
       const unitPrefixProposal = (fields.StreetNumber ?? "").length <= (rules.fieldLengths.StreetNumber ?? Infinity)
@@ -406,6 +411,35 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       }
     }
   }
+  // Character policy is a final fallback. If a specialized validator already
+  // owns a record field, do not add a competing special-character suggestion.
+  const claimedFields = new Set(
+    issues
+      .filter((finding) => finding.recordId && finding.field)
+      .map((finding) => `${finding.recordId}\u0000${finding.field}`),
+  );
+  for (const [schoolIndex, school] of upload.schools.entries()) {
+    const recordId = `school${schoolIndex}`;
+    if (claimedFields.has(`${recordId}\u0000SchoolName`)) continue;
+    for (const finding of freeTextCharacterFindings(school.name, "SchoolName", effectiveRules)) {
+      issue(issues, {
+        severity: "info", recordId, studentName: "School name", schoolNumber: school.schoolNumber,
+        field: "SchoolName", currentValue: school.name, autoFixable: true, layer: "CANONICAL", ...finding,
+      });
+    }
+  }
+  for (const record of records) {
+    const studentName = [record.fields.FirstName, record.fields.LastName].filter(Boolean).join(" ");
+    for (const field of FREE_TEXT_FIELDS) {
+      if (field === "SchoolName" || !record.fields[field] || claimedFields.has(`${record.id}\u0000${field}`)) continue;
+      for (const finding of freeTextCharacterFindings(record.fields[field], field, effectiveRules)) {
+        issue(issues, {
+          severity: "info", recordId: record.id, studentName, schoolNumber: record.fields.SchoolNumber,
+          field, currentValue: record.fields[field], autoFixable: true, layer: "CANONICAL", ...finding,
+        });
+      }
+    }
+  }
   const hasErrors = issues.some((finding) => finding.severity === "error");
   const hasWarnings = issues.some((finding) => finding.severity === "warning" && finding.ruleId !== "PHONE_CANADIAN_AREA_CODE");
   const gate: GateState = hasErrors ? "BLOCKED" : hasWarnings ? "REVIEW_REQUIRED" : "READY";
@@ -484,6 +518,12 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
     }
     if (fix.recordId === "metadata") {
       setCanonicalMetadataField(upload.metadata, fix.field, fix.newValue);
+      continue;
+    }
+    const schoolMatch = fix.recordId.match(/^school(\d+)$/);
+    if (schoolMatch) {
+      const school = upload.schools[Number(schoolMatch[1])];
+      if (school && fix.field === "SchoolName") school.name = fix.newValue;
       continue;
     }
     const coordinates = decodeRecordId(fix.recordId);
