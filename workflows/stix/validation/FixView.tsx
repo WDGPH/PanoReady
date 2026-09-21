@@ -1,4 +1,5 @@
 "use client";
+import { isOenIdentityFinding } from "@/lib/identityRules";
 import WorkflowHeading from "@/components/WorkflowHeading";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import PagedTable from "@/components/PagedTable";
@@ -308,6 +309,8 @@ export default function FixView({
                           }} />
                           <span>{isEmptyGuardian ? "Remove empty Guardian placeholder" : suggestedValue === "" ? "Clear value" : suggestedValue ?? "No automatic correction available"}</span>
                         </label>
+                      ) : isOenIdentityFinding(issue.ruleId) ? (
+                        <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>Review in the source system and upload a corrected file.</span>
                       ) : issue.field ? (
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {isGuardianRelationship ? (
