@@ -5,11 +5,12 @@ import SeverityFilter from "@/components/SeverityFilter";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
-import { Wand2, CheckCircle2, Trash2 } from "lucide-react";
+import { Wand2, CheckCircle2, Trash2, TriangleAlert } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { guardianSectionForField } from "@/lib/fields";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 import { defaultRules } from "@/lib/rulesets";
+import { fieldValueMeetsRules } from "@/lib/validator";
 import type { AppliedFix, StudentRecord, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
 import { automaticFixes, isAutomaticIssue } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
@@ -36,6 +37,30 @@ function FixValues({ changes, beforeLabel = "Before", afterLabel = "After" }: {
       <td>{change.currentValue}</td>
       <td>{change.proposedValue}</td>
     </tr>)}</tbody>
+  </table>;
+}
+
+function ManualFieldEditor({ field, control, status }: {
+  field: string;
+  control: ReactNode;
+  status?: "valid" | "removed" | "invalid";
+}) {
+  const detail = status === "valid"
+    ? { label: "Meets field rules", Icon: CheckCircle2 }
+    : status === "removed"
+      ? { label: "Removed", Icon: Trash2 }
+      : status === "invalid"
+        ? { label: "Check value", Icon: TriangleAlert }
+        : null;
+  return <table className="fix-values manual-field-editor" aria-label="Manual field review">
+    <thead><tr><th scope="col">Field</th><th scope="col">Edit</th></tr></thead>
+    <tbody><tr>
+      <th scope="row">{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</th>
+      <td>
+        {control}
+        {detail && <span className={`manual-edit-status manual-edit-status--${status}`} role="status"><detail.Icon size={13} aria-hidden="true" />{detail.label}</span>}
+      </td>
+    </tr></tbody>
   </table>;
 }
 
@@ -159,6 +184,14 @@ export default function FixView({
     if (issue.recordId && issue.field) setStudentDrafts(current => ({ ...current,
       [issue.recordId!]: Object.fromEntries(Object.entries(current[issue.recordId!] ?? {}).filter(([field]) => field !== issue.field && !(issue.ruleId === "EMPTY_GUARDIAN" && guardianSectionForField(field) === guardianSectionForField(issue.field!)))),
     }));
+  };
+
+  const updateManualIssue = (issue: ValidationIssue, currentValue: string, value: string) => {
+    if (value === currentValue) {
+      setPending(current => Object.fromEntries(Object.entries(current).filter(([id]) => id !== issue.id)));
+      return;
+    }
+    stageIssue(issue, value);
   };
 
   const toggleGuardianRemoval = (record: StudentRecord, guardian: "Guardian" | "Guardian2", remove: boolean) => {
@@ -314,7 +347,7 @@ export default function FixView({
                 const isEmptyGuardian = issue.ruleId === "EMPTY_GUARDIAN";
                 const isEmptySchool = issue.ruleId === "EMPTY_STUDENTS";
                 const suggestedValue = isEmptyGuardian ? "" : issue.suggestedFix ?? issue.repairProposal?.changes.find(change => change.proposedValue !== change.currentValue)?.proposedValue;
-                const pendingVal = (record && issue.field ? studentDrafts[record.id]?.[issue.field] : undefined) ?? pending[issue.id] ?? "";
+                const pendingVal = (record && issue.field ? studentDrafts[record.id]?.[issue.field] : undefined) ?? pending[issue.id] ?? currentValue;
                 const isGuardianRelationship = issue.field === "GuardianRelationship" || issue.field === "Guardian2Relationship";
                 const guardian = guardianSectionForField(issue.field ?? "");
                 const guardianRemoved = record && guardian && studentDrafts[record.id]?.[guardian] === "";
@@ -339,6 +372,8 @@ export default function FixView({
                 ])] : issue.field ? [issue.field] : Object.keys(draft);
                 const manualStaged = !isIdentityReview(issue) && Boolean(guardianRemoved || selected && (isEmptyGuardian || pending[issue.id] !== currentValue)
                   || reviewFields.some(field => draft[field] !== undefined && draft[field] !== (record?.fields[field] ?? "")));
+                const manualStatus = pending[issue.id] === undefined ? undefined : pendingVal === "" ? "removed"
+                  : fieldValueMeetsRules(issue.field ?? "", pendingVal, rules) ? "valid" : "invalid";
                 const manualControl = group.automatic ? null : (isEmptySchool ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" aria-label={"Remove empty school " + (currentValue || issue.schoolNumber || "record")} checked={pending[issue.id] === "REMOVE"} onChange={event => {
@@ -371,7 +406,7 @@ export default function FixView({
                             <select
                               className="input"
                               value={pendingVal}
-                              onChange={e => stageIssue(issue, e.target.value)}
+                              onChange={e => updateManualIssue(issue, currentValue, e.target.value)}
                               style={{ fontSize: 12, padding: "5px 8px" }}
                               aria-label={`${issue.field} for ${recordLabel}`}
                             >
@@ -383,8 +418,7 @@ export default function FixView({
                               className="input"
                               aria-label={`Correct ${issue.field} for ${recordLabel}`}
                               value={pendingVal}
-                              onChange={e => stageIssue(issue, e.target.value)}
-                              placeholder="New value…"
+                              onChange={e => updateManualIssue(issue, currentValue, e.target.value)}
                               style={{ fontSize: 12, padding: "5px 8px" }}
                             />
                           )}
@@ -416,7 +450,7 @@ export default function FixView({
                     ] : [
                       <td key="review" className={`manual-review-cell${proposal && record ? " manual-review-cell--address" : ""}`}>
                         {proposal && record ? manualControl : issue.field && !isEmptyGuardian && !guardianRemoved ?
-                          <FixValues beforeLabel="Current" afterLabel="Edit" changes={[{ field: issue.field, currentValue, proposedValue: manualControl }]} />
+                          <ManualFieldEditor field={issue.field} control={manualControl} status={manualStatus} />
                           : manualControl}
                       </td>
                     ]}

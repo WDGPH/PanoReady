@@ -75,6 +75,23 @@ function validRealDate(value: string): boolean {
   return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
 
+function allowedValuesForField(field: string, rules: RulesProfile): string[] | undefined {
+  return {
+    Grade: rules.allowedGradeValues,
+    Gender: rules.allowedGenderValues,
+    Province: rules.allowedProvinceValues,
+    Language: rules.allowedLanguageValues,
+    CountryOfOrigin: rules.allowedCountryValues,
+    StreetType: rules.allowedStreetTypeValues,
+    StreetDirection: rules.allowedStreetDirectionValues,
+    GuardianRelationship: rules.allowedRelationshipValues,
+    Guardian2Relationship: rules.allowedRelationshipValues,
+    PhoneType: rules.allowedPhoneTypeValues,
+    GuardianPhoneType: rules.allowedPhoneTypeValues,
+    Guardian2PhoneType: rules.allowedPhoneTypeValues,
+  }[field];
+}
+
 type CanonicalPhoneFinding = {
   severity: "error" | "warning" | "info";
   message: string;
@@ -186,6 +203,24 @@ function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFind
   return { severity: "warning", message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
 }
 
+/**
+ * Check the independent rules for one non-empty field value. Cross-record and
+ * cross-field findings still require the normal recheck after fixes are applied.
+ */
+export function fieldValueMeetsRules(field: string, value: string, rules: RulesProfile): boolean {
+  if (!value) return !rules.requiredFields.includes(field);
+  if (value.length > (rules.fieldLengths[field] ?? Infinity)) return false;
+  const allowed = allowedValuesForField(field, rules);
+  if (allowed && !allowed.includes(value)) return false;
+  if (field === "PostalCode" && postalCodeFinding(value, rules)) return false;
+  if (["Phone", "ContactPhone", "MetadataContactPhone", "GuardianPhoneNumber", "Guardian2PhoneNumber"].includes(field)
+    && canonicalPhoneFindings(value, field, rules).length) return false;
+  if (field === "BirthDate" && (!validRealDate(value) || value > new Date().toISOString().slice(0, 10))) return false;
+  if (field === "OEN" && !/^\d{9}$/.test(value)) return false;
+  if (field === "BoardNumber" && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(value)) return false;
+  return true;
+}
+
 /** Namespace-aware validation of the canonical STIX model. */
 export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
   const issues: ValidationIssue[] = [];
@@ -237,13 +272,10 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
 
   const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
   const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
-  const allowedByField: Record<string, string[]> = {
-    Grade: rules.allowedGradeValues, Gender: rules.allowedGenderValues, Province: rules.allowedProvinceValues,
-    Language: rules.allowedLanguageValues, CountryOfOrigin: rules.allowedCountryValues, StreetType: rules.allowedStreetTypeValues,
-    StreetDirection: rules.allowedStreetDirectionValues, GuardianRelationship: rules.allowedRelationshipValues,
-    Guardian2Relationship: rules.allowedRelationshipValues, PhoneType: rules.allowedPhoneTypeValues,
-    GuardianPhoneType: rules.allowedPhoneTypeValues, Guardian2PhoneType: rules.allowedPhoneTypeValues,
-  };
+  const allowedByField = Object.fromEntries([
+    "Grade", "Gender", "Province", "Language", "CountryOfOrigin", "StreetType", "StreetDirection",
+    "GuardianRelationship", "Guardian2Relationship", "PhoneType", "GuardianPhoneType", "Guardian2PhoneType",
+  ].map(field => [field, allowedValuesForField(field, rules)!]));
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
   const schoolFields = new Set<string>(SCHOOL_FIELDS);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {

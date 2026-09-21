@@ -1,7 +1,8 @@
 "use client";
 
-import { PenLine, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CheckCircle2, PenLine, ShieldCheck, Trash2, TriangleAlert } from "lucide-react";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
+import { fieldValueMeetsRules } from "@/lib/validator";
 import type { AddressRepairProposal, RulesProfile, StudentRecord } from "@/lib/types";
 
 type AddressDraft = Record<string, string>;
@@ -97,6 +98,11 @@ export default function AddressRepairCard({
             const current = record.fields[field] ?? "";
             const value = draft[field] ?? "";
             const changed = value !== current;
+            const status = !changed ? null : value === ""
+              ? { label: "Removed", className: "removed", Icon: Trash2 }
+              : fieldValueMeetsRules(field, value, rules)
+                ? { label: "Meets field rules", className: "valid", Icon: CheckCircle2 }
+                : { label: "Check value", className: "invalid", Icon: TriangleAlert };
             const options = optionsFor(field, rules);
             const maxLength = rules.fieldLengths[field];
             const controlStyle: React.CSSProperties = {
@@ -110,8 +116,8 @@ export default function AddressRepairCard({
             };
             return (
               <label key={field} style={{ minWidth: 0 }}>
-                <span style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 4, color: "var(--color-text-muted)", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                  {LABELS[field]}
+                <span className="address-field-label">
+                  <span>{LABELS[field]}</span>
                   {maxLength && <span style={{ color: value.length > maxLength ? "var(--color-error-text)" : "inherit" }}>{value.length}/{maxLength}</span>}
                 </span>
                 {options ? (
@@ -123,6 +129,7 @@ export default function AddressRepairCard({
                 ) : (
                   <input value={value} onChange={(event) => onDraftChange(field, event.target.value)} style={controlStyle} />
                 )}
+                {status && <span className={`address-field-status address-field-status--${status.className}`} role="status"><status.Icon size={12} aria-hidden="true" />{status.label}</span>}
               </label>
             );
           })}

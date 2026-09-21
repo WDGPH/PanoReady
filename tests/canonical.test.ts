@@ -355,6 +355,19 @@ test("fixes operate through the canonical model for default-namespace XML", () =
   assert.equal(parseSTIXXml(fixed)[0].fields.FirstName, "Augusta");
 });
 
+test("manual field and address edits can remove existing values", () => {
+  const source = xml();
+  const fixed = applyValidationFixes(source, [
+    { issueId: "phone", recordId: "school0:student0", field: "GuardianPhoneNumber", oldValue: "519-555-2222", newValue: "", ruleId: "MANUAL", appliedAt: 1 },
+    { issueId: "city", recordId: "school0:student0", field: "City", oldValue: "Guelph", newValue: "", ruleId: "MANUAL", appliedAt: 1 },
+  ]);
+  const record = parseSTIXXml(fixed)[0];
+  assert.equal(record.fields.GuardianPhoneNumber, "");
+  assert.equal(record.fields.City, "");
+  assert.doesNotMatch(fixed, /<ns1:City>/);
+  assert.doesNotMatch(fixed, /<ns1:Phone type="HOME">519-555-2222<\/ns1:Phone>/);
+});
+
 test("removes a populated first guardian while applying edits to the second guardian", () => {
   const source = xml().replace("</Guardian>", "</Guardian><Guardian><Name><First>Second</First></Name><Relationship>OTHER</Relationship></Guardian>");
   const changes = [

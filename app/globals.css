@@ -1398,6 +1398,13 @@ h1, h2, h3 {
 .manual-review-cell--address { text-align: right; vertical-align: middle; }
 .manual-review-cell .input { width: 100%; min-width: 0; min-height: 30px; font-family: var(--font-sans), sans-serif; }
 .manual-field-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.manual-field-editor th:first-child { width: 34%; }
+.manual-field-editor td:last-child { width: 66%; }
+.manual-edit-status, .address-field-status { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px; font-weight: 600; }
+.manual-edit-status--valid, .address-field-status--valid { color: var(--color-success-text); }
+.manual-edit-status--removed, .address-field-status--removed { color: var(--color-text-secondary); }
+.manual-edit-status--invalid, .address-field-status--invalid { color: var(--color-warning-text); }
+.address-field-label { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; color: var(--color-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .manual-review-cell .btn { padding: 6px 9px; font-size: 11px; }
 .manual-review-cell--address > .btn { width: calc(100% / 3 - 16px); margin-inline: 8px; min-height: 30px; padding: 5px 8px; font-size: 12px; line-height: 1.4; }
 
