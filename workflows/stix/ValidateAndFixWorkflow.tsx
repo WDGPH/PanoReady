@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { SaveProgressRegistration } from "@/components/SaveProgress";
+import { useCallback, useState } from "react";
 import CleaningSummaryView from "@/components/CleaningSummaryView";
 import CleaningView from "@/components/CleaningView";
 import { BUILTIN_ID, defaultRules, getActiveRulesetId, listCustomRulesets, saveCustomRuleset, setActiveRulesetId } from "@/lib/rulesets";
@@ -16,7 +15,7 @@ import RevalidateView from "./validation/RevalidateView";
 import AssessmentView from "./validation/AssessmentView";
 import ActionHistory from "./validation/ActionHistory";
 import { WorkflowNavigationActions } from "@/components/WorkflowNavigation";
-import SaveProgress, { downloadProgress } from "@/components/SaveProgress";
+import SaveProgress from "@/components/SaveProgress";
 import styles from "./ValidateAndFixWorkflow.module.css";
 
 import RulesetSelector from "@/components/RulesetSelector";
@@ -28,11 +27,7 @@ type ValidateWorkflowState =
   | { step: "clean-summary"; input: ValidateWorkflowInput; session: ValidateSession; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
   | { step: "issues" | "fix" | "manual" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
 
-export default function ValidateAndFixWorkflow({ input, onExit, onSaveProgressChange }: {
-  input: ValidateWorkflowInput;
-  onExit: () => void;
-  onSaveProgressChange: SaveProgressRegistration;
-}) {
+export default function ValidateAndFixWorkflow({ input, onExit }: { input: ValidateWorkflowInput; onExit: () => void }) {
   const [applying, setApplying] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -126,15 +121,6 @@ export default function ValidateAndFixWorkflow({ input, onExit, onSaveProgressCh
 
   const stage = state.step === "issues" || state.step === "assessing" ? 1 : state.step === "fix" || state.step === "clean-summary" ? 2 : state.step === "manual" ? 3 : state.step === "revalidate" ? 4 : 5;
   const pendingChanges = "session" in state && state.session.fixes.length > (state.session.appliedFixCount ?? 0);
-  const saveableSession = "session" in state && !applying && !pendingChanges ? state.session : null;
-  useEffect(() => {
-    if (!saveableSession) {
-      onSaveProgressChange(null);
-      return;
-    }
-    onSaveProgressChange(() => downloadProgress(saveableSession.fileName, saveableSession.finalXml ?? saveableSession.originalXml));
-    return () => onSaveProgressChange(null);
-  }, [onSaveProgressChange, saveableSession]);
   const canNavigate = (target: number) => state.step !== "assessing" && !applying && !pendingChanges && target < stage && (target !== 4 || ("session" in state && Boolean(state.session.revalidatedResult)));
   const navigate = (target: number) => {
     if (!canNavigate(target) || !("session" in state)) return;

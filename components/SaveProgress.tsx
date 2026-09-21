@@ -2,9 +2,7 @@
 
 import { downloadText } from "@/lib/utils";
 
-export type SaveProgressRegistration = (save: (() => void) | null) => void;
-
-export function downloadProgress(fileName: string, xml: string) {
+function downloadProgress(fileName: string, xml: string) {
   const name = `${fileName.replace(/\.(xml|xlsm|xls|stix)$/i, "").replace(/_in_progress$/i, "")}_in_progress.xml`;
   downloadText(xml, name, "application/xml");
 }

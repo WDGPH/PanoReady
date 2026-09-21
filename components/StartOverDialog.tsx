@@ -2,18 +2,17 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import type { RefObject } from "react";
+import { X } from "lucide-react";
 
 export default function StartOverDialog({
   open,
   onOpenChange,
   onStartOver,
-  onSaveAndStartOver,
   returnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStartOver: () => void;
-  onSaveAndStartOver?: () => void;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
 }) {
   return (
@@ -24,18 +23,17 @@ export default function StartOverDialog({
           event.preventDefault();
           returnFocusRef.current?.focus();
         }}>
+          <Dialog.Close asChild>
+            <button type="button" className="prompt-dialog-close" aria-label="Close start over prompt"><X size={17} /></button>
+          </Dialog.Close>
           <Dialog.Title>Start over?</Dialog.Title>
           <Dialog.Description>
             This will abandon the current file and any unsaved changes, then return to the landing page.
-            {onSaveAndStartOver && " You can download the current file with applied corrections first."}
           </Dialog.Description>
           <div className="start-over-dialog-actions">
             <Dialog.Close asChild>
               <button type="button" className="btn btn-secondary">Keep working</button>
             </Dialog.Close>
-            {onSaveAndStartOver && (
-              <button type="button" className="btn btn-secondary" onClick={onSaveAndStartOver}>Save progress and start over</button>
-            )}
             <button type="button" className="btn btn-primary" onClick={onStartOver}>Start over</button>
           </div>
         </Dialog.Content>

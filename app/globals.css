@@ -971,9 +971,28 @@ h1, h2, h3 {
   background: var(--color-surface-1);
   box-shadow: 0 18px 60px var(--color-shadow);
 }
+.prompt-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.prompt-dialog-close:hover { background: var(--color-surface-2); color: var(--color-text-primary); }
 .start-over-dialog h2 { margin: 0 0 8px; font-size: 19px; }
 .start-over-dialog p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.55; }
-.start-over-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.start-over-dialog-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.start-over-dialog-actions .btn { width: 100%; }
+@media (max-width: 480px) { .start-over-dialog-actions { grid-template-columns: 1fr; } }
 .intake-main {
   flex: 1;
   display: flex;

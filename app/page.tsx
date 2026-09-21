@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import NavBar from "@/components/NavBar";
 import StartOverDialog from "@/components/StartOverDialog";
-import type { SaveProgressRegistration } from "@/components/SaveProgress";
 import type { STIXComparison } from "@/lib/types";
 import CompareWorkflow from "@/workflows/stix/CompareWorkflow";
 import STIXIntake from "@/workflows/stix/STIXIntake";
@@ -19,15 +18,7 @@ export default function PanoReady() {
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow>({ kind: "home" });
   const [startOverOpen, setStartOverOpen] = useState(false);
   const homeButtonRef = useRef<HTMLButtonElement>(null);
-  const saveProgressRef = useRef<(() => void) | null>(null);
-  const [canSaveProgress, setCanSaveProgress] = useState(false);
-  const registerSaveProgress = useCallback<SaveProgressRegistration>((save) => {
-    saveProgressRef.current = save;
-    setCanSaveProgress(Boolean(save));
-  }, []);
   const returnHome = () => {
-    saveProgressRef.current = null;
-    setCanSaveProgress(false);
     setStartOverOpen(false);
     setActiveWorkflow({ kind: "home" });
     window.scrollTo({ top: 0 });
@@ -38,10 +29,6 @@ export default function PanoReady() {
       return;
     }
     setStartOverOpen(true);
-  };
-  const saveAndReturnHome = () => {
-    saveProgressRef.current?.();
-    returnHome();
   };
 
   return (
@@ -54,13 +41,13 @@ export default function PanoReady() {
         />
       )}
       {activeWorkflow.kind === "validate" && (
-        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={returnHome} onSaveProgressChange={registerSaveProgress} />
+        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={returnHome} />
       )}
       {activeWorkflow.kind === "compare" && (
-        <CompareWorkflow comparison={activeWorkflow.comparison} onStartOver={returnHome} onSaveProgressChange={registerSaveProgress} />
+        <CompareWorkflow comparison={activeWorkflow.comparison} onStartOver={returnHome} />
       )}
       <StartOverDialog open={startOverOpen} onOpenChange={setStartOverOpen} onStartOver={returnHome}
-        onSaveAndStartOver={canSaveProgress ? saveAndReturnHome : undefined} returnFocusRef={homeButtonRef} />
+        returnFocusRef={homeButtonRef} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
