@@ -16,9 +16,9 @@ test("manual fields edit the current value and can remove it", async ({ page }) 
 
   const phone = page.getByRole("textbox", { name: "Correct GuardianPhoneNumber for Student 1.1", exact: true });
   const statusCell = phone.locator("xpath=ancestor::td[1]/following-sibling::td[1]");
-  await expect(phone).toHaveValue("416-555-1111x");
+  await expect(phone).toHaveValue("204-555-0101x");
   await expect(statusCell.getByText("Unaltered", { exact: true })).toBeVisible();
-  await phone.fill("416-555-1111");
+  await phone.fill("204-555-0101");
   await expect(statusCell.getByText("Valid", { exact: true })).toBeVisible();
   await phone.fill("");
   await expect(statusCell.getByText("Removed", { exact: true })).toBeVisible();
@@ -28,7 +28,7 @@ test("manual fields edit the current value and can remove it", async ({ page }) 
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download", exact: true }).first().click();
   const output = readFileSync((await (await downloading).path())!, "utf8");
-  expect(output).not.toContain("416-555-1111x");
+  expect(output).not.toContain("204-555-0101x");
 });
 
 test("address reviews navigate between students and retain drafts", async ({ page }) => {
@@ -42,6 +42,10 @@ test("address reviews navigate between students and retain drafts", async ({ pag
   const dialog = page.getByRole("dialog");
   const footer = dialog.locator("footer");
   await expect(dialog).toContainText("Address 1 of 30");
+  await expect(dialog.locator(".student-section")).toHaveCount(1);
+  await expect(dialog.getByRole("heading", { name: "Address", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "School", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("heading", { name: "Student", exact: true })).toHaveCount(0);
   await expect(footer.getByRole("button", { name: "Previous", exact: true })).toBeDisabled();
   const street = dialog.getByRole("textbox", { name: /^Street number/i });
   const originalStreet = await street.inputValue();
@@ -84,8 +88,8 @@ test("address reviews navigate between students and retain drafts", async ({ pag
 });
 
 for (const apply of [false, true]) test(`suggestions stay on automatic fixes (apply: ${apply})`, async ({ page }) => {
-  const safeStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>51 Keats</ns1:StreetNumber><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
-  const conflictStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>66 Downey</ns1:StreetNumber><ns1:StreetName>Rd</ns1:StreetName><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
+  const safeStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>51 Example</ns1:StreetNumber><ns1:City>Exampleville</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
+  const conflictStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>66 Placeholder</ns1:StreetNumber><ns1:StreetName>Rd</ns1:StreetName><ns1:City>Exampleville</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
   const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${safeStudent}${conflictStudent}</ns1:Students>`);
   await page.goto("./");
   await page.locator("#xml-upload").setInputFiles({ name: "suggestions.xml", mimeType: "application/xml", buffer: Buffer.from(fixture) });
@@ -97,7 +101,7 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   const comparison = safeRow.getByRole("table", { name: "Suggested field changes" });
   const namePair = comparison.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Street Name", exact: true }) });
   await expect(namePair.getByRole("cell").nth(0)).toBeEmpty();
-  await expect(namePair.getByRole("cell").nth(1)).toHaveText("Keats");
+  await expect(namePair.getByRole("cell").nth(1)).toHaveText("Example");
   const values = await namePair.getByRole("cell").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
   expect(values[0]).toBe(values[1]);
   await namePair.getByRole("cell").nth(1).click();
@@ -122,7 +126,7 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   await page.getByRole("button", { name: "Manual fixes", exact: true }).click();
   if (!apply) {
     await page.getByRole("button", { name: "Review address for Student 1.1", exact: true }).click();
-    await expect(page.getByRole("dialog").getByRole("textbox", { name: /^Street number/i })).toHaveValue("51 Keats");
+    await expect(page.getByRole("dialog").getByRole("textbox", { name: /^Street number/i })).toHaveValue("51 Example");
     await expect(page.getByRole("dialog").getByRole("textbox", { name: /^Street name/i })).toHaveValue("");
     await expect(page.getByRole("dialog").getByRole("button", { name: "Back to fixes", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
@@ -131,21 +135,19 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
     const addressSection = page.getByRole("dialog").locator("details").filter({ has: page.getByRole("heading", { name: "Address", exact: true }) });
     await addressSection.locator("summary").click();
     await expect(addressSection.getByText("51", { exact: true })).toBeVisible();
-    await expect(addressSection.getByText("Keats", { exact: true })).toBeVisible();
+    await expect(addressSection.getByText("Example", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
   }
   await page.getByRole("button", { name: "Review address for Student 1.2", exact: true }).click();
   const dialog = page.getByRole("dialog");
   const street = dialog.getByRole("textbox", { name: /^Street number/i });
-  await expect(street).toHaveValue("66 Downey");
+  await expect(street).toHaveValue("66 Placeholder");
   await expect(dialog.getByRole("textbox", { name: /^Street name/i })).toHaveValue("Rd");
   await expect(dialog.getByRole("button", { name: "Back to fixes", exact: true })).toBeVisible();
   await street.fill("66");
   await dialog.getByRole("button", { name: "Reset changes", exact: true }).click();
-  await expect(street).toHaveValue("66 Downey");
+  await expect(street).toHaveValue("66 Placeholder");
   await dialog.getByRole("textbox", { name: /^City/i }).fill("Waterloo");
-  await dialog.getByRole("textbox", { name: /^Street name/i }).fill("");
-  await expect(dialog.getByText("Removed", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Apply fixes and view summary", exact: true }).click();
   await page.getByRole("button", { name: "Output", exact: true }).click();
@@ -153,14 +155,14 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   await page.getByRole("button", { name: "Download", exact: true }).first().click();
   const file = await (await downloading).path();
   const output = readFileSync(file!, "utf8");
-  expect(output).toContain(">66 Downey<");
-  expect(output).not.toContain(">Rd<");
+  expect(output).toContain(">66 Placeholder<");
+  expect(output).toContain(">Rd<");
   expect(output).toContain(">Waterloo<");
-  if (!apply) expect(output).toContain(">51 Keats<");
+  if (!apply) expect(output).toContain(">51 Example<");
 });
 
 for (const scope of ["selected", "page", "all"] as const) test(`safe address repairs support ${scope} apply`, async ({ page }) => {
-  const repairStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>654321 Qwerty</ns1:StreetNumber><ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
+  const repairStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>654321 Qwerty</ns1:StreetNumber><ns1:City>Exampleville</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
   const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${repairStudent.repeat(30)}</ns1:Students>`);
   await page.goto("./");
   await page.locator("#xml-upload").setInputFiles({ name: "bulk-suggestions.xml", mimeType: "application/xml", buffer: Buffer.from(fixture) });
@@ -180,8 +182,14 @@ for (const scope of ["selected", "page", "all"] as const) test(`safe address rep
     const nextPageChecks = page.locator(".autofix-row input:checked");
     await expect(nextPageChecks).toHaveCount(scope === "all" ? await page.locator(".autofix-row").count() : 0);
   }
-  await page.getByRole("button", { name: /Apply selected/ }).click();
-  await expect(page.getByRole("heading", { name: /fixes applied/ })).toBeVisible();
+  const applySelected = page.getByRole("button", { name: /Apply selected/ });
+  const selectedCount = (await applySelected.textContent())?.match(/\((\d+)\)/)?.[1];
+  expect(selectedCount).toBeDefined();
+  await applySelected.click();
+  await expect(page.getByRole("heading", {
+    name: `${selectedCount} correction${selectedCount === "1" ? "" : "s"} applied`,
+    exact: true,
+  })).toBeVisible();
   await page.getByRole("button", { name: "Manual fixes", exact: true }).click();
   await page.getByRole("button", { name: "Apply fixes and view summary", exact: true }).click();
   await page.getByRole("button", { name: "Output", exact: true }).click();

@@ -21,13 +21,13 @@ describe("review dialogs", () => {
     const issue = result.issues.find(candidate => result.records.some(record => record.id === candidate.recordId) && candidate.autoFixable && !candidate.repairProposal)!;
     const source = result.records.find(record => record.id === issue.recordId)!;
     const privateSession = { ...session, initialResult: { ...result,
-      records: [{ ...source, fields: { ...source.fields, FirstName: "PrivateGivenName", LastName: "PrivateSurname", GuardianFirstName: "PrivateGuardian", GuardianPhoneNumber: "5195550199" } }],
+      records: [{ ...source, fields: { ...source.fields, FirstName: "PrivateGivenName", LastName: "PrivateSurname", GuardianFirstName: "PrivateGuardian", GuardianPhoneNumber: "2045550199" } }],
       issues: [{ ...issue, studentName: "PrivateGivenName PrivateSurname" }],
     } };
     const html = render(view, privateSession);
     expect(html).toContain("View student ");
     expect(html).toContain("data-sort-value=\"Student ");
-    for (const value of ["PrivateGivenName", "PrivateSurname", "PrivateGuardian", "5195550199"]) expect(html).not.toContain(value);
+    for (const value of ["PrivateGivenName", "PrivateSurname", "PrivateGuardian", "2045550199"]) expect(html).not.toContain(value);
     expect(html).not.toContain("Student details");
   });
 

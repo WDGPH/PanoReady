@@ -10,6 +10,7 @@ import { prettyPrintXml } from "@/lib/cleaner";
 import { birthYearFromDate, processExport, studentFromRecord } from "@/lib/pullInfo";
 import { downloadBlob, downloadText, toCsv } from "@/lib/utils";
 import { generateAgeGroupReportCsv, generateIssueReportCsv, generateSchoolSummaryCsv } from "@/lib/validator";
+import { summarizeAppliedCorrections } from "@/lib/fixSummary";
 import type { ValidateSession } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 
@@ -118,6 +119,13 @@ export default function DownloadView({
   const gate = result.gate;
   const needsReview = gate === "REVIEW_REQUIRED";
   const xml = session.finalXml ?? session.originalXml;
+  const corrections = summarizeAppliedCorrections(session.fixes, session.history);
+  const correctionBreakdown = [
+    `${corrections.automatic} automatic`,
+    `${corrections.manual} manual`,
+    corrections.cleaning > 0 ? `${corrections.cleaning} cleaning` : "",
+    corrections.uncategorized > 0 ? `${corrections.uncategorized} earlier` : "",
+  ].filter(Boolean).join(" · ");
 
   const dlXml = () => downloadText(xml, `${baseName}_validated.xml`, "application/xml");
   const [encryptOpen, setEncryptOpen] = useState(false);
@@ -272,8 +280,9 @@ export default function DownloadView({
       </div>
 
       {/* Stats */}
-      <div className="summary-stats summary-stats--three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 28, marginBottom: 28 }}>
-        <StatCard label="Fixes Applied"    value={session.fixes.length}  accent="teal" />
+      <div className="summary-stats summary-stats--four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 28, marginBottom: 28 }}>
+        <StatCard label="Corrections Applied" value={corrections.total} sub={correctionBreakdown} accent="teal" />
+        <StatCard label="Field Changes" value={corrections.fieldChanges} />
         <StatCard label="Remaining Issues" value={result.issues.length}  />
         <StatCard label="Students"         value={result.studentCount}   accent="green" />
       </div>
@@ -290,7 +299,9 @@ export default function DownloadView({
             <div>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{baseName}_validated.xml</div>
               <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
-                {session.fixes.length > 0 ? `Cleaned STIX XML with ${session.fixes.length} fix${session.fixes.length !== 1 ? "es" : ""} applied` : "Original STIX XML (no fixes applied)"}
+                {corrections.fieldChanges > 0
+                  ? `Cleaned STIX XML with ${corrections.total} correction${corrections.total !== 1 ? "s" : ""} applied across ${corrections.fieldChanges} field change${corrections.fieldChanges !== 1 ? "s" : ""}`
+                  : "Original STIX XML (no corrections applied)"}
               </div>
             </div>
           </div>

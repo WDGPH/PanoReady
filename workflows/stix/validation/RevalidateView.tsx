@@ -3,6 +3,7 @@ import WorkflowNavigation from "@/components/WorkflowNavigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { applyReviewChanges } from "@/lib/reviewHistory";
+import { summarizeAppliedCorrections } from "@/lib/fixSummary";
 import type { ValidateSession } from "@/lib/types";
 
 // ─── ValidateRevalidateView ───────────────────────────────────────────────────
@@ -50,7 +51,7 @@ export default function RevalidateView({
 
   const prev = session.initialResult;
   const next = result.revalidatedResult!;
-  const fixCount = session.fixes.length;
+  const corrections = summarizeAppliedCorrections(session.fixes, session.history);
   const prevErrors   = prev.issues.filter(i => i.severity === "error").length;
   const prevWarnings = prev.issues.filter(i => i.severity === "warning").length;
   const nextErrors   = next.issues.filter(i => i.severity === "error").length;
@@ -91,8 +92,24 @@ export default function RevalidateView({
         </div>
 
         <div className="card" style={{ padding: "18px 22px" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 14 }}>After {fixCount} Fix{fixCount !== 1 ? "es" : ""}</div>
+          <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 14 }}>After {corrections.total} Correction{corrections.total !== 1 ? "s" : ""} · {corrections.fieldChanges} Field Change{corrections.fieldChanges !== 1 ? "s" : ""}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Automatic fixes</span>
+              <span style={{ fontWeight: 700 }}>{corrections.automatic}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Manual fixes</span>
+              <span style={{ fontWeight: 700 }}>{corrections.manual}</span>
+            </div>
+            {corrections.cleaning > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Cleaning mappings</span>
+              <span style={{ fontWeight: 700 }}>{corrections.cleaning}</span>
+            </div>}
+            {corrections.uncategorized > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Earlier corrections</span>
+              <span style={{ fontWeight: 700 }}>{corrections.uncategorized}</span>
+            </div>}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Total issues</span>
               <span style={{ fontWeight: 700 }}>{next.issues.length}</span>

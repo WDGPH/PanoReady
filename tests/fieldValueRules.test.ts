@@ -4,8 +4,8 @@ import { fieldValueMeetsRules } from "../lib/validator";
 
 describe("field value status", () => {
   it("uses the same canonical phone requirements as validation", () => {
-    expect(fieldValueMeetsRules("GuardianPhoneNumber", "416-555-1111", defaultRules)).toBe(true);
-    expect(fieldValueMeetsRules("GuardianPhoneNumber", "416-555-1111x", defaultRules)).toBe(false);
+    expect(fieldValueMeetsRules("GuardianPhoneNumber", "204-555-0100", defaultRules)).toBe(true);
+    expect(fieldValueMeetsRules("GuardianPhoneNumber", "204-555-0100x", defaultRules)).toBe(false);
     expect(fieldValueMeetsRules("GuardianPhoneNumber", "519-000-0000", defaultRules)).toBe(false);
   });
 

@@ -69,6 +69,9 @@ export default function StudentEntry({ record, editor, navigation }: { record: S
       StreetDirection: rules.allowedStreetDirectionValues } as Record<string, string[]>)[field];
   };
   const label = studentReference(record);
+  const visibleFieldGroups = editor?.addressEditor
+    ? dialogFieldGroups.filter(group => group.label === "Address")
+    : dialogFieldGroups;
   const targetChanged = editor?.issue.field && draft[editor.issue.field] !== undefined
     && draft[editor.issue.field] !== (record.fields[editor.issue.field] ?? "");
   return <Dialog.Root open={navigation ? true : undefined} onOpenChange={open => { if (!open) navigation?.onClose(); }}>
@@ -101,7 +104,7 @@ export default function StudentEntry({ record, editor, navigation }: { record: S
           <Dialog.Title>{label}</Dialog.Title>
           {navigation && <span role="status">Address {navigation.position} of {navigation.total}</span>}
         </header>
-        <div key={record.id}>{dialogFieldGroups.map((group) => {
+        <div key={record.id}>{visibleFieldGroups.map((group) => {
           const guardian = group.label === "Guardian 1" ? "Guardian" : group.label === "Guardian 2" ? "Guardian2" : undefined;
           const removed = guardian !== undefined && draft[guardian] === "";
           const groupIssues = editor?.issues.filter(issue => group.fields.some(field => field === issue.field)
