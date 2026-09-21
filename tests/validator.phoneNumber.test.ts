@@ -20,7 +20,7 @@ function stixWithPhones(phones: string[]): string {
 
   return `<?xml version="1.0" encoding="utf-8"?>
     <ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
-      <ns1:Metadata><ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime><ns1:CreatedBy>Phone Tests</ns1:CreatedBy><ns1:ContactPhone type="WORK">519-824-9999</ns1:ContactPhone><ns1:ContactEmail>phone@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload></ns1:Metadata>
+      <ns1:Metadata><ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime><ns1:CreatedBy>Synthetic Phone Tests</ns1:CreatedBy><ns1:ContactPhone type="WORK">204-555-0100</ns1:ContactPhone><ns1:ContactEmail>phone@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload></ns1:Metadata>
       <ns1:School>
         <ns1:SchoolNumber>123456</ns1:SchoolNumber>
         <ns1:Name>Synthetic Phone School</ns1:Name>
@@ -38,11 +38,11 @@ function phoneIssues(phones: string[], rules: RulesProfile = defaultRules) {
 describe("phone-number validator integration", () => {
   it("enforces both NANP NPA and NXX structure without suggesting digit changes", () => {
     const issues = phoneIssues([
-      "519-824-1234",
-      "019-824-1234",
-      "119-824-1234",
-      "519-024-1234",
-      "519-124-1234",
+      "204-555-0100",
+      "019-555-0100",
+      "119-555-0100",
+      "204-055-0100",
+      "204-155-0100",
     ]);
 
     expect(issues.map((issue) => issue.ruleId)).toEqual([
@@ -56,10 +56,10 @@ describe("phone-number validator integration", () => {
 
   it("preserves length, multiple-number, and appended-text errors", () => {
     const issues = phoneIssues([
-      "519-824-123",
-      "519-824-12345",
-      "519-824-1234 / 416-555-1234",
-      "519-824-1234 call office",
+      "204-555-010",
+      "204-555-01000",
+      "204-555-0100 / 416-555-0101",
+      "204-555-0100 call office",
     ]);
 
     expect(issues).toHaveLength(4);
@@ -68,7 +68,7 @@ describe("phone-number validator integration", () => {
   });
 
   it("applies deterministic formatting fixes and clears them on revalidation", () => {
-    const xml = stixWithPhones(["5198241234", "(416) 555-6789", "+1 867 920 1234"]);
+    const xml = stixWithPhones(["2045550100", "(416) 555-0101", "+1 867 555 0102"]);
     const initial = validateXml(xml);
     const formattingIssues = initial.issues.filter((issue) => issue.ruleId === "PHONE_FORMAT");
     const fixes: AppliedFix[] = formattingIssues.map((issue) => ({
@@ -82,16 +82,16 @@ describe("phone-number validator integration", () => {
     }));
 
     expect(formattingIssues.map((issue) => issue.suggestedFix)).toEqual([
-      "519-824-1234",
-      "416-555-6789",
-      "867-920-1234",
+      "204-555-0100",
+      "416-555-0101",
+      "867-555-0102",
     ]);
     const fixedXml = applyValidationFixes(xml, fixes);
     expect(validateXml(fixedXml).issues.filter((issue) => issue.field === "Phone")).toEqual([]);
   });
 
   it("allows an explicitly staged blank to remove an invalid phone", () => {
-    const xml = stixWithPhones(["766-838-917x766"]);
+    const xml = stixWithPhones(["204-555-0100xABC"]);
     const initial = validateXml(xml);
     const issue = initial.issues.find((candidate) => candidate.field === "Phone");
     expect(issue).toBeDefined();
@@ -106,38 +106,38 @@ describe("phone-number validator integration", () => {
       appliedAt: 0,
     }]);
 
-    expect(fixedXml).not.toContain("766-838-917x766");
+    expect(fixedXml).not.toContain("204-555-0100xABC");
     expect(fixedXml).not.toContain("<ns1:Phone");
     expect(validateXml(fixedXml).issues.filter((candidate) => candidate.field === "Phone")).toEqual([]);
   });
 
   it("accepts canonical extensions and auto-fixes common unambiguous variants", () => {
     const xml = stixWithPhones([
-      "519-824-1234x1",
-      "519-824-1234x12345",
-      "519-824-1234X12",
-      "519-824-1234 ext. 34",
-      "519-824-1234 #56",
+      "204-555-0100x1",
+      "204-555-0100x12345",
+      "204-555-0100X12",
+      "204-555-0100 ext. 34",
+      "204-555-0100 #56",
     ]);
     const issues = validateXml(xml).issues.filter((issue) => issue.field === "Phone");
 
     expect(issues).toHaveLength(3);
     expect(issues.every((issue) => issue.ruleId === "PHONE_EXTENSION_NORMALIZE")).toBe(true);
     expect(issues.map((issue) => issue.suggestedFix)).toEqual([
-      "519-824-1234x12",
-      "519-824-1234x34",
-      "519-824-1234x56",
+      "204-555-0100x12",
+      "204-555-0100x34",
+      "204-555-0100x56",
     ]);
     expect(issues.every((issue) => issue.autoFixable)).toBe(true);
   });
 
   it("requires manual review when extension intent or digits are ambiguous", () => {
     const issues = phoneIssues([
-      "519-824-1234x",
-      "519-824-1234 ext.",
-      "519-824-1234x123456",
-      "519-824-1234 ext ABC",
-      "519-824-1234x12A",
+      "204-555-0100x",
+      "204-555-0100 ext.",
+      "204-555-0100x123456",
+      "204-555-0100 ext ABC",
+      "204-555-0100x12A",
     ]);
 
     expect(issues).toHaveLength(5);
@@ -150,7 +150,7 @@ describe("phone-number validator integration", () => {
       <ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
         <ns1:Metadata>
           <ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime>
-          <ns1:CreatedBy>Pear Orchard</ns1:CreatedBy><ns1:ContactPhone type="WORK">519-824-1000 ext. 10</ns1:ContactPhone>
+          <ns1:CreatedBy>Synthetic Test</ns1:CreatedBy><ns1:ContactPhone type="WORK">204-555-0100 ext. 10</ns1:ContactPhone>
           <ns1:ContactEmail>demo@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload>
         </ns1:Metadata>
         <ns1:School><ns1:SchoolNumber>123456</ns1:SchoolNumber><ns1:Name>Synthetic Phone School</ns1:Name>
@@ -158,9 +158,9 @@ describe("phone-number validator integration", () => {
             <ns1:OEN>700000000</ns1:OEN><ns1:Grade>GR5</ns1:Grade>
             <ns1:Name><ns1:First>Apple</ns1:First><ns1:Last>Tester</ns1:Last></ns1:Name>
             <ns1:Gender>Other</ns1:Gender><ns1:BirthDate>2015-02-01</ns1:BirthDate>
-            <ns1:Guardian><ns1:Name><ns1:First>Pear</ns1:First></ns1:Name><ns1:Relationship>LEGALGRD</ns1:Relationship><ns1:Phone type="HOME">519-824-2000 #20</ns1:Phone></ns1:Guardian>
-            <ns1:Guardian><ns1:Name><ns1:First>Plum</ns1:First></ns1:Name><ns1:Relationship>OTHER</ns1:Relationship><ns1:Phone type="MOBILE">519-824-3000X30</ns1:Phone></ns1:Guardian>
-            <ns1:Address></ns1:Address><ns1:Phone type="MOBILE">519-824-4000 x 40</ns1:Phone>
+            <ns1:Guardian><ns1:Name><ns1:First>Example</ns1:First></ns1:Name><ns1:Relationship>LEGALGRD</ns1:Relationship><ns1:Phone type="HOME">204-555-0101 #20</ns1:Phone></ns1:Guardian>
+            <ns1:Guardian><ns1:Name><ns1:First>Sample</ns1:First></ns1:Name><ns1:Relationship>OTHER</ns1:Relationship><ns1:Phone type="MOBILE">204-555-0102X30</ns1:Phone></ns1:Guardian>
+            <ns1:Address></ns1:Address><ns1:Phone type="MOBILE">204-555-0103 x 40</ns1:Phone>
           </ns1:Student></ns1:Students>
         </ns1:School>
       </ns1:SchoolUpload>`;
@@ -184,10 +184,10 @@ describe("phone-number validator integration", () => {
     }));
     const fixedXml = applyValidationFixes(xml, fixes);
 
-    expect(fixedXml).toContain('<ns1:ContactPhone type="WORK">519-824-1000x10</ns1:ContactPhone>');
-    expect(fixedXml).toContain('<ns1:Phone type="HOME">519-824-2000x20</ns1:Phone>');
-    expect(fixedXml).toContain('<ns1:Phone type="MOBILE">519-824-3000x30</ns1:Phone>');
-    expect(fixedXml).toContain('<ns1:Phone type="MOBILE">519-824-4000x40</ns1:Phone>');
+    expect(fixedXml).toContain('<ns1:ContactPhone type="WORK">204-555-0100x10</ns1:ContactPhone>');
+    expect(fixedXml).toContain('<ns1:Phone type="HOME">204-555-0101x20</ns1:Phone>');
+    expect(fixedXml).toContain('<ns1:Phone type="MOBILE">204-555-0102x30</ns1:Phone>');
+    expect(fixedXml).toContain('<ns1:Phone type="MOBILE">204-555-0103x40</ns1:Phone>');
     expect(validateXml(fixedXml).issues.filter((issue) => issue.ruleId.startsWith("PHONE_EXTENSION"))).toEqual([]);
   });
 
@@ -207,7 +207,7 @@ describe("phone-number validator integration", () => {
   ] as const)("honors Canadian geographic NPA policy level %s", (level, expectedCount) => {
     const rules = structuredClone(defaultRules);
     rules.phoneConfig.canadianAreaCodeCheck = level;
-    const result = validateXml(stixWithPhones(["212-555-1234"]), rules);
+    const result = validateXml(stixWithPhones(["212-555-0100"]), rules);
     const issues = result.issues.filter((issue) => issue.ruleId === "PHONE_CANADIAN_AREA_CODE");
 
     expect(issues).toHaveLength(expectedCount);
@@ -221,7 +221,7 @@ describe("phone-number validator integration", () => {
   it("retains the previous off behavior when a legacy ruleset omits the policy setting", () => {
     const legacyRules = structuredClone(defaultRules);
     delete legacyRules.phoneConfig.canadianAreaCodeCheck;
-    const result = validateXml(stixWithPhones(["212-555-1234"]), legacyRules);
+    const result = validateXml(stixWithPhones(["212-555-0100"]), legacyRules);
 
     expect(result.issues.filter((issue) => issue.field === "Phone")).toEqual([]);
     expect(result.gate).toBe("READY");
@@ -229,11 +229,11 @@ describe("phone-number validator integration", () => {
 
   it("distinguishes active Canadian geographic NPAs from future and non-geographic resources", () => {
     const result = validateXml(stixWithPhones([
-      "519-824-1234",
-      "257-555-1234",
-      "851-555-1234",
-      "273-555-1234",
-      "600-555-1234",
+      "204-555-0100",
+      "257-555-0101",
+      "851-555-0102",
+      "273-555-0103",
+      "600-555-0104",
     ]));
     const issues = result.issues.filter((issue) => issue.ruleId === "PHONE_CANADIAN_AREA_CODE");
 
@@ -244,7 +244,7 @@ describe("phone-number validator integration", () => {
   });
 
   it("does not emit Canadian policy findings for structurally invalid NANP numbers", () => {
-    const issues = phoneIssues(["119-824-1234", "519-124-1234", "212-555-123"]);
+    const issues = phoneIssues(["119-555-0100", "204-155-0100", "212-555-010"]);
     expect(issues.some((issue) => issue.ruleId === "PHONE_CANADIAN_AREA_CODE")).toBe(false);
   });
 

@@ -509,6 +509,11 @@ export default function STIXIntake({ onValidate, onCompare }: {
         </section>
         <footer className="intake-footer">
           Built by Wellington-Dufferin-Guelph Public Health · MIT License
+          {process.env.NEXT_PUBLIC_BUILD_VERSION && (
+            <div style={{ marginTop: 6 }}>
+              {process.env.NEXT_PUBLIC_BUILD_VERSION} · {process.env.NEXT_PUBLIC_BUILD_SHA}
+            </div>
+          )}
         </footer>
       </div>
     </main>

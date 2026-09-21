@@ -6,13 +6,13 @@ import { importWorkbook } from "../lib/excel";
 import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
 import { standardizeUnit } from "../lib/cleaner";
 
-const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-0100</ContactPhone><ContactEmail>analyst@example.invalid</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
-const student = `<Student><Name><First>Ada</First><Last>Lovelace</Last></Name><Gender>F</Gender><BirthDate>2015-04-12</BirthDate><Language>en</Language><CountryOfOrigin>CA</CountryOfOrigin><Guardian><Name><First>Ann</First><Last>Lovelace</Last></Name><Relationship>MOTHER</Relationship><Phone type="MOBILE">519-555-2222</Phone></Guardian><Address><StreetName>Main</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G1A1</PostalCode></Address><Phone type="HOME">519-555-3333</Phone></Student>`;
+const metadata = `<Metadata><CreateDate>2026-08-31</CreateDate><CreateTime>12:30:00</CreateTime><CreatedBy>Synthetic Test</CreatedBy><ContactPhone type="WORK">204-555-0100</ContactPhone><ContactEmail>test@example.invalid</ContactEmail><FullUpload>YES</FullUpload></Metadata>`;
+const student = `<Student><Name><First>Sample</First><Last>Student</Last></Name><Gender>F</Gender><BirthDate>2015-04-12</BirthDate><Language>en</Language><CountryOfOrigin>CA</CountryOfOrigin><Guardian><Name><First>Example</First><Last>Guardian</Last></Name><Relationship>MOTHER</Relationship><Phone type="MOBILE">204-555-0101</Phone></Guardian><Address><StreetName>Placeholder</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Exampleville</City><Province>ON</Province><PostalCode>H0H0H0</PostalCode></Address><Phone type="HOME">204-555-0102</Phone></Student>`;
 
 function xml(prefix = "") {
   const p = prefix ? `${prefix}:` : "";
   const namespace = prefix ? `xmlns:${prefix}="http://ontario.ca"` : `xmlns="http://ontario.ca"`;
-  const body = `${metadata}<School><SchoolNumber>123</SchoolNumber><Name>Test</Name><Students>${student}</Students></School>`;
+  const body = `${metadata}<School><SchoolNumber>123</SchoolNumber><Name>Synthetic School</Name><Students>${student}</Students></School>`;
   return `<?xml version="1.0"?><${p}SchoolUpload ${namespace}>${prefix ? body.replace(/<(\/?)([A-Z])/g, `<$1${p}$2`) : body}</${p}SchoolUpload>`;
 }
 
@@ -21,15 +21,15 @@ test("default and arbitrary namespace prefixes parse to the same canonical model
     const upload = parseCanonicalXml(source);
     assert.equal(upload.schools[0].students.length, 1);
     const fields = flattenCanonicalStudent(upload.schools[0].students[0], upload.schools[0]);
-    assert.equal(fields.GuardianFirstName, "Ann");
-    assert.equal(fields.GuardianPhoneNumber, "519-555-2222");
-    assert.equal(fields.Phone, "519-555-3333");
+    assert.equal(fields.GuardianFirstName, "Example");
+    assert.equal(fields.GuardianPhoneNumber, "204-555-0101");
+    assert.equal(fields.Phone, "204-555-0102");
     assert.equal(fields.StreetDirection, "N");
   }
 });
 
 test("canonical round-trips decode XML entities instead of double-escaping them", () => {
-  const source = xml().replace("<Last>Lovelace</Last>", "<Last>O&amp;amp;apos;Example &amp; Sons</Last>");
+  const source = xml().replace("<Last>Student</Last>", "<Last>O&amp;amp;apos;Example &amp; Sons</Last>");
   const upload = parseCanonicalXml(source);
   const lastName = upload.schools[0].students[0].name.last;
   assert.equal(lastName, "O'Example & Sons");
@@ -48,8 +48,8 @@ test("canonical XML round trip preserves nested guardians, address, and typed ph
 
 test("preserves empty guardians and flags partial guardians without a relationship", () => {
   const source = xml().replace(
-    "<Guardian><Name><First>Ann</First><Last>Lovelace</Last></Name><Relationship>MOTHER</Relationship><Phone type=\"MOBILE\">519-555-2222</Phone></Guardian>",
-    "<Guardian><Name></Name></Guardian><Guardian><Name><First>Ann</First></Name></Guardian>",
+    "<Guardian><Name><First>Example</First><Last>Guardian</Last></Name><Relationship>MOTHER</Relationship><Phone type=\"MOBILE\">204-555-0101</Phone></Guardian>",
+    "<Guardian><Name></Name></Guardian><Guardian><Name><First>Example</First></Name></Guardian>",
   );
   const upload = parseCanonicalXml(source);
   assert.equal(upload.schools[0].students[0].guardians.length, 2);
@@ -101,11 +101,11 @@ test("workbook adapter detects alternate sheets and headers and normalizes value
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["Child First Name", "Surname", "DOB", "Sex", "Student Phone", "Guardian 1 First Name", "Guardian 1 Last Name", "Guardian 1 Relationship"],
-    ["Ada", "Lovelace", "2015-04-12", "x", "(519) 555-3333", "Ann", "Lovelace", "MOTHER"],
+    ["Sample", "Student", "2015-04-12", "x", "(204) 555-0102", "Example", "Guardian", "MOTHER"],
   ]), "Child Information");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
-    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+    ["Contact Phone", "2045550100"], ["Phone Type", "WORK"], ["PHU Contact Email", "test@example.invalid"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Synthetic School"],
   ]), "Submission Details");
   const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
   const result = importWorkbook(bytes, "altered.xlsx");
@@ -114,8 +114,8 @@ test("workbook adapter detects alternate sheets and headers and normalizes value
   assert.equal(result.preview.diagnostics.filter((finding) => finding.severity === "error").length, 0);
   const imported = result.upload.schools[0].students[0];
   assert.equal(imported.gender, "Other");
-  assert.equal(imported.phone?.number, "519-555-3333");
-  assert.equal(imported.guardians[0].name.first, "Ann");
+  assert.equal(imported.phone?.number, "204-555-0102");
+  assert.equal(imported.guardians[0].name.first, "Example");
 });
 
 function duplicateStudent(oen: string, first: string, last: string, birthDate = "2015-04-12") {
@@ -130,7 +130,7 @@ function twoSchoolXml(schoolAStudents: string, schoolBStudents: string) {
 
 test("same-school OEN and name+DOB matches block the gate as errors", () => {
   const source = twoSchoolXml(
-    duplicateStudent("123456789", "Priya", "Nair") + duplicateStudent("123456789", "Priya", "Nair"),
+    duplicateStudent("123456789", "Duplicate", "Student") + duplicateStudent("123456789", "Duplicate", "Student"),
     "",
   );
   const result = validateXml(source);
@@ -142,8 +142,8 @@ test("same-school OEN and name+DOB matches block the gate as errors", () => {
 
 test("cross-school OEN and name+DOB matches warn about dual enrollment instead of blocking", () => {
   const source = twoSchoolXml(
-    duplicateStudent("987654321", "Jordan", "Reyes"),
-    duplicateStudent("987654321", "Jordan", "Reyes"),
+    duplicateStudent("987654321", "CrossSchool", "Student"),
+    duplicateStudent("987654321", "CrossSchool", "Student"),
   );
   const result = validateXml(source);
   const dupRuleIds = result.issues.filter((i) => ["OEN_DUPLICATE", "NAME_DOB_DUPLICATE", "OEN_DUAL_ENROLLMENT", "IDENTITY_REVIEW"].includes(i.ruleId));
@@ -158,11 +158,11 @@ test("column overrides resolve unmapped and duplicate columns that would otherwi
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["First Name", "Last Name", "DOB", "Gender", "Notes", "Phone", "Phone Number"],
-    ["Ada", "Lovelace", "2015-04-12", "F", "stray column", "519-555-3333", "519-555-4444"],
+    ["Sample", "Student", "2015-04-12", "F", "stray column", "204-555-0102", "204-555-0103"],
   ]), "Students");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
-    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+    ["Contact Phone", "2045550100"], ["Phone Type", "WORK"], ["PHU Contact Email", "test@example.invalid"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Synthetic School"],
   ]), "Submission Details");
   const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
 
@@ -179,7 +179,7 @@ test("column overrides resolve unmapped and duplicate columns that would otherwi
   assert.equal(statuses["Notes"], "IGNORED");
   assert.equal(statuses["Phone Number"], "IGNORED");
   assert.equal(statuses["Phone"], "MAPPED");
-  assert.equal(resolved.upload.schools[0].students[0].phone?.number, "519-555-3333");
+  assert.equal(resolved.upload.schools[0].students[0].phone?.number, "204-555-0102");
 });
 
 test("a decorative row that only repeats the column headers is skipped, not imported as a student", () => {
@@ -189,31 +189,31 @@ test("a decorative row that only repeats the column headers is skipped, not impo
     ["Required", "", "Y", "Y", "Y", "Y"],
     // Header-echo row: leading cell blank, every other populated cell restates its header.
     ["", "OEN", "First Name", "Last Name", "", ""],
-    ["", "123456789", "Luke", "Ball", "2015-04-12", "M"],
+    ["", "123456789", "Sample", "Student", "2015-04-12", "M"],
   ]), "Students");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
-    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+    ["Contact Phone", "2045550100"], ["Phone Type", "WORK"], ["PHU Contact Email", "test@example.invalid"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Synthetic School"],
   ]), "Submission Details");
   const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
   const result = importWorkbook(bytes, "echo-row.xlsx", undefined, { 1: "IGNORE" });
   assert.equal(result.preview.canonicalStudentCount, 1);
-  assert.equal(result.upload.schools[0].students[0].name.first, "Luke");
+  assert.equal(result.upload.schools[0].students[0].name.first, "Sample");
   assert.ok(result.preview.diagnostics.some((finding) => finding.ruleId === "IMPORT_HEADER_ECHO_ROW"));
 });
 
 test("validateXml suggests deterministic fixes for aliasable, oversized, and reformattable values", () => {
   const source = xml()
     .replace("<Gender>F</Gender>", "<Gender>MALE</Gender>")
-    .replace("<Last>Lovelace</Last>", `<Last>${"X".repeat(55)}</Last>`)
-    .replace("519-555-3333", "5195553333");
+    .replace("<Last>Student</Last>", `<Last>${"X".repeat(55)}</Last>`)
+    .replace("204-555-0102", "2045550102");
   const result = validateXml(source);
   const byRule = Object.fromEntries(result.issues.map((i) => [i.ruleId, i]));
   assert.equal(byRule.GENDER_ALLOWED_VALUE?.suggestedFix, "M");
   assert.equal(byRule.GENDER_ALLOWED_VALUE?.autoFixable, true);
   assert.equal(byRule.FIELD_LENGTH?.suggestedFix, "X".repeat(50));
   assert.equal(byRule.FIELD_LENGTH?.autoFixable, true);
-  assert.equal(byRule.PHONE_FORMAT?.suggestedFix, "519-555-3333");
+  assert.equal(byRule.PHONE_FORMAT?.suggestedFix, "204-555-0102");
   assert.equal(byRule.PHONE_FORMAT?.autoFixable, true);
 });
 
@@ -235,12 +235,12 @@ test("Excel import maps Gender x/n aliases to Other", () => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["First Name", "Last Name", "DOB", "Gender"],
-    ["Ada", "Lovelace", "2015-04-12", "x"],
+    ["Sample", "Student", "2015-04-12", "x"],
     ["Bob", "Smith", "2015-04-12", "n"],
   ]), "Students");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["Field", "Value"], ["Date Created", "2026-08-31"], ["Time Created", "12:30:00"], ["Created By", "Analyst"],
-    ["Contact Phone", "5195551234"], ["Phone Type", "WORK"], ["PHU Contact Email", "analyst@example.ca"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Test"],
+    ["Contact Phone", "2045550100"], ["Phone Type", "WORK"], ["PHU Contact Email", "test@example.invalid"], ["Full Upload", "YES"], ["School Number", "123"], ["School Name", "Synthetic School"],
   ]), "Submission Details");
   const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
   const result = importWorkbook(bytes, "gender-xn.xlsx");
@@ -269,7 +269,7 @@ test("an empty Students element is an error, matching Panorama's real rejection 
 
 test("the correction pipeline repairs board metadata and drops empty schools without inventing contact data", () => {
   const boardMetadata = metadata
-    .replace(`<ContactPhone type="WORK">519-555-0100</ContactPhone>`, "")
+    .replace(`<ContactPhone type="WORK">204-555-0100</ContactPhone>`, "")
     .replace("</Metadata>", "<SchoolBoard><BoardNumber>12345</BoardNumber><Name>Synthetic Catholic District School Board</Name></SchoolBoard></Metadata>");
   const source = xml()
     .replace(metadata, boardMetadata)
@@ -286,29 +286,29 @@ test("the correction pipeline repairs board metadata and drops empty schools wit
   assert.equal(upload.schools[0].students.length, 1);
 
   const manuallyFixed = applyValidationFixes(source, [
-    { issueId: "contact", recordId: "metadata", field: "ContactPhone", oldValue: "", newValue: "519-555-0101", ruleId: "METADATA_REQUIRED", appliedAt: 0 },
+    { issueId: "contact", recordId: "metadata", field: "ContactPhone", oldValue: "", newValue: "204-555-0103", ruleId: "METADATA_REQUIRED", appliedAt: 0 },
     { issueId: "board", recordId: "metadata", field: "BoardNumber", oldValue: "12345", newValue: "B12345", ruleId: "BOARD_NUMBER_FORMAT", appliedAt: 0 },
     { issueId: "empty-school", recordId: "school1", field: "RemoveSchool", oldValue: "Virtual School", newValue: "REMOVE", ruleId: "EMPTY_STUDENTS", appliedAt: 0 },
   ]);
   const repaired = parseCanonicalXml(manuallyFixed);
-  assert.equal(repaired.metadata.contactPhone?.number, "519-555-0101");
+  assert.equal(repaired.metadata.contactPhone?.number, "204-555-0103");
   assert.equal(repaired.metadata.boardNumber, "B12345");
 });
 
-test("phone fixes strip real-world trailing call notes and recognize 'ex' as an extension marker", () => {
+test("phone fixes strip synthetic trailing call notes and recognize 'ex' as an extension marker", () => {
   const cases: Array<[string, string]> = [
-    ["519-938-0734 call 1st", "519-938-0734"],
-    ["519-546-8814 CALL 2ND", "519-546-8814"],
-    ["519-830 6506-call first", "519-830-6506"],
-    ["519-362-0305 **1st", "519-362-0305"],
-    ["226-500-2616(call 1st)", "226-500-2616"],
-    ["416-894-8985 (1St)", "416-894-8985"],
-    ["905-877-5200 ex 233", "905-877-5200x233"],
-    ["548) 255-2714", "548-255-2714"],
-    ["226-929-13-92", "226-929-1392"],
+    ["204-555-0104 call 1st", "204-555-0104"],
+    ["204-555-0105 CALL 2ND", "204-555-0105"],
+    ["204-555 0106-call first", "204-555-0106"],
+    ["204-555-0107 **1st", "204-555-0107"],
+    ["416-555-0108(call 1st)", "416-555-0108"],
+    ["867-555-0109 (1St)", "867-555-0109"],
+    ["613-555-0110 ex 233", "613-555-0110x233"],
+    ["204) 555-0111", "204-555-0111"],
+    ["204-555-01-12", "204-555-0112"],
   ];
   for (const [raw, expected] of cases) {
-    const source = xml().replace("519-555-3333", raw);
+    const source = xml().replace("204-555-0102", raw);
     const result = validateXml(source);
     const issue = result.issues.find((i) => i.ruleId === "PHONE_FORMAT");
     assert.equal(issue?.suggestedFix, expected, `expected fix for "${raw}"`);
@@ -318,13 +318,13 @@ test("phone fixes strip real-world trailing call notes and recognize 'ex' as an 
 
 test("StreetNumber overflow splits into StreetNumber + StreetName when the shape is confident, stays manual when ambiguous", () => {
   const confident: Array<[string, string, string]> = [
-    ["46 Curzon", "46", "Curzon"],
-    ["97 Lynch", "97", "Lynch"],
-    ["66 Downey", "66", "Downey"],
+    ["46 Example", "46", "Example"],
+    ["97 Sample", "97", "Sample"],
+    ["66 Placeholder", "66", "Placeholder"],
   ];
   const addressXml = (streetNumber: string) => xml().replace(
-    `<Address><StreetName>Main</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G1A1</PostalCode></Address>`,
-    `<Address><StreetNumber>${streetNumber}</StreetNumber><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Guelph</City><Province>ON</Province><PostalCode>N1G1A1</PostalCode></Address>`
+    `<Address><StreetName>Placeholder</StreetName><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Exampleville</City><Province>ON</Province><PostalCode>H0H0H0</PostalCode></Address>`,
+    `<Address><StreetNumber>${streetNumber}</StreetNumber><StreetType>ST</StreetType><StreetDirection>N</StreetDirection><City>Exampleville</City><Province>ON</Province><PostalCode>H0H0H0</PostalCode></Address>`
   );
   for (const [raw, expectedNumber, expectedName] of confident) {
     const result = validateXml(addressXml(raw));
@@ -350,22 +350,22 @@ test("StreetNumber overflow splits into StreetNumber + StreetName when the shape
 
 test("fixes operate through the canonical model for default-namespace XML", () => {
   const records = parseSTIXXml(xml());
-  assert.equal(records[0].fields.FirstName, "Ada");
-  const fixed = applyValidationFixes(xml(), [{ issueId: "manual", recordId: "school0:student0", field: "FirstName", oldValue: "Ada", newValue: "Augusta", ruleId: "MANUAL", appliedAt: 1 }]);
-  assert.equal(parseSTIXXml(fixed)[0].fields.FirstName, "Augusta");
+  assert.equal(records[0].fields.FirstName, "Sample");
+  const fixed = applyValidationFixes(xml(), [{ issueId: "manual", recordId: "school0:student0", field: "FirstName", oldValue: "Sample", newValue: "Updated", ruleId: "MANUAL", appliedAt: 1 }]);
+  assert.equal(parseSTIXXml(fixed)[0].fields.FirstName, "Updated");
 });
 
 test("manual field and address edits can remove existing values", () => {
   const source = xml();
   const fixed = applyValidationFixes(source, [
-    { issueId: "phone", recordId: "school0:student0", field: "GuardianPhoneNumber", oldValue: "519-555-2222", newValue: "", ruleId: "MANUAL", appliedAt: 1 },
-    { issueId: "city", recordId: "school0:student0", field: "City", oldValue: "Guelph", newValue: "", ruleId: "MANUAL", appliedAt: 1 },
+    { issueId: "phone", recordId: "school0:student0", field: "GuardianPhoneNumber", oldValue: "204-555-0101", newValue: "", ruleId: "MANUAL", appliedAt: 1 },
+    { issueId: "city", recordId: "school0:student0", field: "City", oldValue: "Exampleville", newValue: "", ruleId: "MANUAL", appliedAt: 1 },
   ]);
   const record = parseSTIXXml(fixed)[0];
   assert.equal(record.fields.GuardianPhoneNumber, "");
   assert.equal(record.fields.City, "");
   assert.doesNotMatch(fixed, /<ns1:City>/);
-  assert.doesNotMatch(fixed, /<ns1:Phone type="HOME">519-555-2222<\/ns1:Phone>/);
+  assert.doesNotMatch(fixed, /<ns1:Phone type="HOME">204-555-0101<\/ns1:Phone>/);
 });
 
 test("removes a populated first guardian while applying edits to the second guardian", () => {
@@ -389,11 +389,11 @@ test("manual empty-school removal preserves populated schools and same-batch stu
     oldValue: removal.currentValue ?? "", newValue: "REMOVE", ruleId: removal.ruleId, appliedAt: 0,
   };
   const output = applyValidationFixes(source, [fix, {
-    issueId: "edit", recordId: result.records[0].id, field: "City", oldValue: "Guelph", newValue: "Toronto", ruleId: "MANUAL", appliedAt: 0,
+    issueId: "edit", recordId: result.records[0].id, field: "City", oldValue: "Exampleville", newValue: "Sampletown", ruleId: "MANUAL", appliedAt: 0,
   }]);
   const upload = parseCanonicalXml(output);
   assert.equal(upload.schools.length, 1);
-  assert.equal(validateXml(output).records[0].fields.City, "Toronto");
+  assert.equal(validateXml(output).records[0].fields.City, "Sampletown");
   const populatedRemoval = { ...fix, recordId: "school1" };
   assert.equal(parseCanonicalXml(applyValidationFixes(source, [populatedRemoval])).schools.length, 2);
 });

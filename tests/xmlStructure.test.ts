@@ -15,7 +15,7 @@ it.each([
   ["third guardian", student("<Guardian/><Guardian/><Guardian/>")],
   ["mixed content", "unmapped text<School/>"],
   ["nested leaf content", student("<BirthDate><Year>2015</Year></BirthDate>")],
-  ["unsupported phone attribute", student("<Phone extension='1'>519-555-1234</Phone>")],
+  ["unsupported phone attribute", student("<Phone extension='1'>204-555-0100</Phone>")],
 ])("rejects %s before projecting data", (_, body) => {
   expect(() => parseCanonicalXml(wrap(body))).toThrow();
   expect(validateXml(wrap(body)).gate).toBe("BLOCKED");

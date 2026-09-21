@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Entirely synthetic demo data. Names are fictional, email uses .invalid,
+     and valid-looking phone numbers use the reserved 555-01xx range. -->
 <ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
   <!-- File-level, student, and guardian phones share the same rules. -->
   <ns1:Metadata>
     <ns1:CreateDate>2026-09-01</ns1:CreateDate>
     <ns1:CreateTime>12:00:00</ns1:CreateTime>
-    <ns1:CreatedBy>Pear Orchard</ns1:CreatedBy>
+    <ns1:CreatedBy>Synthetic Test Generator</ns1:CreatedBy>
     <!-- Auto-fix: common "ext." variant becomes lowercase x plus 1-5 digits. -->
-    <ns1:ContactPhone type="WORK">519-824-1000 ext. 10</ns1:ContactPhone>
+    <ns1:ContactPhone type="WORK">204-555-0100 ext. 10</ns1:ContactPhone>
     <ns1:ContactEmail>pear.orchard@example.invalid</ns1:ContactEmail>
     <ns1:FullUpload>YES</ns1:FullUpload>
   </ns1:Metadata>
@@ -28,21 +30,21 @@
           <ns1:Name><ns1:First>Captain</ns1:First><ns1:Last>Carrot</ns1:Last></ns1:Name>
           <ns1:Relationship>LEGALGRD</ns1:Relationship>
           <!-- Manual: extension marker has no digits. -->
-          <ns1:Phone type="HOME">416-555-1111x</ns1:Phone>
+          <ns1:Phone type="HOME">204-555-0101x</ns1:Phone>
         </ns1:Guardian>
         <ns1:Guardian>
           <ns1:Name><ns1:First>Princess</ns1:First><ns1:Last>Pea</ns1:Last></ns1:Name>
           <ns1:Relationship>OTHER</ns1:Relationship>
           <!-- Manual: extension is not numeric. -->
-          <ns1:Phone type="MOBILE">416-555-2222 ext ABC</ns1:Phone>
+          <ns1:Phone type="MOBILE">204-555-0102 ext ABC</ns1:Phone>
         </ns1:Guardian>
-        <ns1:Phone type="MOBILE">416-555-1234x12345</ns1:Phone>
+        <ns1:Phone type="MOBILE">204-555-0103x12345</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Ottawa</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>K1A0B1</ns1:PostalCode>
+          <ns1:PostalCode>H0H0H0</ns1:PostalCode>
           <ns1:StreetNumber>12</ns1:StreetNumber>
-          <ns1:StreetName>Main St</ns1:StreetName>
+          <ns1:StreetName>Example St</ns1:StreetName>
           <ns1:Unit>4</ns1:Unit>
         </ns1:Address>
       </ns1:Student>
@@ -58,7 +60,7 @@
         <ns1:OEN>000000001</ns1:OEN>
         <ns1:Phone>519-000-0000</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Toronto</ns1:City>
+          <ns1:City>Sampletown</ns1:City>
           <ns1:Province>ZZ</ns1:Province>
           <ns1:PostalCode>12345</ns1:PostalCode>
           <ns1:StreetNumber>1234567</ns1:StreetNumber>
@@ -79,9 +81,9 @@
         <ns1:OEN>ABC123</ns1:OEN>
         <ns1:Phone>4165556789</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Kingston</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>K7L 3N6</ns1:PostalCode>
+          <ns1:PostalCode>H0H 0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -95,11 +97,11 @@
         <ns1:Grade>GR11</ns1:Grade>
         <ns1:Gender>M</ns1:Gender>
         <ns1:OEN>222333444</ns1:OEN>
-        <ns1:Phone>(416) 555-0000</ns1:Phone>
+        <ns1:Phone>(204) 555-0104</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Kingston</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>K7L3N6</ns1:PostalCode>
+          <ns1:PostalCode>H0H0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -113,11 +115,11 @@
         <ns1:Grade>1</ns1:Grade>
         <ns1:Gender>N</ns1:Gender>
         <ns1:OEN>222333444</ns1:OEN>
-        <ns1:Phone>1-416-555-9999</ns1:Phone>
+        <ns1:Phone>1-204-555-0105</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Ottawa</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>K1A 0B1</ns1:PostalCode>
+          <ns1:PostalCode>H0H 0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -134,11 +136,11 @@
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000005</ns1:OEN>
         <!-- Auto-fix: uppercase X becomes canonical lowercase x. -->
-        <ns1:Phone>519-824-1234X12</ns1:Phone>
+        <ns1:Phone>204-555-0106X12</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>NIG/2WI</ns1:PostalCode>
+          <ns1:PostalCode>HIH/IHI</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -152,11 +154,11 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000006</ns1:OEN>
-        <ns1:Phone>519-124-1234</ns1:Phone>
+        <ns1:Phone>204-155-0100</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>NLG2W1</ns1:PostalCode>
+          <ns1:PostalCode>HLH1H1</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -171,11 +173,11 @@
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000007</ns1:OEN>
         <!-- Auto-fix: hash extension marker becomes canonical x. -->
-        <ns1:Phone>212-555-1234 #23</ns1:Phone>
+        <ns1:Phone>212-555-0100 #23</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>NOG2W1</ns1:PostalCode>
+          <ns1:PostalCode>HOH0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -190,11 +192,11 @@
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000008</ns1:OEN>
         <!-- Auto-fix: country code, formatting, and spaced extension marker. -->
-        <ns1:Phone>+1 (519) 824-1234 x 45</ns1:Phone>
+        <ns1:Phone>+1 (204) 555-0107 x 45</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>n1g—2w1</ns1:PostalCode>
+          <ns1:PostalCode>h0h—0h0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -208,11 +210,11 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000009</ns1:OEN>
-        <ns1:Phone>019-824-1234</ns1:Phone>
+        <ns1:Phone>019-555-0100</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>N1D2W1</ns1:PostalCode>
+          <ns1:PostalCode>D0H0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -226,11 +228,11 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000010</ns1:OEN>
-        <ns1:Phone>519-824-123</ns1:Phone>
+        <ns1:Phone>204-555-010</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>N1/G2W1</ns1:PostalCode>
+          <ns1:PostalCode>H0/H0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -244,11 +246,11 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000011</ns1:OEN>
-        <ns1:Phone>519-824-1234 extension 2</ns1:Phone>
+        <ns1:Phone>204-555-0108 extension 2</ns1:Phone>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City>
+          <ns1:City>Exampleville</ns1:City>
           <ns1:Province>ON</ns1:Province>
-          <ns1:PostalCode>N1G!!!2W1</ns1:PostalCode>
+          <ns1:PostalCode>H0H!!!0H0</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>
 
@@ -261,7 +263,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000012</ns1:OEN>
-        <ns1:Phone>119-824-1234</ns1:Phone>
+        <ns1:Phone>119-555-0100</ns1:Phone>
       </ns1:Student>
 
       <!-- Student 13: extension exceeds the maximum; not auto-fixable -->
@@ -271,7 +273,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000013</ns1:OEN>
-        <ns1:Phone>519-824-1234x123456</ns1:Phone>
+        <ns1:Phone>204-555-0109x123456</ns1:Phone>
       </ns1:Student>
 
       <!-- Student 14: multiple numbers; not auto-fixable -->
@@ -281,7 +283,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000014</ns1:OEN>
-        <ns1:Phone>519-824-1234 / 416-555-1234</ns1:Phone>
+        <ns1:Phone>204-555-0110 / 416-555-0111</ns1:Phone>
       </ns1:Student>
 
       <!-- Student 15: future Canadian relief NPA; warning only -->
@@ -291,7 +293,7 @@
         <ns1:Grade>GR5</ns1:Grade>
         <ns1:Gender>X</ns1:Gender>
         <ns1:OEN>500000015</ns1:OEN>
-        <ns1:Phone>851-555-1234</ns1:Phone>
+        <ns1:Phone>851-555-0112</ns1:Phone>
       </ns1:Student>
 
     </ns1:Students>
@@ -316,7 +318,7 @@
         <ns1:Grade>GR100</ns1:Grade>
         <ns1:Gender>unknown</ns1:Gender>
         <ns1:OEN>333444555</ns1:OEN>
-        <ns1:Phone>600-555-1234</ns1:Phone>
+        <ns1:Phone>600-555-0113</ns1:Phone>
       </ns1:Student>
     </ns1:Students>
   </ns1:School>

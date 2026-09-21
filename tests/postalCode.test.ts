@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeCanadianPostalCode } from "../lib/postalCode";
 
 describe("normalizeCanadianPostalCode", () => {
-  it.each(["N1G2W1", "K1A0B1", "K1W2Z3", "V9Z8W7"])(
+  it.each(["H0H0H0", "A1A1A1", "B2B2B2", "C3C3C3"])(
     "accepts canonical Canadian postal code %s",
     (raw) => {
       expect(normalizeCanadianPostalCode(raw)).toEqual({ status: "valid", value: raw });
@@ -10,47 +10,47 @@ describe("normalizeCanadianPostalCode", () => {
   );
 
   it.each([
-    ["n1g2w1", "N1G2W1"],
-    [" N1G2W1 ", "N1G2W1"],
-    ["N1G 2W1", "N1G2W1"],
-    ["N1G   2W1", "N1G2W1"],
-    ["N1G-2W1", "N1G2W1"],
-    ["N1G–2W1", "N1G2W1"],
-    ["N1G—2W1", "N1G2W1"],
-    ["N1G/2W1", "N1G2W1"],
-    ["N1G\\2W1", "N1G2W1"],
-    ["N1G_2W1", "N1G2W1"],
-    ["N1G.2W1", "N1G2W1"],
-    ["N1G / 2W1", "N1G2W1"],
+    ["h0h0h0", "H0H0H0"],
+    [" H0H0H0 ", "H0H0H0"],
+    ["H0H 0H0", "H0H0H0"],
+    ["H0H   0H0", "H0H0H0"],
+    ["H0H-0H0", "H0H0H0"],
+    ["H0H–0H0", "H0H0H0"],
+    ["H0H—0H0", "H0H0H0"],
+    ["H0H/0H0", "H0H0H0"],
+    ["H0H\\0H0", "H0H0H0"],
+    ["H0H_0H0", "H0H0H0"],
+    ["H0H.0H0", "H0H0H0"],
+    ["H0H / 0H0", "H0H0H0"],
   ])("normalizes %s", (raw, value) => {
     expect(normalizeCanadianPostalCode(raw)).toEqual({ status: "normalized", value });
   });
 
   it.each([
-    ["NIG2W1", "N1G2W1"],
-    ["NLG2W1", "N1G2W1"],
-    ["NOG2W1", "N0G2W1"],
-    ["N1G2WI", "N1G2W1"],
-    ["NIG/2WI", "N1G2W1"],
+    ["HIH1H1", "H1H1H1"],
+    ["HLH1H1", "H1H1H1"],
+    ["HOH0H0", "H0H0H0"],
+    ["H1H1HI", "H1H1H1"],
+    ["HIH/1HI", "H1H1H1"],
   ])("repairs numeric-position confusion in %s", (raw, value) => {
     expect(normalizeCanadianPostalCode(raw)).toEqual({ status: "repaired", value });
   });
 
   it.each([
-    "N1D2W1",
-    "N1F2W1",
-    "N1I2W1",
-    "N1O2W1",
-    "N1Q2W1",
-    "N1U2W1",
-    "W1G2W1",
-    "Z1G2W1",
-    "N1G2W",
-    "N1G2W11",
-    "N1/G2W1",
-    "N1G2/W1",
-    "N1G!!!2W1",
-    "N1G--2W1",
+    "H0D0H0",
+    "H0F0H0",
+    "H0I0H0",
+    "H0O0H0",
+    "H0Q0H0",
+    "H0U0H0",
+    "W0H0H0",
+    "Z0H0H0",
+    "H0H0H",
+    "H0H0H00",
+    "H0/H0H0",
+    "H0H0/H0",
+    "H0H!!!0H0",
+    "H0H--0H0",
   ])("rejects unresolved input %s", (raw) => {
     expect(normalizeCanadianPostalCode(raw)).toEqual({ status: "invalid" });
   });

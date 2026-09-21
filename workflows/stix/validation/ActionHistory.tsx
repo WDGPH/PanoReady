@@ -3,7 +3,13 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft, X } from "lucide-react";
 import type { ReviewAction } from "@/lib/types";
+import { countAppliedCorrections } from "@/lib/fixSummary";
 import styles from "./ActionHistory.module.css";
+
+function actionSummary(action: ReviewAction): string {
+  const corrections = countAppliedCorrections(action.changes);
+  return `${corrections} correction${corrections !== 1 ? "s" : ""}, ${action.changes.length} field change${action.changes.length !== 1 ? "s" : ""}`;
+}
 
 export default function ActionHistory({ history, disabled, onUndo }: {
   history: ReviewAction[];
@@ -29,7 +35,7 @@ export default function ActionHistory({ history, disabled, onUndo }: {
         </div>
         <button type="button" className={styles.action} disabled={disabled || !latest} onClick={onUndo}>Undo last action</button>
         <ol>{[...history].reverse().map((action) => <li key={action.id}>
-          <span>{action.label} ({action.changes.length})</span>
+          <span>{action.label} ({actionSummary(action)})</span>
           {action.status === "undone" && <small>Undone</small>}
         </li>)}</ol>
       </Dialog.Content>

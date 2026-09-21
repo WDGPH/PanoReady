@@ -177,7 +177,7 @@ The Fix screen presents every issue that has either a suggested fix or can accep
 
 ### Step 4 — Revalidate
 
-After fixes are applied, the Revalidate screen shows a side-by-side before/after comparison and a full audit of every change.
+After corrections are applied, the Revalidate screen shows a side-by-side before/after comparison. Its heading distinguishes corrections from field changes: a coordinated address repair is one correction even when it updates several XML fields. The After card reports automatic and manual corrections separately, with cleaning mappings and earlier uncategorized corrections shown when present.
 
 **Comparison cards:**
 
@@ -186,9 +186,9 @@ After fixes are applied, the Revalidate screen shows a side-by-side before/after
 | Before | Error count, warning count, and gate state from the initial validation |
 | After | Error count, warning count, and gate state after fixes were applied |
 
-**Applied Fixes audit table:**
+**Applied corrections audit:**
 
-Every fix that was applied is listed with:
+Every field change that was applied records:
 
 | Column | Description |
 |---|---|
@@ -215,7 +215,8 @@ The Download screen provides the final outputs.
 
 **Summary stats:**
 
-- Fixes applied
+- Corrections applied, split into automatic and manual corrections (plus cleaning or earlier corrections when present)
+- Field changes
 - Remaining issues
 - Total students in the file
 

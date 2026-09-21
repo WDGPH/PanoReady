@@ -7,14 +7,14 @@ import { expectNoPersistentState, installGuard, markers, persistentState } from 
 const xml = `<?xml version="1.0"?>
 <SchoolUpload xmlns="http://ontario.ca">
   <Metadata><CreateDate>2026-09-12</CreateDate><CreateTime>12:00:00</CreateTime>
-    <CreatedBy>Test</CreatedBy><ContactPhone type="WORK">519-555-1234</ContactPhone>
+    <CreatedBy>Synthetic Test</CreatedBy><ContactPhone type="WORK">204-555-0100</ContactPhone>
     <ContactEmail>test@example.invalid</ContactEmail><FullUpload>YES</FullUpload></Metadata>
-  <School><SchoolNumber>123</SchoolNumber><Name>Test school</Name><Students><Student>
+  <School><SchoolNumber>123</SchoolNumber><Name>Synthetic School</Name><Students><Student>
     <OEN>123456789</OEN><Grade>BAD</Grade><Name><First>${markers.record}</First><Last>Student</Last></Name>
     <Gender>F</Gender><BirthDate>2015-04-13</BirthDate>
-    <Address><StreetNumber>12</StreetNumber><StreetName>Main</StreetName><StreetType>ST</StreetType>
-      <City>Guelph</City><Province>ON</Province><PostalCode>N1G1A1</PostalCode></Address>
-    <Phone type="HOME">(519) 555-1234</Phone>
+    <Address><StreetNumber>12</StreetNumber><StreetName>Placeholder</StreetName><StreetType>ST</StreetType>
+      <City>Exampleville</City><Province>ON</Province><PostalCode>H0H0H0</PostalCode></Address>
+    <Phone type="HOME">(204) 555-0100</Phone>
   </Student></Students></School>
 </SchoolUpload>`;
 
@@ -46,7 +46,7 @@ test("validation, corrections and encrypted output keep records and passwords lo
   await historyTrigger.click();
   const history = page.getByRole("dialog", { name: /^History/ });
   await expect(history).toBeVisible();
-  await expect(history).toContainText("Automatic fixes (1)");
+  await expect(history).toContainText("Automatic fixes (1 correction, 1 field change)");
   await expect(history).not.toContainText(markers.record);
   await history.getByRole("button", { name: "Undo last action" }).click();
   await expect(history).toContainText("Undone");
@@ -70,8 +70,8 @@ test("validation, corrections and encrypted output keep records and passwords lo
   const text = plain.bytes.toString("utf8");
   expect(text).toContain(markers.record);
   expect(text).toContain(">GR5<");
-  expect(text).toContain(">519-555-1234<");
-  expect(text).not.toContain("(519) 555-1234");
+  expect(text).toContain(">204-555-0100<");
+  expect(text).not.toContain("(204) 555-0100");
   const report = await download(page, () => page.locator(".download-row").filter({ hasText: "_issue_report.csv" }).getByRole("button").click());
   expect(report.bytes.toString("utf8")).toContain(markers.record);
 

@@ -17,7 +17,7 @@ function stixWithPostalCodes(postalCodes: string[]): string {
         <ns1:Gender>Other</ns1:Gender>
         <ns1:BirthDate>2015-01-${String(index + 1).padStart(2, "0")}</ns1:BirthDate>
         <ns1:Address>
-          <ns1:City>Guelph</ns1:City><ns1:Province>ON</ns1:Province>
+          <ns1:City>Exampleville</ns1:City><ns1:Province>ON</ns1:Province>
           <ns1:PostalCode>${postalCode}</ns1:PostalCode>
         </ns1:Address>
       </ns1:Student>`
@@ -26,7 +26,7 @@ function stixWithPostalCodes(postalCodes: string[]): string {
 
   return `<?xml version="1.0" encoding="utf-8"?>
   <ns1:SchoolUpload xmlns:ns1="http://ontario.ca">
-    <ns1:Metadata><ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime><ns1:CreatedBy>Postal Tests</ns1:CreatedBy><ns1:ContactPhone type="WORK">519-824-9999</ns1:ContactPhone><ns1:ContactEmail>postal@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload></ns1:Metadata>
+    <ns1:Metadata><ns1:CreateDate>2026-09-01</ns1:CreateDate><ns1:CreateTime>12:00:00</ns1:CreateTime><ns1:CreatedBy>Synthetic Postal Tests</ns1:CreatedBy><ns1:ContactPhone type="WORK">204-555-0100</ns1:ContactPhone><ns1:ContactEmail>postal@example.invalid</ns1:ContactEmail><ns1:FullUpload>YES</ns1:FullUpload></ns1:Metadata>
     <ns1:School>
       <ns1:SchoolNumber>123456</ns1:SchoolNumber><ns1:Name>Synthetic School</ns1:Name>
       <ns1:Students>${students}</ns1:Students>
@@ -36,7 +36,7 @@ function stixWithPostalCodes(postalCodes: string[]): string {
 
 describe("postal-code validator integration", () => {
   it("creates dedicated normalization and repair fixes without generic duplicates", () => {
-    const xml = stixWithPostalCodes(["N1G2W1", " n1g / 2w1 ", "NIG/2WI", "Z1G2W1"]);
+    const xml = stixWithPostalCodes(["H0H0H0", " h0h / 0h0 ", "HOH/OHO", "D0H0H0"]);
     const result = validateXml(xml);
     const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
 
@@ -47,8 +47,8 @@ describe("postal-code validator integration", () => {
       suggestedFix: issue.suggestedFix,
       autoFixable: issue.autoFixable,
     }))).toEqual([
-      { ruleId: "POSTAL_CODE_NORMALIZE", severity: "info", suggestedFix: "N1G2W1", autoFixable: true },
-      { ruleId: "POSTAL_CODE_REPAIR", severity: "warning", suggestedFix: "N1G2W1", autoFixable: true },
+      { ruleId: "POSTAL_CODE_NORMALIZE", severity: "info", suggestedFix: "H0H0H0", autoFixable: true },
+      { ruleId: "POSTAL_CODE_REPAIR", severity: "warning", suggestedFix: "H0H0H0", autoFixable: true },
       { ruleId: "POSTAL_CODE_FORMAT", severity: "warning", suggestedFix: undefined, autoFixable: false },
     ]);
     expect(result.issues.some((issue) =>
@@ -57,7 +57,7 @@ describe("postal-code validator integration", () => {
   });
 
   it("applies suggested fixes through AppliedFix and clears them on revalidation", () => {
-    const xml = stixWithPostalCodes(["N1G 2W1", "NLG2W1"]);
+    const xml = stixWithPostalCodes(["H1H 1H1", "HLH1H1"]);
     const initial = validateXml(xml);
     const fixes: AppliedFix[] = initial.issues.map((issue) => ({
       issueId: issue.id,
@@ -70,12 +70,12 @@ describe("postal-code validator integration", () => {
     }));
 
     const fixedXml = applyValidationFixes(xml, fixes);
-    expect(fixedXml.match(/<ns1:PostalCode>N1G2W1<\/ns1:PostalCode>/g)).toHaveLength(2);
+    expect(fixedXml.match(/<ns1:PostalCode>H1H1H1<\/ns1:PostalCode>/g)).toHaveLength(2);
     expect(validateXml(fixedXml).issues.filter((issue) => issue.field === "PostalCode")).toEqual([]);
   });
 
   it("never suggests truncation or stitching for long invalid punctuation", () => {
-    const result = validateXml(stixWithPostalCodes(["N1G!!!2W1", "N1G2W11"]));
+    const result = validateXml(stixWithPostalCodes(["H0H!!!0H0", "H0H0H00"]));
     const postalIssues = result.issues.filter((issue) => issue.field === "PostalCode");
 
     expect(postalIssues).toHaveLength(2);
@@ -103,8 +103,8 @@ describe("postal-code validator integration", () => {
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_FORMAT")).toHaveLength(4);
     expect(postalIssues.filter((issue) => issue.autoFixable)).toHaveLength(6);
-    expect(postalIssues.find((issue) => issue.studentName === "Indiana Jones")?.suggestedFix).toBe("N1G2W1");
-    expect(postalIssues.find((issue) => issue.studentName === "Lara Croft")?.suggestedFix).toBe("N1G2W1");
-    expect(postalIssues.find((issue) => issue.studentName === "Oscar Grouch")?.suggestedFix).toBe("N0G2W1");
+    expect(postalIssues.find((issue) => issue.studentName === "Indiana Jones")?.suggestedFix).toBe("H1H1H1");
+    expect(postalIssues.find((issue) => issue.studentName === "Lara Croft")?.suggestedFix).toBe("H1H1H1");
+    expect(postalIssues.find((issue) => issue.studentName === "Oscar Grouch")?.suggestedFix).toBe("H0H0H0");
   });
 });
