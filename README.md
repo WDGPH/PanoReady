@@ -4,6 +4,7 @@
 [![Browser privacy](https://github.com/WDGPH/PanoReady/actions/workflows/browser-privacy.yml/badge.svg?branch=main)](https://github.com/WDGPH/PanoReady/actions/workflows/browser-privacy.yml)
 [![Offline operation](https://github.com/WDGPH/PanoReady/actions/workflows/offline-operation.yml/badge.svg?branch=main)](https://github.com/WDGPH/PanoReady/actions/workflows/offline-operation.yml)
 [![Documentation](https://github.com/WDGPH/PanoReady/actions/workflows/docs.yml/badge.svg)](https://github.com/WDGPH/PanoReady/actions/workflows/docs.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/WDGPH/PanoReady)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 

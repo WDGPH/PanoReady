@@ -1,3 +1,4 @@
+import { ageOnDate, analyzeCalendarDate, validRealDate } from "./calendarDate";
 /**
  * STIX XML validator — Phase 1 of PLAN.md
  *
@@ -5,6 +6,7 @@
  * Also provides helpers for applying fixes back to XML and exporting reports.
  */
 
+import { isOenIdentityFinding } from "./identityRules";
 import { standardizeUnit } from "./cleaner";
 import { normalizeCanadianPostalCode } from "./postalCode";
 import {
@@ -36,7 +38,8 @@ import {
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
 } from "./addressRepair";
-import { SCHOOL_FIELDS } from "./fields";
+import { FREE_TEXT_FIELDS, SCHOOL_FIELDS } from "./fields";
+import { freeTextCharacterFindings } from "./freeTextCharacters";
 
 // ─── XML parser (standalone) ──────────────────────────────────────────────────
 
@@ -61,14 +64,28 @@ function issue(
   issues: ValidationIssue[],
   value: Omit<ValidationIssue, "id" | "autoFixable"> & { id?: string; autoFixable?: boolean },
 ) {
-  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, autoFixable: value.autoFixable ?? false, ...value });
+  const autoFixable = value.repairProposal
+    ? value.repairProposal.confidence === "safe"
+      && value.repairProposal.changes.some(change => change.proposedValue !== change.currentValue)
+    : value.autoFixable ?? value.suggestedFix !== undefined;
+  issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, ...value, autoFixable });
 }
 
-function validRealDate(value: string): boolean {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return false;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
+function allowedValuesForField(field: string, rules: RulesProfile): string[] | undefined {
+  return {
+    Grade: rules.allowedGradeValues,
+    Gender: rules.allowedGenderValues,
+    Province: rules.allowedProvinceValues,
+    Language: rules.allowedLanguageValues,
+    CountryOfOrigin: rules.allowedCountryValues,
+    StreetType: rules.allowedStreetTypeValues,
+    StreetDirection: rules.allowedStreetDirectionValues,
+    GuardianRelationship: rules.allowedRelationshipValues,
+    Guardian2Relationship: rules.allowedRelationshipValues,
+    PhoneType: rules.allowedPhoneTypeValues,
+    GuardianPhoneType: rules.allowedPhoneTypeValues,
+    Guardian2PhoneType: rules.allowedPhoneTypeValues,
+  }[field];
 }
 
 type CanonicalPhoneFinding = {
@@ -182,9 +199,32 @@ function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFind
   return { severity: "warning", message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
 }
 
+/**
+ * Check the independent rules for one non-empty field value. Cross-record and
+ * cross-field findings still require the normal recheck after fixes are applied.
+ */
+export function fieldValueMeetsRules(field: string, value: string, rules: RulesProfile): boolean {
+  if (!value) return !rules.requiredFields.includes(field);
+  if (value.length > (rules.fieldLengths[field] ?? Infinity)) return false;
+  const allowed = allowedValuesForField(field, rules);
+  if (allowed && !allowed.includes(value)) return false;
+  if (field === "PostalCode" && postalCodeFinding(value, rules)) return false;
+  if (["Phone", "ContactPhone", "MetadataContactPhone", "GuardianPhoneNumber", "Guardian2PhoneNumber"].includes(field)
+    && canonicalPhoneFindings(value, field, rules).length) return false;
+  if (field === "BirthDate" && (!validRealDate(value) || value > new Date().toISOString().slice(0, 10))) return false;
+  if (field === "OEN" && !/^\d{9}$/.test(value)) return false;
+  if (field === "BoardNumber" && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(value)) return false;
+  return true;
+}
+
 /** Namespace-aware validation of the canonical STIX model. */
 export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
   const issues: ValidationIssue[] = [];
+  const effectiveRules: RulesProfile = {
+    ...rules,
+    freeTextCharacterChecks: { ...defaultRules.freeTextCharacterChecks, ...rules.freeTextCharacterChecks },
+    freeTextAllowedCharacters: { ...defaultRules.freeTextAllowedCharacters, ...rules.freeTextAllowedCharacters },
+  };
   let upload;
   try {
     upload = parseCanonicalXml(xmlText);
@@ -231,15 +271,12 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
     if (metadata.contactPhone.type && !rules.allowedPhoneTypeValues.includes(metadata.contactPhone.type)) issue(issues, { severity: "error", field: "PhoneType", ruleId: "PHONE_TYPE_ALLOWED_VALUE", layer: "CANONICAL", message: `Contact phone type "${metadata.contactPhone.type}" is not allowed.` });
   }
 
-  const seenOens = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
+  const seenOens = new Map<string, { studentName: string; schoolId: string; schoolNumber: string; schoolName: string }[]>();
   const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
-  const allowedByField: Record<string, string[]> = {
-    Grade: rules.allowedGradeValues, Gender: rules.allowedGenderValues, Province: rules.allowedProvinceValues,
-    Language: rules.allowedLanguageValues, CountryOfOrigin: rules.allowedCountryValues, StreetType: rules.allowedStreetTypeValues,
-    StreetDirection: rules.allowedStreetDirectionValues, GuardianRelationship: rules.allowedRelationshipValues,
-    Guardian2Relationship: rules.allowedRelationshipValues, PhoneType: rules.allowedPhoneTypeValues,
-    GuardianPhoneType: rules.allowedPhoneTypeValues, Guardian2PhoneType: rules.allowedPhoneTypeValues,
-  };
+  const allowedByField = Object.fromEntries([
+    "Grade", "Gender", "Province", "Language", "CountryOfOrigin", "StreetType", "StreetDirection",
+    "GuardianRelationship", "Guardian2Relationship", "PhoneType", "GuardianPhoneType", "Guardian2PhoneType",
+  ].map(field => [field, allowedValuesForField(field, rules)!]));
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
   const schoolFields = new Set<string>(SCHOOL_FIELDS);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
@@ -259,7 +296,6 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       const studentName = [fields.FirstName, fields.LastName].filter(Boolean).join(" ") || `Student #${studentIndex + 1}`;
       const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
       records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
-
       // Only a standalone finding when StreetNumber is within its length limit — an over-length
       // value gets this same proposal attached to the blocking FIELD_LENGTH error instead.
       const unitPrefixProposal = (fields.StreetNumber ?? "").length <= (rules.fieldLengths.StreetNumber ?? Infinity)
@@ -314,22 +350,30 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         }
       }
       if (fields.BirthDate) {
-        if (!validRealDate(fields.BirthDate)) {
-          const parsed = new Date(fields.BirthDate);
-          const canNormalize = !isNaN(parsed.getTime());
-          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.`, suggestedFix: canNormalize ? parsed.toISOString().slice(0, 10) : undefined, autoFixable: canNormalize });
-        } else if (fields.BirthDate > new Date().toISOString().slice(0, 10)) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
+        const date = analyzeCalendarDate(fields.BirthDate);
+        const today = new Date().toISOString().slice(0, 10);
+        if (date.status !== "valid") {
+          const suggestion = date.status === "normalizable" && date.value <= today ? date.value : undefined;
+          const guidance = date.status === "ambiguous"
+            ? " The day and month order is ambiguous; confirm the source date."
+            : " Confirm the source date if no correction is suggested.";
+          issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FORMAT", message: `BirthDate "${fields.BirthDate}" must be a real YYYY-MM-DD date.${guidance}`, suggestedFix: suggestion, autoFixable: suggestion !== undefined });
+        }
+        if ((date.status === "valid" || date.status === "normalizable") && date.value > today) issue(issues, { ...base, severity: "error", field: "BirthDate", ruleId: "BIRTHDATE_FUTURE", message: "BirthDate cannot be in the future." });
       }
       if (fields.OEN) {
         if (!/^\d{9}$/.test(fields.OEN)) issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_FORMAT", message: `OEN "${fields.OEN}" must contain exactly 9 digits.` });
-        else if (rules.duplicateDetection.checkOen && seenOens.has(fields.OEN)) {
-          const prior = seenOens.get(fields.OEN)!;
-          if (prior.schoolNumber === school.schoolNumber) {
-            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}).` });
-          } else {
-            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment.` });
+        else if (rules.duplicateDetection.checkOen) {
+          const occurrences = seenOens.get(fields.OEN) ?? [];
+          const prior = occurrences.find((entry) => entry.schoolId === school.schoolId) ?? occurrences[0];
+          if (prior?.schoolId === school.schoolId) {
+            issue(issues, { ...base, severity: "error", field: "OEN", ruleId: "OEN_DUPLICATE", message: `OEN "${fields.OEN}" is duplicated with ${prior.studentName} in the same school (${school.name || school.schoolNumber}). Resolve the duplicate in the source system and upload a corrected file.` });
+          } else if (prior) {
+            issue(issues, { ...base, severity: "warning", field: "OEN", ruleId: "OEN_DUAL_ENROLLMENT", message: `OEN "${fields.OEN}" also appears at ${prior.schoolName || prior.schoolNumber} (${prior.schoolNumber}) as ${prior.studentName}; review for dual enrollment in the source system.` });
           }
-        } else seenOens.set(fields.OEN, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
+          occurrences.push({ studentName, schoolId: school.schoolId, schoolNumber: school.schoolNumber, schoolName: school.name });
+          seenOens.set(fields.OEN, occurrences);
+        }
       }
       if (fields.PostalCode) {
         const finding = postalCodeFinding(fields.PostalCode, rules);
@@ -403,6 +447,35 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       }
     }
   }
+  // Character policy is a final fallback. If a specialized validator already
+  // owns a record field, do not add a competing special-character suggestion.
+  const claimedFields = new Set(
+    issues
+      .filter((finding) => finding.recordId && finding.field)
+      .map((finding) => `${finding.recordId}\u0000${finding.field}`),
+  );
+  for (const [schoolIndex, school] of upload.schools.entries()) {
+    const recordId = `school${schoolIndex}`;
+    if (claimedFields.has(`${recordId}\u0000SchoolName`)) continue;
+    for (const finding of freeTextCharacterFindings(school.name, "SchoolName", effectiveRules)) {
+      issue(issues, {
+        severity: "info", recordId, studentName: "School name", schoolNumber: school.schoolNumber,
+        field: "SchoolName", currentValue: school.name, autoFixable: true, layer: "CANONICAL", ...finding,
+      });
+    }
+  }
+  for (const record of records) {
+    const studentName = [record.fields.FirstName, record.fields.LastName].filter(Boolean).join(" ");
+    for (const field of FREE_TEXT_FIELDS) {
+      if (field === "SchoolName" || !record.fields[field] || claimedFields.has(`${record.id}\u0000${field}`)) continue;
+      for (const finding of freeTextCharacterFindings(record.fields[field], field, effectiveRules)) {
+        issue(issues, {
+          severity: "info", recordId: record.id, studentName, schoolNumber: record.fields.SchoolNumber,
+          field, currentValue: record.fields[field], autoFixable: true, layer: "CANONICAL", ...finding,
+        });
+      }
+    }
+  }
   const hasErrors = issues.some((finding) => finding.severity === "error");
   const hasWarnings = issues.some((finding) => finding.severity === "warning" && finding.ruleId !== "PHONE_CANADIAN_AREA_CODE");
   const gate: GateState = hasErrors ? "BLOCKED" : hasWarnings ? "REVIEW_REQUIRED" : "READY";
@@ -473,13 +546,23 @@ export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): stri
   const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
   const removedSchools = new Set<number>();
   for (const fix of fixes) {
+    if (isOenIdentityFinding(fix.ruleId)) continue;
     if (fix.field === "RemoveSchool") {
       const schoolMatch = fix.recordId.match(/^school(\d+)$/);
-      if (fix.newValue === "REMOVE" && schoolMatch) removedSchools.add(Number(schoolMatch[1]));
+      if (fix.newValue === "REMOVE" && schoolMatch) {
+        const index = Number(schoolMatch[1]);
+        if (upload.schools[index]?.students.length === 0) removedSchools.add(index);
+      }
       continue;
     }
     if (fix.recordId === "metadata") {
       setCanonicalMetadataField(upload.metadata, fix.field, fix.newValue);
+      continue;
+    }
+    const schoolMatch = fix.recordId.match(/^school(\d+)$/);
+    if (schoolMatch) {
+      const school = upload.schools[Number(schoolMatch[1])];
+      if (school && fix.field === "SchoolName") school.name = fix.newValue;
       continue;
     }
     const coordinates = decodeRecordId(fix.recordId);
@@ -596,32 +679,11 @@ export function generateAgeGroupReportCsv(records: StudentRecord[], buckets?: Ar
   const defaultBuckets: Array<[number, number | null]> = [[0,4],[5,9],[10,14],[15,19],[20,null]];
   const b = buckets ?? defaultBuckets;
   const counts = new Array(b.length).fill(0);
-  const now = new Date();
+  const today = new Date().toISOString().slice(0, 10);
   for (const r of records) {
     const bd = (r.fields.BirthDate || "").trim();
-    if (!bd) continue;
-    const m = bd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    let age: number | null = null;
-    if (m) {
-      const y = parseInt(m[1], 10);
-      const mo = parseInt(m[2], 10) - 1;
-      const d = parseInt(m[3], 10);
-      const dob = new Date(y, mo, d);
-      if (!isNaN(dob.getTime())) {
-        age = now.getFullYear() - dob.getFullYear();
-        const mDiff = now.getMonth() - dob.getMonth();
-        if (mDiff < 0 || (mDiff === 0 && now.getDate() < dob.getDate())) age--;
-      }
-    } else {
-      // try Date parse of other formats
-      const parsed = new Date(bd);
-      if (!isNaN(parsed.getTime())) {
-        age = now.getFullYear() - parsed.getFullYear();
-        const mDiff = now.getMonth() - parsed.getMonth();
-        if (mDiff < 0 || (mDiff === 0 && now.getDate() < parsed.getDate())) age--;
-      }
-    }
-    if (age === null || age < 0) continue;
+    const age = ageOnDate(bd, today);
+    if (age === null) continue;
     for (let i = 0; i < b.length; i++) {
       const [min, max] = b[i];
       if (age >= min && (max === null || age <= max)) {

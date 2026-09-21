@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, MapPin, PenLine, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CheckCircle2, PenLine, ShieldCheck, Trash2, TriangleAlert } from "lucide-react";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
+import { fieldValueMeetsRules } from "@/lib/validator";
 import type { AddressRepairProposal, RulesProfile, StudentRecord } from "@/lib/types";
 
 type AddressDraft = Record<string, string>;
@@ -43,27 +44,17 @@ function optionsFor(field: string, rules: RulesProfile): string[] | null {
 export default function AddressRepairCard({
   proposal,
   record,
-  studentName,
-  schoolNumber,
   rules,
   draft,
-  selected,
   onDraftChange,
-  onSelectedChange,
-  onReset,
 }: {
   proposal: AddressRepairProposal;
   record: StudentRecord;
-  studentName?: string;
-  schoolNumber?: string;
   rules: RulesProfile;
   draft: AddressDraft;
-  selected: boolean;
   onDraftChange: (field: string, value: string) => void;
-  onSelectedChange: (selected: boolean) => void;
-  onReset: () => void;
 }) {
-  const changedCount = ADDRESS_REPAIR_FIELDS.filter((field) => (draft[field] ?? "") !== (record.fields[field] ?? "")).length;
+  const changed = ADDRESS_REPAIR_FIELDS.some(field => (draft[field] ?? "") !== (record.fields[field] ?? ""));
   const tone = proposal.confidence === "safe"
     ? { border: "var(--color-success-border)", bg: "var(--color-success-bg)", text: "var(--color-success-text)", Icon: ShieldCheck }
     : proposal.confidence === "manual"
@@ -84,17 +75,9 @@ export default function AddressRepairCard({
               <tone.Icon size={16} style={{ color: tone.text }} />
               <strong style={{ fontSize: 14 }}>{proposal.title}</strong>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "var(--color-text-muted)", fontSize: 11, marginBottom: 8 }}>
-              <span>{studentName || "Student record"}</span>
-              {schoolNumber && <span>School {schoolNumber}</span>}
-              <span style={{ fontFamily: "var(--font-mono)" }}>{record.id}</span>
-            </div>
             <p style={{ margin: 0, maxWidth: 720, color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.55 }}>{proposal.explanation}</p>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-            <input type="checkbox" checked={selected} onChange={(event) => onSelectedChange(event.target.checked)} />
-            Apply
-          </label>
+
         </div>
       </div>
 
@@ -104,8 +87,8 @@ export default function AddressRepairCard({
             <div style={{ fontSize: 9, fontWeight: 700, color: "var(--color-text-muted)", letterSpacing: "0.06em", marginBottom: 4 }}>CURRENT ADDRESS</div>
             <div style={{ fontSize: 12, lineHeight: 1.45 }}>{addressLine(record.fields)}</div>
           </div>
-          <div style={{ borderLeft: `2px solid ${selected ? "var(--color-success-border)" : "var(--color-border)"}`, padding: "6px 10px" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--color-text-muted)", letterSpacing: "0.06em", marginBottom: 4 }}>CORRECTED PREVIEW</div>
+          <div style={{ borderLeft: `2px solid ${changed ? "var(--color-success-border)" : "var(--color-border)"}`, padding: "6px 10px" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--color-text-muted)", letterSpacing: "0.06em", marginBottom: 4 }}>EDITED PREVIEW</div>
             <div style={{ fontSize: 12, lineHeight: 1.45 }}>{addressLine(draft)}</div>
           </div>
         </div>
@@ -115,6 +98,11 @@ export default function AddressRepairCard({
             const current = record.fields[field] ?? "";
             const value = draft[field] ?? "";
             const changed = value !== current;
+            const status = !changed ? null : value === ""
+              ? { label: "Removed", className: "removed", Icon: Trash2 }
+              : fieldValueMeetsRules(field, value, rules)
+                ? { label: "Meets field rules", className: "valid", Icon: CheckCircle2 }
+                : { label: "Check value", className: "invalid", Icon: TriangleAlert };
             const options = optionsFor(field, rules);
             const maxLength = rules.fieldLengths[field];
             const controlStyle: React.CSSProperties = {
@@ -128,32 +116,23 @@ export default function AddressRepairCard({
             };
             return (
               <label key={field} style={{ minWidth: 0 }}>
-                <span style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 4, color: "var(--color-text-muted)", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                  {LABELS[field]}
+                <span className="address-field-label">
+                  <span>{LABELS[field]}</span>
                   {maxLength && <span style={{ color: value.length > maxLength ? "var(--color-error-text)" : "inherit" }}>{value.length}/{maxLength}</span>}
                 </span>
                 {options ? (
-                  <select value={value} onChange={(event) => { onDraftChange(field, event.target.value); onSelectedChange(true); }} style={controlStyle}>
+                  <select value={value} onChange={(event) => onDraftChange(field, event.target.value)} style={controlStyle}>
                     <option value="">—</option>
                     {value && !options.includes(value) && <option value={value}>{value} (current)</option>}
                     {options.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
                 ) : (
-                  <input value={value} onChange={(event) => { onDraftChange(field, event.target.value); onSelectedChange(true); }} style={controlStyle} />
+                  <input value={value} onChange={(event) => onDraftChange(field, event.target.value)} style={controlStyle} />
                 )}
+                {status && <span className={`address-field-status address-field-status--${status.className}`} role="status"><status.Icon size={12} aria-hidden="true" />{status.label}</span>}
               </label>
             );
           })}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 14 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: changedCount ? "var(--color-success-text)" : "var(--color-text-muted)", fontSize: 11 }}>
-            {changedCount ? <Check size={12} /> : <MapPin size={12} />}
-            {changedCount ? `${changedCount} field change${changedCount === 1 ? "" : "s"} staged` : "No address changes staged"}
-          </span>
-          <button type="button" onClick={onReset} className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11, gap: 5 }}>
-            <RotateCcw size={11} /> Reset suggestion
-          </button>
         </div>
       </div>
     </article>
