@@ -106,6 +106,6 @@
     "StreetNumber": "./",
     "StreetNumberSuffix": "./",
     "StreetName": "./",
-    "City": "/"
+    "City": "./&"
   }
 }

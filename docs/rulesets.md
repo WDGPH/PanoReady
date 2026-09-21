@@ -317,7 +317,7 @@ field lists at validation time.
   "StreetNumber": "./",
   "StreetNumberSuffix": "./",
   "StreetName": "./",
-  "City": "/"
+  "City": "./&"
 }
 ```
 
@@ -325,7 +325,7 @@ The built-in profile therefore preserves periods and ampersands in school names,
 and preserves periods and slashes in `Unit`, `StreetNumber`,
 `StreetNumberSuffix`, and `StreetName`.
 A custom profile may replace the exception string for a field. Legacy profiles
-The slash is also preserved in `City`; periods are not.
+Periods, slashes, and ampersands are also preserved in `City`.
 that omit either free-text property remain valid and inherit the built-in policy
 at validation time.
 

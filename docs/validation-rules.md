@@ -405,7 +405,7 @@ periods, and ampersands in `SchoolName`, while the other enabled checks still
 apply there.
 Periods and slashes are also preserved in the street-address fields `Unit`,
 `StreetNumber`, `StreetNumberSuffix`, and `StreetName`.
-The slash is preserved in `City` as well, but a period is not.
+Periods, slashes, and ampersands are preserved in `City` as well.
 Profiles can enable or disable every category for every supported free-text
 field. When one field contains multiple categories, the findings remain
 separate but share the same composed suggestion so applying any or all of them

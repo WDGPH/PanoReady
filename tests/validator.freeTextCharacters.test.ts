@@ -106,8 +106,8 @@ describe("free-text character validation", () => {
     ]);
   });
 
-  it("allows periods and slashes only in street-address fields", () => {
-    const source = xml("Sample", "Exampleville/Testborough.", "Example School").replace(
+  it("allows configured punctuation in street-address and city fields", () => {
+    const source = xml("Sample", "Exampleville/Testborough &amp; Sampletown.@", "Example School").replace(
       "<Address><City>",
       "<Address><Unit>4/5</Unit><StreetNumber>12.5</StreetNumber><StreetNumberSuffix>A/.</StreetNumberSuffix><StreetName>Example St./West</StreetName><City>",
     );
@@ -118,7 +118,7 @@ describe("free-text character validation", () => {
       expect.objectContaining({
         ruleId: "FREE_TEXT_SPECIAL_CHARACTER",
         field: "City",
-        suggestedFix: "Exampleville/Testborough",
+        suggestedFix: "Exampleville/Testborough & Sampletown.",
       }),
     ]);
   });
