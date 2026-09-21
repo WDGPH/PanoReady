@@ -992,6 +992,7 @@ h1, h2, h3 {
 .start-over-dialog p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.55; }
 .start-over-dialog-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
 .start-over-dialog-actions .btn { width: 100%; }
+.save-progress-dialog { width: min(92vw, 500px); }
 @media (max-width: 480px) { .start-over-dialog-actions { grid-template-columns: 1fr; } }
 .intake-main {
   flex: 1;

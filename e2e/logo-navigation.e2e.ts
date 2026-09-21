@@ -19,6 +19,17 @@ test("logo protects active work before returning home", async ({ page }) => {
   await expect(homeButton).toBeFocused();
 
   await expect(page.getByRole("button", { name: "Save progress", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
+  const firstFix = page.getByRole("checkbox", { name: /^Select fix for/ }).first();
+  await firstFix.check();
+  await page.getByRole("button", { name: "Save progress", exact: true }).click();
+  const saveDialog = page.getByRole("dialog", { name: "Apply fixes before saving" });
+  await expect(saveDialog).toContainText("1 unapplied fix");
+  await expect(saveDialog.getByRole("button", { name: "Close save progress prompt" })).toBeVisible();
+  await saveDialog.getByRole("button", { name: "Go back and apply fixes" }).click();
+  await expect(firstFix).toBeChecked();
+  await expect(page.getByRole("button", { name: "Save progress", exact: true })).toBeFocused();
+
   await homeButton.click();
   await dialog.getByRole("button", { name: "Start over", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Better data in/ })).toBeVisible();
