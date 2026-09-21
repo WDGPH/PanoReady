@@ -279,6 +279,11 @@ const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
 const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
 const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
 
+export type AlternateDeliveryRepairProposal = AddressRepairProposal & {
+  deliveryType: "poBox" | "ruralRoute";
+  sourceField: "StreetName" | "StreetNumber";
+};
+
 function ruralRouteNumber(value: string): string | undefined {
   const match = value.trim().match(RURAL_ROUTE_PATTERN);
   return match?.[1] === undefined ? undefined : String(Number(match[1]));
@@ -294,7 +299,7 @@ function ruralRouteNumber(value: string): string | undefined {
 export function analyzeAlternateDeliveryInStreetFields(
   fields: Record<string, string>,
   proposalId = "address-alternate-delivery",
-): AddressRepairProposal | undefined {
+): AlternateDeliveryRepairProposal | undefined {
   for (const field of ["StreetName", "StreetNumber"] as const) {
     const raw = (fields[field] ?? "").trim();
     if (!raw) continue;
@@ -306,6 +311,8 @@ export function analyzeAlternateDeliveryInStreetFields(
       const conflict = currentBox !== "" && currentBox !== boxId;
       return {
         kind: "address",
+        deliveryType: "poBox",
+        sourceField: field,
         id: proposalId,
         confidence: "review",
         title: conflict ? "Review PO Box text found in the street address" : "Move PO Box text out of the street address",
@@ -320,7 +327,8 @@ export function analyzeAlternateDeliveryInStreetFields(
     }
     if (PO_BOX_PREFIX.test(raw)) {
       return {
-        kind: "address", id: proposalId, confidence: "manual",
+        kind: "address", deliveryType: "poBox", sourceField: field,
+        id: proposalId, confidence: "manual",
         title: "Review possible PO Box text in the street address",
         explanation: `“${raw}” in ${field} looks like it starts with a PO Box reference, but the box number couldn't be parsed. Review the complete address and edit the fields directly.`,
         changes: [],
@@ -335,6 +343,8 @@ export function analyzeAlternateDeliveryInStreetFields(
         && ruralRouteNumber(currentRoute) !== routeNumber;
       return {
         kind: "address",
+        deliveryType: "ruralRoute",
+        sourceField: field,
         id: proposalId,
         confidence: conflict ? "review" : "safe",
         title: conflict ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
@@ -349,7 +359,8 @@ export function analyzeAlternateDeliveryInStreetFields(
     }
     if (RURAL_ROUTE_PREFIX.test(raw)) {
       return {
-        kind: "address", id: proposalId, confidence: "manual",
+        kind: "address", deliveryType: "ruralRoute", sourceField: field,
+        id: proposalId, confidence: "manual",
         title: "Review possible rural route text in the street address",
         explanation: `“${raw}” in ${field} looks like it starts with a rural route reference, but the route number couldn't be parsed. Review the complete address and edit the fields directly.`,
         changes: [],
