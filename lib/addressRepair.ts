@@ -286,10 +286,10 @@ function ruralRouteNumber(value: string): string | undefined {
 
 /**
  * Detect PO Box / rural-route delivery text typed into a street field instead
- * of PoBoxNumber/RuralRoute. A clean rural-route match is safe to move into
- * RuralRoute; a PO Box match still requires confirmation because clearing a
- * street field is a bigger structural change. A recognizable-but-unparsable
- * prefix is surfaced as a manual finding with no guessed value.
+ * of PoBoxNumber/RuralRoute. A clean match proposes moving it for confirmation
+ * because clearing a street field is a bigger structural change. A
+ * recognizable-but-unparsable prefix is surfaced as a manual finding with no
+ * guessed value.
  */
 export function analyzeAlternateDeliveryInStreetFields(
   fields: Record<string, string>,
@@ -336,7 +336,7 @@ export function analyzeAlternateDeliveryInStreetFields(
       return {
         kind: "address",
         id: proposalId,
-        confidence: conflict ? "review" : "safe",
+        confidence: "review",
         title: conflict ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
         explanation: conflict
           ? `“${raw}” in ${field} looks like a rural route, but RuralRoute is already “${currentRoute}”. Review the complete address before applying changes.`

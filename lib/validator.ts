@@ -313,7 +313,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         issue(issues, {
           ...base, severity: "warning", field: "StreetName", ruleId: "ALTERNATE_DELIVERY_IN_STREET_FIELD",
           message: alternateDeliveryProposal.explanation,
-          autoFixable: alternateDeliveryProposal.confidence === "safe",
+          autoFixable: false,
           repairProposal: alternateDeliveryProposal,
         });
       }
