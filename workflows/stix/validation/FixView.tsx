@@ -214,7 +214,9 @@ export default function FixView({
   };
 
   const openAddressReview = (record: StudentRecord, issue: ValidationIssue) => {
-    const changes = issue.repairProposal?.changes ?? [];
+    const changes = issue.ruleId === "RURAL_ROUTE_IN_STREET_FIELD"
+      ? issue.repairProposal?.changes ?? []
+      : [];
     if (changes.length) setStudentDrafts(current => {
       const existing = current[record.id] ?? {};
       const proposed = { ...existing };
