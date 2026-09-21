@@ -385,6 +385,23 @@ issue.
 
 ---
 
+### Rule: `RURAL_ROUTE_IN_STREET_FIELD`
+
+**Severity:** warning
+**Fields:** `StreetName`, `StreetNumber`
+
+Detects rural-route delivery text entered in a street field. Detection runs
+before the generic character policy so punctuation can contribute to
+recognition. For example, `R.R. #01` is accepted as input even though that
+punctuation is not retained in the canonical rural-route value.
+
+**Review fix:** Yes for an unambiguous route number when `RuralRoute` is empty
+or already identifies the same route. The address editor stages clearing the
+source street field and writing the normalized value, such as `RR 1`, to
+`RuralRoute`. A conflicting existing `RuralRoute` remains manual review.
+
+---
+
 ### Rules: free-text characters
 
 **Severity:** info
@@ -415,9 +432,9 @@ Balanced parenthetical spans are excluded entirely: the brackets and their
 contents are preserved for possible future handling as aliases or former names.
 An unmatched round bracket is allowed but does not shield the remaining text.
 
-Character checks run last and act only as a fallback. If another validator
-already reports the same record field, its specialized correction owns that
-field and no character finding is added.
+Character checks run last and act only as a fallback. If another validator,
+including rural-route detection, already reports the same record field, its
+specialized correction owns that field and no character finding is added.
 
 **Auto-fix:** Yes. These findings never change the validation gate.
 
@@ -459,6 +476,7 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
+| `RURAL_ROUTE_IN_STREET_FIELD` | Review proposal | Stage move to `RuralRoute` and normalize to `RR n` |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
 | `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
 | `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |

@@ -250,7 +250,7 @@ describe("a street number and name found in Unit", () => {
 describe("PO Box and rural route text in street fields", () => {
   it("moves a clean PO Box match out of StreetName", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "PO Box 42", PoBoxNumber: "" });
-    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal).toMatchObject({ confidence: "review", deliveryType: "poBox", sourceField: "StreetName" });
     expect(proposal?.changes).toEqual([
       { field: "StreetName", currentValue: "PO Box 42", proposedValue: "" },
       { field: "PoBoxNumber", currentValue: "", proposedValue: "42" },
@@ -259,7 +259,7 @@ describe("PO Box and rural route text in street fields", () => {
 
   it("proposes moving a clean rural route match out of StreetNumber for review", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetNumber: "RR 2", RuralRoute: "" });
-    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal).toMatchObject({ confidence: "review", deliveryType: "ruralRoute", sourceField: "StreetNumber" });
     expect(proposal?.changes).toEqual([
       { field: "StreetNumber", currentValue: "RR 2", proposedValue: "" },
       { field: "RuralRoute", currentValue: "", proposedValue: "RR 2" },
@@ -331,8 +331,8 @@ it("applies a safe automatic address correction as a complete repair", () => {
 it("offers a clean rural route as a coordinated review address repair", () => {
   const xml = studentXml("<StreetNumber>RR1</StreetNumber><City>Exampleville</City><Province>ON</Province>");
   const result = validateXml(xml);
-  const issue = result.issues.find(candidate => candidate.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD");
-  expect(issue).toMatchObject({ autoFixable: false, repairProposal: { confidence: "review" } });
+  const issue = result.issues.find(candidate => candidate.ruleId === "RURAL_ROUTE_IN_STREET_FIELD");
+  expect(issue).toMatchObject({ field: "StreetNumber", autoFixable: false, repairProposal: { confidence: "review" } });
   expect(issue?.repairProposal?.changes).toEqual([
     { field: "StreetNumber", currentValue: "RR1", proposedValue: "" },
     { field: "RuralRoute", currentValue: "", proposedValue: "RR 1" },

@@ -136,6 +136,23 @@ describe("free-text character validation", () => {
     }));
   });
 
+  it("detects punctuated rural routes before special-character correction", () => {
+    const source = xml("Sample", "Exampleville", "Example School")
+      .replace("<Address><City>", "<Address><StreetNumber>R.R. #01</StreetNumber><City>");
+    const findings = validateXml(source).issues;
+
+    expect(findings).toContainEqual(expect.objectContaining({
+      ruleId: "RURAL_ROUTE_IN_STREET_FIELD",
+      field: "StreetNumber",
+      autoFixable: false,
+      repairProposal: expect.objectContaining({ confidence: "review" }),
+    }));
+    expect(findings).not.toContainEqual(expect.objectContaining({
+      ruleId: "FREE_TEXT_SPECIAL_CHARACTER",
+      field: "StreetNumber",
+    }));
+  });
+
   it("accepts legacy profiles and validates configured field arrays", () => {
     const rules = structuredClone(defaultRulesJson) as RulesProfile;
     delete rules.freeTextCharacterChecks;

@@ -311,7 +311,12 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       const alternateDeliveryProposal = analyzeAlternateDeliveryInStreetFields(fields, `${recordId}-address-alternate-delivery`);
       if (alternateDeliveryProposal) {
         issue(issues, {
-          ...base, severity: "warning", field: "StreetName", ruleId: "ALTERNATE_DELIVERY_IN_STREET_FIELD",
+          ...base,
+          severity: "warning",
+          field: alternateDeliveryProposal.sourceField,
+          ruleId: alternateDeliveryProposal.deliveryType === "ruralRoute"
+            ? "RURAL_ROUTE_IN_STREET_FIELD"
+            : "ALTERNATE_DELIVERY_IN_STREET_FIELD",
           message: alternateDeliveryProposal.explanation,
           autoFixable: false,
           repairProposal: alternateDeliveryProposal,
