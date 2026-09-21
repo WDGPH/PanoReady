@@ -17,8 +17,9 @@ test("manual fields edit the current value and can remove it", async ({ page }) 
   const phone = page.getByRole("textbox", { name: "Correct GuardianPhoneNumber for Student 1.1", exact: true });
   const statusCell = phone.locator("xpath=ancestor::td[1]/following-sibling::td[1]");
   await expect(phone).toHaveValue("416-555-1111x");
+  await expect(statusCell.getByText("Unaltered", { exact: true })).toBeVisible();
   await phone.fill("416-555-1111");
-  await expect(statusCell.getByText("Meets field rules", { exact: true })).toBeVisible();
+  await expect(statusCell.getByText("Valid", { exact: true })).toBeVisible();
   await phone.fill("");
   await expect(statusCell.getByText("Removed", { exact: true })).toBeVisible();
 

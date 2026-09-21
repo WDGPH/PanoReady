@@ -5,7 +5,7 @@ import SeverityFilter from "@/components/SeverityFilter";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
-import { Wand2, CheckCircle2, Trash2, TriangleAlert } from "lucide-react";
+import { Wand2, CheckCircle2, Trash2, TriangleAlert, Minus } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { guardianSectionForField } from "@/lib/fields";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
@@ -45,19 +45,20 @@ function ManualFieldEditor({ field, control, status }: {
   control: ReactNode;
   status?: "valid" | "removed" | "invalid";
 }) {
-  const detail = status === "valid"
-    ? { label: "Meets field rules", Icon: CheckCircle2 }
+  const state = status ?? "unaltered";
+  const detail = state === "valid"
+    ? { label: "Valid", description: "Meets field rules", Icon: CheckCircle2 }
     : status === "removed"
-      ? { label: "Removed", Icon: Trash2 }
+      ? { label: "Removed", description: "Value removed", Icon: Trash2 }
       : status === "invalid"
-        ? { label: "Check value", Icon: TriangleAlert }
-        : null;
+        ? { label: "Check", description: "Value still needs review", Icon: TriangleAlert }
+        : { label: "Unaltered", description: "Value is unaltered", Icon: Minus };
   return <table className="fix-values manual-field-editor" aria-label="Manual field review">
     <thead><tr><th scope="col">Field</th><th scope="col">Edit</th><th scope="col">Status</th></tr></thead>
     <tbody><tr>
       <th scope="row">{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</th>
       <td>{control}</td>
-      <td>{detail && <span className={`manual-edit-status manual-edit-status--${status}`} role="status"><detail.Icon size={13} aria-hidden="true" />{detail.label}</span>}</td>
+      <td><span className={`manual-edit-status manual-edit-status--${state}`} role="status" aria-label={detail.description} title={detail.description}><detail.Icon size={13} aria-hidden="true" />{detail.label}</span></td>
     </tr></tbody>
   </table>;
 }

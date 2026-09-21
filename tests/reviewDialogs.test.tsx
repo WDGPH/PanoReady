@@ -58,6 +58,8 @@ describe("review dialogs", () => {
     expect(html).toContain("<th scope=\"col\">Field</th><th scope=\"col\">Edit</th><th scope=\"col\">Status</th>");
     expect(html).not.toContain("<th scope=\"col\">Current</th>");
     expect(html).toContain(`value="${record.fields.GuardianRelationship}"`);
+    expect(html).toContain("Unaltered");
+    expect(html).toContain("aria-label=\"Value is unaltered\"");
     expect(html).not.toContain("Review and edit");
   });
 
