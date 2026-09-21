@@ -1,3 +1,4 @@
+import { isAutomaticIssue } from "./helpers";
 import type { ValidationIssue, ValidationResult, ValidationSeverity } from "@/lib/types";
 
 export type ReviewFilter = { schoolNumber?: string; ruleId?: string; field?: string; severity?: ValidationSeverity };
@@ -42,7 +43,7 @@ export function summarizeValidation(result: ValidationResult, inventory: { schoo
     errors: issues.filter(issue => issue.severity === "error").length,
     warnings: issues.filter(issue => issue.severity === "warning").length,
     info: issues.filter(issue => issue.severity === "info").length,
-    automatic: issues.filter(issue => issue.autoFixable && !issue.repairProposal).length,
+    automatic: issues.filter(isAutomaticIssue).length,
     affected: new Set(issues.filter(issue => issue.recordId && records.has(issue.recordId)).map(issue => issue.recordId)).size,
   });
   const schools = new Map<string, { schoolNumber: string; name: string; students: number; issues: ValidationIssue[] }>();
