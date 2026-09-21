@@ -1,317 +1,303 @@
-# Ruleset Reference
+# Advanced rules and replacements
 
-Custom rulesets let you adjust what counts as a validation failure — for example, accepting grade codes your board uses that the built-in ruleset doesn't recognise, or tightening required-field rules — without editing source code or affecting other users.
+Most files should use PanoReady's built-in validation profile and suggested
+fixes. Custom validation rules and saved value replacements are advanced options
+for organizations with an approved local policy that differs from the built-in
+one.
 
-Rulesets are stored in your browser's localStorage and never uploaded anywhere. To share one with a colleague, export it as a `.json` file and send it to them.
+A profile can contain two related kinds of configuration:
 
-For background on what each rule *does*, see [validation-rules.md](validation-rules.md). This document explains which ruleset fields control which rules.
+- **Validation rules** define approved values, required fields, length limits,
+  and selected data-quality checks.
+- **Cleaning mappings** define exact whole-value replacements to apply before
+  validation, such as `St. Marys` to `St. Mary’s`.
 
-## Quick Start
+These settings can materially change findings and output values. Test a custom
+profile with representative, non-sensitive records before relying on it.
+Accepting a value locally does not establish that a receiving system accepts it;
+base policy changes on that system's requirements.
 
-The easiest path is to build a ruleset directly in the app — no JSON editing required:
+This reference describes the current configuration contract. Exact bundled values
+are in [rules.stix.default.json](../config/rules.stix.default.json).
+[Validation Rules](validation-rules.md) provides additional background; the
+implementation links below are the authority for current behavior and finding IDs.
 
-1. Open the **Validation ruleset** dropdown in Validate & Fix or Reports.
-2. Click **New** to open the in-app editor, configure each tab, and click **Save Ruleset**.
-3. The new ruleset is selected automatically. Validate as normal.
+## Access advanced options
 
-To start from an existing ruleset, click **Duplicate** first, then **Edit** the copy.
+Advanced options appear after PanoReady has assessed a file. They are collapsed
+by default.
 
-Alternatively, work with the JSON file directly:
+### Change validation rules
 
-1. Click **Export** — downloads the built-in defaults as a `.json` file.
-2. Edit the file (see fields below).
-3. Click **Import** to load your edited file.
-4. Select it from the dropdown and validate as normal.
+1. Start **Validate & Fix**, choose a file, and wait for **Import readiness**.
+2. Expand **Advanced options** beside the page heading.
+3. The current **Profile** is shown. Choose **Change** to open **Cleaning and
+   validation profile**.
+4. Choose **New** to start from the built-in defaults, or **Duplicate** to copy
+   the selected profile. The built-in profile cannot be edited directly.
+5. Configure the rules and choose **Save Ruleset**. The saved profile is selected
+   automatically. Use **Edit** to change a custom profile later.
 
----
+Changing the selected profile immediately revalidates the current file. Return
+to the readiness summary and review the new findings before continuing.
 
-## Outer Envelope
+### Add or change replacements
 
-Every ruleset file must include these fields:
+1. From **Import readiness**, continue to **Automatic fixes**.
+2. Expand **Advanced options** beside **Choose automatic fixes**.
+3. Under **Cleaning mappings**, choose **Add mapping** and select a field.
+4. Enter the replacement beside each raw value. Matching applies to the complete
+   field value and is case-insensitive unless **Match case** is selected.
+5. Keep **Apply mappings** selected and choose **Preview cleaning changes**.
+6. Review the cleaning summary, including mappings that changed no records,
+   before continuing and applying the replacements.
+
+Cleaning mappings are drafts for the current review until saved. Choose **Save
+as new profile** when the built-in profile is active, or **Save mappings to
+profile** for an existing custom profile. Saving a mapping does not apply it to
+the current file; **Preview cleaning changes** begins that review-and-apply path.
+
+### Import, export, and share profiles
+
+Open the profile dialog from **Import readiness** → **Advanced options** →
+**Change**. Use **Export** to back up or share the selected profile, and
+**Import** to add an exported JSON profile to the current browser. Direct JSON
+editing is an expert workflow; prefer the in-app editor for routine changes.
+
+Switching profiles replaces validation rules and cleaning mappings, including
+unsaved mappings for the current file. Profiles are stored in the browser's
+`localStorage`; they are not uploaded or synchronized between users. Keep exports
+if you need to recover profiles after clearing browser storage. Cleaning mappings
+can contain literal source values, so review their contents before sharing.
+
+Exporting the built-in profile creates a new ID and timestamp. Exporting a custom
+profile preserves its ID. Importing an existing ID **replaces that saved profile**.
+To keep both versions, duplicate the profile or change the imported `id`;
+changing only `name` does not prevent replacement. Do not use the reserved ID
+`builtin` for a custom profile.
+
+## JSON file structure and import checks
+
+This section is for maintainers and advanced users who need to inspect or edit an
+exported profile. Start with an export from the app. The bundled configuration is
+only the `rules` body, not a complete importable profile.
+
+| Outer property | Required | Meaning |
+|---|---|---|
+| `id` | Yes | Non-empty string used for selection and replacement. |
+| `name` | Yes | Non-empty display name. |
+| `description` | No | Description of the profile's purpose and policy choices. |
+| `createdAt` | Yes | Creation timestamp, normally ISO 8601. Import checks only for a non-empty string, not a valid date. |
+| `rules` | Yes | Validation configuration described below. |
+| `cleaning` | No | Cleaning configuration, alongside `rules`, not inside it. |
+| `warnings` | No | Transient importer messages; omit from authored files. The UI removes this property before saving an import. |
+
+Every `rules` property described below is required on import except
+`freeTextCharacterChecks`, `freeTextAllowedCharacters`, and the nested
+`phoneConfig.canadianAreaCodeCheck`. Required arrays and maps may be empty;
+omission is not equivalent to an empty value.
+
+Import checks JSON syntax, required types, the postal regular expression,
+duplicate-check booleans, and optional configuration shapes. Unknown keys directly
+inside `rules` or `cleaning` produce warnings and do not define new checks.
+Unknown free-text category names are rejected.
+
+Successful import is not semantic validation of a policy. It does not check that
+field names exist, alias targets belong to allowed lists, length limits are
+positive integers, or a profile meets an external specification. Use the editor's
+field choices and test the resulting behavior.
+
+## How configuration affects validation
+
+Cleaning mappings propose substitutions before validation. Validation checks the
+canonical working model and produces findings; suggestions are applied through
+the review workflow and revalidated. An alias does not silently rewrite input
+during validation.
+
+Errors block the validation gate. Warnings and informational findings do not.
+Most severities and repair algorithms are defined in code. XML structure,
+metadata requirements, birth-date interpretation, OEN format, and guardian
+structure cannot be disabled by removing a field from `requiredFields`.
+
+### Required fields and length limits
+
+`requiredFields` is an array of canonical field names. The bundled value is:
+
+```json
+["FirstName", "LastName", "Gender", "BirthDate", "SchoolNumber"]
+```
+
+Student fields must contain a non-whitespace value (`REQUIRED_FIELD`).
+`SchoolNumber` and `SchoolName` are checked at school scope; a missing required
+school number uses `SCHOOL_NUMBER_REQUIRED`. Unknown student field names can
+create missing-field errors on every record; do not add arbitrary schema names.
+
+`fieldLengths` maps field names to maximum lengths. These are the bundled limits:
+
+| Fields | Limit |
+|---|---|
+| `FirstName`, `MiddleName`, `LastName`, `AliasFirstName`, `AliasMiddleName`, `AliasLastName`, `City` | 50 |
+| `StreetName` | 80 |
+| `StreetNumber` | 6 |
+| `StreetNumberSuffix`, `Unit` | 5 |
+| `OEN` | 9 |
+| `PostalCode` | 7, retained for compatibility; ignored by the generic length check |
+
+The generic check reads student record fields and emits `FIELD_LENGTH` errors.
+Only listed fields receive it; separate structural limits still apply, including
+the 100-character school-number limit. Length uses JavaScript string length
+(UTF-16 code units).
+
+Ordinary fields can receive a truncation suggestion; address fields use
+specialized repair or manual review. Postal codes use their dedicated rule and
+are never truncated by this check. Review proposed fixes when changing limits.
+
+### Allowed values and aliases
+
+Allowed-value arrays use exact, case-sensitive matching. Empty optional fields
+skip these checks; presence is controlled separately. Invalid populated values
+produce errors.
+
+| Property | Fields checked | Finding ID |
+|---|---|---|
+| `allowedGradeValues` | `Grade` | `GRADE_ALLOWED_VALUE` |
+| `allowedGenderValues` | `Gender` | `GENDER_ALLOWED_VALUE` |
+| `allowedProvinceValues` | `Province` | `PROVINCE_ALLOWED_VALUE` |
+| `allowedLanguageValues` | `Language` | `LANGUAGE_ALLOWED_VALUE` |
+| `allowedCountryValues` | `CountryOfOrigin` | `COUNTRYOFORIGIN_ALLOWED_VALUE` |
+| `allowedStreetTypeValues` | `StreetType` | `STREETTYPE_ALLOWED_VALUE` |
+| `allowedStreetDirectionValues` | `StreetDirection` | `STREETDIRECTION_ALLOWED_VALUE` |
+| `allowedRelationshipValues` | `GuardianRelationship`, `Guardian2Relationship` | `GUARDIANRELATIONSHIP_ALLOWED_VALUE`, `GUARDIAN2RELATIONSHIP_ALLOWED_VALUE` |
+| `allowedPhoneTypeValues` | Student and guardian phone types; metadata contact-phone type | `PHONETYPE_ALLOWED_VALUE`, `GUARDIANPHONETYPE_ALLOWED_VALUE`, `GUARDIAN2PHONETYPE_ALLOWED_VALUE`; metadata uses `PHONE_TYPE_ALLOWED_VALUE` |
+| `allowedFullLoadTypeValues` | Metadata `FullUpload` | `FULL_UPLOAD_ALLOWED_VALUE` |
+
+The built-in genders are `F`, `M`, `Unk`, and `Other`; full-upload values are
+`NO` and `YES`. Grades include `JK`, `SK`, `GR1` through `GR13`, `CCL`, `CCNL`,
+`CL-CGP`, `PRE`, and `UNIV`. Consult the bundled JSON for complete lists. Its
+language and country lists are application vocabularies, not a guarantee of
+complete, current ISO coverage; for example, they contain `gaelic` and `AN`.
+
+`gradeAliases` and `genderAliases` map inputs to suggested replacements. This
+excerpt belongs inside `rules`:
 
 ```json
 {
-  "id": "a unique string — generated automatically on export",
-  "name": "My Board Ruleset",
-  "description": "Optional note for your own reference",
-  "createdAt": "2026-07-06T00:00:00.000Z",
-  "rules": { ... }
+  "gradeAliases": { "K": "JK", "GR01": "GR1", "1": "GR1" },
+  "genderAliases": { "MALE": "M", "FEMALE": "F", "UNKNOWN": "Unk" }
 }
 ```
 
-| Field | Required | Notes |
-|---|---|---|
-| `id` | Yes | Any non-empty string. Export generates a UUID; you can change it. |
-| `name` | Yes | Shown in the dropdown. Keep it short and descriptive. |
-| `description` | No | Free text — shown below the dropdown and editable in the in-app editor. |
-| `createdAt` | Yes | ISO 8601 datetime string. Used for your records only. |
-| `rules` | Yes | The ruleset body — all fields below go here. |
-| `warnings` | No | Set internally by the importer when unknown `rules` keys are detected. Safe to remove from exported files. Do not set this manually. |
+For a value outside its allowed list, the validator tries the exact alias key,
+then the trimmed, uppercased key. The target is used as written. Add a code to
+the allowed list if it should remain unchanged; add an alias if it should become
+another accepted code.
 
----
+Keep alias targets in their allowed list. This is an authoring requirement, not
+an importer guarantee: current defaults include gender aliases to `X`, but `X`
+is not in `allowedGenderValues`. Those suggestions do not resolve the error on
+revalidation. A future policy change needs to reconcile that mismatch explicitly.
 
-## Ruleset Fields
+### Dates
 
-### `requiredFields`
+`dateFields` is a required array whose bundled value is `["BirthDate"]`. It is
+retained in the format and editor, but the current canonical validator does not
+read it. Adding a name does not add date validation; clearing it does not disable
+birth-date validation.
 
-**Controls:** `required-field` rule
-**Type:** array of strings
+Populated `BirthDate` values are checked directly for a real `YYYY-MM-DD` date
+and future dates (`BIRTHDATE_FORMAT`, `BIRTHDATE_FUTURE`). Only unambiguous,
+non-future alternatives receive normalization suggestions. Metadata `CreateDate`
+has its own check (`METADATA_DATE`). Workbook date interpretation happens at
+intake; see [Validation Rules](validation-rules.md#workbook-birth-date-interpretation).
+
+### Postal codes and phone numbers
+
+`postalCodePattern` is a regular-expression string. The bundled value is:
 
 ```json
-"requiredFields": ["FirstName", "LastName", "Gender", "BirthDate", "SchoolNumber"]
+"^[ABCEGHJKLMNPRSTVXY]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d$"
 ```
 
-Canonical student fields in this list must be non-empty on every student record. `SchoolNumber` and `SchoolName` are checked once per school. The editor offers every field supported by the canonical validation model, grouped as Student, Student phone, Guardian 1, Guardian 2, Address, and School. The built-in default requires the five fields above.
+JSON requires doubled backslashes. Import checks that the expression compiles;
+custom expressions are evaluated case-insensitively during validation. With the
+built-in pattern, the dedicated rule normalizes supported formatting and can
+repair `O`, `I`, or `L` in numeric positions. A custom pattern remains
+authoritative: a Canadian normalization or repair is suggested only if it also
+passes that expression. Findings are `POSTAL_CODE_NORMALIZE` (info),
+`POSTAL_CODE_REPAIR` (warning), and `POSTAL_CODE_FORMAT` (warning). See
+[postal-code behavior](validation-rules.md#rule-postal-code) for examples.
 
-Use the canonical field names shown in the editor when importing a ruleset JSON. Unknown names are not useful because they do not map to a value in the validation model.
-
----
-
-### `allowedGradeValues`
-
-**Controls:** `grade-value` rule
-**Type:** array of strings
-
-```json
-"allowedGradeValues": ["JK", "SK", "GR1", "GR2", ..., "GR12", "GR13", "CCL", "CCNL", "CL-CGP", "PRE", "UNIV"]
-```
-
-The exact grade codes accepted after aliases are applied. If your board submits codes not in this list (and no alias covers them), add them here rather than adding aliases.
-
----
-
-### `allowedGenderValues`
-
-**Controls:** `gender-value` rule
-**Type:** array of strings
+`phoneConfig` contains these settings, shown with their bundled values:
 
 ```json
-"allowedGenderValues": ["F", "M", "N", "OTHER", "UNK", "X"]
-```
-
-Case-sensitive. Extend this list if your SIS exports additional codes that your board considers valid.
-
----
-
-### `allowedProvinceValues`
-
-**Controls:** `province-value` rule
-**Type:** array of strings
-
-```json
-"allowedProvinceValues": ["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"]
-```
-
-Standard two-letter Canadian province/territory codes.
-
----
-
-### `allowedLanguageValues`
-
-**Controls:** `language-value` rule
-**Type:** array of strings
-
-ISO 639-1 language codes. The built-in list includes all 184 codes defined in the standard. You would rarely need to change this.
-
----
-
-### `allowedCountryValues`
-
-**Controls:** `country-value` rule
-**Type:** array of strings
-
-ISO 3166-1 alpha-2 country codes. The built-in list includes all current codes. You would rarely need to change this.
-
----
-
-### `allowedStreetTypeValues`
-
-**Controls:** `street-type-value` rule
-**Type:** array of strings
-
-```json
-"allowedStreetTypeValues": ["ST", "AVE", "BLVD", "DR", "RD", ...]
-```
-
-Canada Post street type abbreviations (English and French). Add any locally-used abbreviations your board's data includes.
-
----
-
-### `allowedRelationshipValues`
-
-**Controls:** `relationship-value` rule
-**Type:** array of strings
-
-```json
-"allowedRelationshipValues": ["AUNT", "COUSIN", "FATHER", "FOSTERPARENT", "FRIEND",
-  "GRANDPARENT", "LEGALGRD", "MOTHER", "PARENT", "SIBLING", "SPOUSE", "STEPPARENT", "UNCLE"]
-```
-
-Relationship codes for emergency contacts. Extend if your SIS uses additional codes.
-
----
-
-### `allowedPhoneTypeValues`
-
-**Controls:** `phone-type-value` rule
-**Type:** array of strings
-
-```json
-"allowedPhoneTypeValues": ["ALTERNATE", "EMERGENCY", "FAX", "HOME", "MOBILE", "PAGER", "UNKNOWN", "WORK"]
-```
-
----
-
-### `allowedStreetDirectionValues`
-
-**Controls:** `street-direction-value` rule
-**Type:** array of strings
-
-```json
-"allowedStreetDirectionValues": ["E", "N", "NE", "NW", "S", "SE", "SW", "W"]
-```
-
----
-
-### `allowedFullLoadTypeValues`
-
-**Controls:** `full-load-type-value` rule
-**Type:** array of strings
-
-```json
-"allowedFullLoadTypeValues": ["NO", "YES"]
-```
-
-You would rarely need to change this.
-
----
-
-### `fieldLengths`
-
-**Controls:** `field-too-long` rule
-**Type:** object — field name → maximum character length
-
-```json
-"fieldLengths": {
-  "FirstName": 50,
-  "LastName": 50,
-  "MiddleName": 50,
-  "AliasFirstName": 50,
-  "AliasMiddleName": 50,
-  "AliasLastName": 50,
-  "OEN": 9,
-  "City": 50,
-  "StreetName": 80,
-  "StreetNumber": 6,
-  "StreetNumberSuffix": 5,
-  "Unit": 5
-}
-```
-
-Only fields listed here are length-checked. If your board's schema permits a longer `City` field, increase the limit rather than removing it.
-
-The bundled JSON retains a legacy `PostalCode` length entry for exported
-ruleset compatibility, but postal-code validation does not use the generic
-length rule or suggest truncation. The dedicated postal-code rule owns the
-complete result.
-
----
-
-### `dateFields`
-
-**Controls:** `date-format` rule
-**Type:** array of strings
-
-```json
-"dateFields": ["BirthDate"]
-```
-
-Fields that must contain a valid `YYYY-MM-DD` date. The default only checks `BirthDate`. Add other date fields from your schema if needed.
-
----
-
-### `postalCodePattern`
-
-**Controls:** `postal-code-format` rule
-**Type:** string (regular expression)
-
-```json
-"postalCodePattern": "^[ABCEGHJKLMNPRSTVXY]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d$"
-```
-
-The pattern is compiled with JavaScript's `new RegExp()`. Note that backslashes must be double-escaped in JSON (`\\d` not `\d`). The import step will reject an invalid pattern with an error message before saving.
-
-When this built-in pattern is active, PanoReady applies the safe normalization
-and O/I/L repair behavior described in [Validation Rules](./validation-rules.md#rule-postal-code).
-If a custom ruleset changes `postalCodePattern`, that custom expression remains
-authoritative. A canonical Canadian suggestion is offered only when the
-suggested value also passes the custom expression.
-
----
-
-### `phoneConfig`
-
-**Controls:** `PHONE_PLACEHOLDER` and `PHONE_CANADIAN_AREA_CODE` rules
-**Type:** object
-
-```json
-"phoneConfig": {
+{
   "placeholderNumbers": ["519-000-0000", "000-000-0000"],
   "canadianAreaCodeCheck": "warning"
 }
 ```
 
-`placeholderNumbers` lists canonical phone numbers that are flagged as
-placeholders. Add your board's commonly used placeholder numbers in
-`XXX-XXX-XXXX` form. PanoReady compares the canonicalized value, so supported
-numeric formatting variants still match the configured placeholder.
+`placeholderNumbers` is a required array of canonical numbers. Supported numeric
+formatting variants are canonicalized before comparison. A match produces a
+`PHONE_PLACEHOLDER` error without a replacement suggestion.
 
-`canadianAreaCodeCheck` controls the optional policy finding for a structurally
-valid NANP number whose NPA is not a currently active Canadian geographic area
-code. Allowed values are `"off"`, `"info"`, and `"warning"`. The built-in STIX
-ruleset uses `"warning"`; the finding never blocks the validation gate. The
-area-code list is maintained by the application and is not editable in a
-ruleset. Legacy custom rulesets that omit this property remain valid and retain
-the previous behavior (`off`) until the setting is explicitly selected.
+`canadianAreaCodeCheck` accepts `"off"`, `"info"`, or `"warning"`. It controls
+`PHONE_CANADIAN_AREA_CODE` for a structurally valid NANP number whose area code
+is outside the application's bundled Canadian geographic set. Omission means
+`off`, including for older custom profiles; the built-in profile explicitly uses
+`warning`. This setting never produces an error. The area-code set and phone
+structure/extension rules are maintained in code, not profile JSON. See
+[phone policy and provenance](validation-rules.md#rule-phone_canadian_area_code).
 
-See [Validation Rules](./validation-rules.md#rule-phone_canadian_area_code) for
-the structural/policy distinction, source provenance, and verification date.
+### Duplicate and identity checks
 
----
+`duplicateDetection` requires two booleans, both `true` in the built-in profile:
 
-### `freeTextCharacterChecks`
+| Setting | Match | Same-school finding | Cross-school finding |
+|---|---|---|---|
+| `checkOen` | Same valid nine-digit OEN | `OEN_DUPLICATE` (error) | `OEN_DUAL_ENROLLMENT` (warning) |
+| `checkNameDobSchool` | Same first and last names, ignoring case, plus identical birth-date text | `NAME_DOB_DUPLICATE` (error) | `IDENTITY_REVIEW` (warning) |
 
-**Controls:** `FREE_TEXT_APOSTROPHE`, `FREE_TEXT_QUOTATION`,
-`FREE_TEXT_ACCENT`, and `FREE_TEXT_SPECIAL_CHARACTER`
-**Type:** object — character category → array of field names
+Setting either flag to `false` disables both findings in its row, but not OEN
+format or birth-date validation. Identity findings have no automatic replacement;
+investigate them in the source system.
+
+The implementations currently differ: OEN checks retain all occurrences and
+prefer a prior match in the same canonical school. Name/date checks compare only
+against the first matching record and use `SchoolNumber` for school equality.
+A name/date sequence in schools A, B, B can therefore produce two cross-school
+warnings without detecting the repeated B record as a same-school error. Do not
+assume the settings have identical grouping behavior.
+
+### Free-text character policy
+
+`freeTextCharacterChecks` maps each category to the fields where it is checked:
+
+| Category | Finding ID | Suggested change |
+|---|---|---|
+| `apostrophe` | `FREE_TEXT_APOSTROPHE` | Remove supported straight/curly apostrophes. |
+| `quotation` | `FREE_TEXT_QUOTATION` | Remove supported quotation marks. |
+| `accent` | `FREE_TEXT_ACCENT` | Convert letters that decompose to an ASCII Latin letter plus accent marks to the unaccented letter. |
+| `other` | `FREE_TEXT_SPECIAL_CHARACTER` | Remove characters outside the base set and configured exceptions. |
+
+All four findings are informational. The base set permits ASCII letters, digits,
+whitespace, `-`, and round brackets. Balanced parenthetical spans and their
+contents are preserved; unmatched brackets do not protect subsequent text.
+Separate category findings on a field share one composed suggestion.
+
+Each omitted category inherits its built-in field list. A supplied array replaces
+that category's entire list; use `[]` to disable it everywhere. Omitting a field
+from a supplied list disables that category for that field. This excerpt disables
+apostrophe checks while retaining the other built-in categories:
 
 ```json
-"freeTextCharacterChecks": {
-  "apostrophe": ["FirstName", "LastName", "City"],
-  "quotation": ["SchoolName", "FirstName", "LastName", "City"],
-  "accent": ["SchoolName", "FirstName", "LastName", "City"],
-  "other": ["SchoolName", "FirstName", "LastName", "City"]
-}
+{ "freeTextCharacterChecks": { "apostrophe": [] } }
 ```
 
-Each category is configured independently for each free-text field. Omitting a
-field from one category allows that category in that field; for example, the
-built-in profile omits `SchoolName` from `apostrophe`, so a school such as
-`King's Academy` is not flagged for its apostrophe. Spaces, the short dash
-(`-`), and round brackets are allowed. A balanced parenthetical span and all
-of its contents are excluded from these checks so aliases and former names are
-preserved for possible future handling.
-
-All four rules are informational and have deterministic suggestions. Apostrophes
-and quotation marks are removed, accented Latin letters are converted to their
-unaccented form, and other disallowed characters are removed. Legacy profiles
-that omit `freeTextCharacterChecks` remain valid and inherit the built-in
-field lists at validation time.
-
-`freeTextAllowedCharacters` adds literal exceptions to the base character set:
+`freeTextAllowedCharacters` maps fields to strings of additional literal
+characters. Exceptions take precedence over all four categories. Built-in values:
 
 ```json
-"freeTextAllowedCharacters": {
+{
   "SchoolName": ".&",
   "Unit": "./",
   "StreetNumber": "./",
@@ -321,127 +307,76 @@ field lists at validation time.
 }
 ```
 
-The built-in profile therefore preserves periods and ampersands in school names,
-and preserves periods and slashes in `Unit`, `StreetNumber`,
-`StreetNumberSuffix`, and `StreetName`.
-A custom profile may replace the exception string for a field. Legacy profiles
-Periods, slashes, and ampersands are also preserved in `City`.
-that omit either free-text property remain valid and inherit the built-in policy
-at validation time.
+Each supplied string replaces that field's exceptions; `""` removes them.
+Omitted fields inherit built-in exceptions. Omitting either free-text property
+entirely retains the corresponding built-in policy. The built-in apostrophe
+list also excludes `SchoolName`.
 
-Character checks run after all other validation. If a specialized rule already
-reports the same record field—for example, an address-repair rule owns
-`StreetName`—PanoReady does not add a competing character finding.
+These checks run last. Existing findings with the same record ID and field
+suppress character findings for that target so specialized corrections take
+precedence. School names are processed separately from student fields.
 
----
+## Cleaning mappings
 
-### `gradeAliases`
-
-**Controls:** `grade-value` rule (auto-fix step)
-**Type:** object — raw value → canonical value
+`cleaning` is optional and belongs alongside `rules` in the outer profile. Add
+this kind of configuration to a complete exported profile:
 
 ```json
-"gradeAliases": {
-  "K":    "JK",
-  "KG":   "JK",
-  "1":    "GR1",
-  "GR01": "GR1",
-  ...
-}
-```
-
-When a grade value is not in `allowedGradeValues`, the validator checks this map. If a match is found, it auto-fixes the value to the canonical form. Add any non-standard codes your SIS exports. The target value must be in `allowedGradeValues`.
-
----
-
-### `genderAliases`
-
-**Controls:** `gender-value` rule (auto-fix step)
-**Type:** object — raw value → canonical value
-
-```json
-"genderAliases": {
-  "MALE":       "M",
-  "FEMALE":     "F",
-  "NON-BINARY": "X",
-  "UNKNOWN":    "Unk",
-  "m":          "M",
-  ...
-}
-```
-
-Same pattern as `gradeAliases`. Aliases are case-sensitive (both the key and the value). The target value must be in `allowedGenderValues`.
-
----
-
-### `duplicateDetection`
-
-**Controls:** `OEN_DUPLICATE`/`OEN_DUAL_ENROLLMENT` and `NAME_DOB_DUPLICATE`/`IDENTITY_REVIEW` rules
-**Type:** object
-
-```json
-"duplicateDetection": {
-  "checkOen": true,
-  "checkNameDobSchool": true
-}
-```
-
-Each check compares matching records (same OEN, or same first name + last name + birth date) and reacts differently depending on where the match was found:
-
-- **Same school** — treated as a real duplicate record. Raised as an `error` (`OEN_DUPLICATE` / `NAME_DOB_DUPLICATE`) and blocks the gate.
-- **Different schools** — treated as a possible dual enrollment (e.g. a student taking a co-op or off-site course at another school). Raised as a `warning` (`OEN_DUAL_ENROLLMENT` / `IDENTITY_REVIEW`), naming both schools so it's easy to review, and does **not** block the gate.
-
-Set either value to `false` to disable that duplicate check entirely, in both its same-school and cross-school forms.
-
----
-
-### `cleaning`
-
-**Controls:** Cleaning step in Validate & Fix (Step 1)
-**Type:** object (optional — omit entirely if you have no cleaning rules)
-
-```json
-"cleaning": {
-  "enabledFields": ["City", "StreetType"],
-  "mappings": {
-    "City": [
-      { "raw": "toronto", "canonical": "Toronto" },
-      { "raw": "TORONTO", "canonical": "Toronto", "matchCase": true }
-    ],
-    "StreetType": [
-      { "raw": "Street", "canonical": "ST" },
-      { "raw": "Avenue", "canonical": "AVE" }
-    ]
+{
+  "cleaning": {
+    "enabledFields": ["City", "Grade"],
+    "mappings": {
+      "City": [{ "raw": "toronto", "canonical": "Toronto" }],
+      "Grade": [{ "raw": "Grade 1", "canonical": "GR1", "matchCase": true }]
+    }
   }
 }
 ```
 
-The cleaning profile defines field-value substitutions applied to student records **before** the validation rules run. Fields in `enabledFields` are processed in order; within each field, mappings are evaluated top-to-bottom and the first match wins.
+Only fields in `enabledFields` are processed, in that order. For each field,
+mappings are evaluated top to bottom and the first match wins. Each mapping
+requires string values for `raw` and `canonical`. Matching compares the whole
+value without trimming; it ignores case unless `matchCase` is `true`.
 
-**`enabledFields`** — array of strings
-Fields to apply mappings to. Only fields listed here are cleaned, even if `mappings` has entries for other fields.
+Cleaning can change controlled values such as grade, gender, language, and
+province before validation. The cleaned result must still pass the active rules.
+Use cleaning for explicit substitutions and aliases for validation suggestions
+on invalid grade or gender values. The editor and cleaning view expose supported
+fields; [cleaning.ts](../lib/cleaning.ts) defines the list and matching behavior.
+Use **Save mappings to profile** in the cleaning workflow to retain mappings,
+or **Save as new profile** when using the built-in profile. Omitting `cleaning`
+means no saved cleaning mappings.
 
-**`mappings`** — object
-A record keyed by field name. Each value is an ordered array of mapping objects:
+## Improving rules safely
 
-| Property | Required | Description |
-|---|---|---|
-| `raw` | Yes | The value to match against the field's current content |
-| `canonical` | Yes | The replacement value to write when `raw` matches |
-| `matchCase` | No | `true` for case-sensitive matching; default is case-insensitive |
+A useful rule proposal records the affected fields, requirement or source,
+accepted and rejected examples, severity, and whether a deterministic correction
+exists. For changing reference data, record the source's verification date and
+when it needs review.
 
-**Scope note:** The cleaning step applies to all student records from the uploaded file. It does not affect controlled-vocabulary validation (grade, gender, language, province) — use the `gradeAliases` / `genderAliases` fields for those.
+Use this implementation map to keep a change consistent:
 
-**In-app editing:** The Cleaning tab in the ruleset editor provides a UI for managing these mappings without editing JSON directly. Click **Save to ruleset** in the Cleaning step to sync mappings discovered from a file back into the active ruleset.
+| Responsibility | Source |
+|---|---|
+| Bundled values and defaults | [rules.stix.default.json](../config/rules.stix.default.json) |
+| Profile types and finding structure | [types.ts](../lib/types.ts) |
+| Import checks, persistence, and compatibility | [rulesets.ts](../lib/rulesets.ts) |
+| Selection, import/export, and editor controls | [RulesetSelector.tsx](../components/RulesetSelector.tsx), [RulesetEditor.tsx](../components/RulesetEditor.tsx) |
+| Rule execution, severity, precedence, and fixes | [validator.ts](../lib/validator.ts) |
+| Character categories and composed suggestions | [freeTextCharacters.ts](../lib/freeTextCharacters.ts) |
+| Cleaning fields and matching | [cleaning.ts](../lib/cleaning.ts) |
+| Regression evidence | [tests](../tests) |
 
----
+For a new setting, define omitted, empty, and explicit values before adding it to
+the importer and editor. Test existing imported profiles as well as new ones.
+For a correction, verify the result passes revalidation, preserves unrelated
+fields, and works with review and Undo. Use synthetic records for valid, invalid,
+ambiguous, and conflicting cases. Browser interaction needs separate verification
+from unit tests.
 
-## Sharing Rulesets
-
-Export produces a self-contained `.json` file. Recipients import it the same way — open the dropdown, click **Import**, and select the file. The ruleset is added to their browser's localStorage under the name defined in the file; it does not overwrite their existing rulesets.
-
-If you update a shared ruleset, re-export and redistribute the file. There is no sync mechanism — each user holds their own copy.
-
-## Versioning Note
-
-The `id` field is how the app identifies rulesets. If you import a file whose `id` already exists in localStorage, the existing entry is overwritten. To keep both versions, change the `id` (or the `name`) before importing.
+The gaps documented above—unconsumed `dateFields`, aliases outside their allowed
+list, limited semantic import checks, and differing duplicate grouping—are
+concrete candidates for future work, not behavior promised by this reference.
+When changing them, update this document and the related sections of
+[Validation Rules](validation-rules.md) together, using actual emitted IDs and
+tested examples.
