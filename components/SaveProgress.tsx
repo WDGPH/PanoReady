@@ -18,6 +18,7 @@ export default function SaveProgress({ fileName, xml, disabled, unappliedFixCoun
 }) {
   const [warningOpen, setWarningOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const applyFirstRef = useRef<HTMLButtonElement>(null);
   const save = () => downloadProgress(fileName, xml);
 
   return <>
@@ -27,10 +28,9 @@ export default function SaveProgress({ fileName, xml, disabled, unappliedFixCoun
     <Dialog.Root open={warningOpen} onOpenChange={setWarningOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className="start-over-dialog-overlay" />
-        <Dialog.Content className="start-over-dialog save-progress-dialog" onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          triggerRef.current?.focus();
-        }}>
+        <Dialog.Content className="start-over-dialog save-progress-dialog"
+          onOpenAutoFocus={(event) => { event.preventDefault(); applyFirstRef.current?.focus(); }}
+          onCloseAutoFocus={(event) => { event.preventDefault(); triggerRef.current?.focus(); }}>
           <Dialog.Close asChild>
             <button type="button" className="prompt-dialog-close" aria-label="Close save progress prompt"><X size={17} /></button>
           </Dialog.Close>
@@ -40,7 +40,7 @@ export default function SaveProgress({ fileName, xml, disabled, unappliedFixCoun
           </Dialog.Description>
           <div className="start-over-dialog-actions">
             <Dialog.Close asChild>
-              <button type="button" className="btn btn-primary">Go back and apply fixes</button>
+              <button ref={applyFirstRef} type="button" className="btn btn-primary">Go back and apply fixes</button>
             </Dialog.Close>
             <button type="button" className="btn btn-secondary" onClick={() => { save(); setWarningOpen(false); }}>Save applied progress only</button>
           </div>

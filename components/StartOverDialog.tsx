@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import type { RefObject } from "react";
+import { useRef, type RefObject } from "react";
 import { X } from "lucide-react";
 
 export default function StartOverDialog({
@@ -15,14 +15,14 @@ export default function StartOverDialog({
   onStartOver: () => void;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
 }) {
+  const keepWorkingRef = useRef<HTMLButtonElement>(null);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="start-over-dialog-overlay" />
-        <Dialog.Content className="start-over-dialog" onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          returnFocusRef.current?.focus();
-        }}>
+        <Dialog.Content className="start-over-dialog"
+          onOpenAutoFocus={(event) => { event.preventDefault(); keepWorkingRef.current?.focus(); }}
+          onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }}>
           <Dialog.Close asChild>
             <button type="button" className="prompt-dialog-close" aria-label="Close start over prompt"><X size={17} /></button>
           </Dialog.Close>
@@ -32,7 +32,7 @@ export default function StartOverDialog({
           </Dialog.Description>
           <div className="start-over-dialog-actions">
             <Dialog.Close asChild>
-              <button type="button" className="btn btn-secondary">Keep working</button>
+              <button ref={keepWorkingRef} type="button" className="btn btn-secondary">Keep working</button>
             </Dialog.Close>
             <button type="button" className="btn btn-primary" onClick={onStartOver}>Start over</button>
           </div>
