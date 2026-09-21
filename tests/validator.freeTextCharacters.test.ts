@@ -9,8 +9,8 @@ function xml(firstName: string, city: string, schoolName: string): string {
 <SchoolUpload xmlns="http://ontario.ca">
   <Metadata>
     <CreateDate>2026-09-01</CreateDate><CreateTime>12:00:00</CreateTime>
-    <CreatedBy>Analyst</CreatedBy><ContactPhone type="WORK">519-555-1234</ContactPhone>
-    <ContactEmail>analyst@example.ca</ContactEmail><FullUpload>YES</FullUpload>
+    <CreatedBy>Synthetic Test</CreatedBy><ContactPhone type="WORK">204-555-0100</ContactPhone>
+    <ContactEmail>test@example.invalid</ContactEmail><FullUpload>YES</FullUpload>
   </Metadata>
   <School>
     <SchoolNumber>001</SchoolNumber><Name>${schoolName}</Name>
@@ -53,7 +53,7 @@ describe("free-text character validation", () => {
   });
 
   it("applies student and school suggestions and clears every character finding", () => {
-    const source = xml("O'“Renée@-2", "Guelph", "St. Mary's &amp; “Academy”.");
+    const source = xml("O'“Renée@-2", "Exampleville", "St. Mary's &amp; “Academy”.");
     const result = validateXml(source);
     const fixes: AppliedFix[] = result.issues
       .filter((issue) => characterRuleIds.has(issue.ruleId))
@@ -77,7 +77,7 @@ describe("free-text character validation", () => {
 
   it("allows each category to be enabled independently for each field", () => {
     const rules = structuredClone(defaultRulesJson) as RulesProfile;
-    expect(validateXml(xml("Ada", "Guelph", "King's Academy"), rules).issues)
+    expect(validateXml(xml("Sample", "Exampleville", "King's Academy"), rules).issues)
       .not.toContainEqual(expect.objectContaining({ ruleId: "FREE_TEXT_APOSTROPHE", field: "SchoolName" }));
 
     rules.freeTextCharacterChecks = {
@@ -85,7 +85,7 @@ describe("free-text character validation", () => {
       apostrophe: [...(rules.freeTextCharacterChecks?.apostrophe ?? []), "SchoolName"],
       quotation: (rules.freeTextCharacterChecks?.quotation ?? []).filter((field) => field !== "FirstName"),
     };
-    const findings = validateXml(xml('“Ada”', "Guelph", "King's Academy"), rules).issues;
+    const findings = validateXml(xml('“Sample”', "Exampleville", "King's Academy"), rules).issues;
     expect(findings).toContainEqual(expect.objectContaining({
       ruleId: "FREE_TEXT_APOSTROPHE", field: "SchoolName", suggestedFix: "Kings Academy",
     }));
@@ -95,7 +95,7 @@ describe("free-text character validation", () => {
   });
 
   it("preserves balanced parenthetical aliases as a protected value", () => {
-    const findings = validateXml(xml("Anne@ (O'“Renée@”)", "Guelph", "Example School")).issues
+    const findings = validateXml(xml("Anne@ (O'“Renée@”)", "Exampleville", "Example School")).issues
       .filter((issue) => characterRuleIds.has(issue.ruleId) && issue.field === "FirstName");
 
     expect(findings).toEqual([
@@ -107,9 +107,9 @@ describe("free-text character validation", () => {
   });
 
   it("allows periods and slashes only in street-address fields", () => {
-    const source = xml("Ada", "Guelph/Eramosa.", "Example School").replace(
+    const source = xml("Sample", "Exampleville/Testborough.", "Example School").replace(
       "<Address><City>",
-      "<Address><Unit>4/5</Unit><StreetNumber>12.5</StreetNumber><StreetNumberSuffix>A/.</StreetNumberSuffix><StreetName>Main St./West</StreetName><City>",
+      "<Address><Unit>4/5</Unit><StreetNumber>12.5</StreetNumber><StreetNumberSuffix>A/.</StreetNumberSuffix><StreetName>Example St./West</StreetName><City>",
     );
     const findings = validateXml(source).issues
       .filter((issue) => characterRuleIds.has(issue.ruleId));
@@ -118,13 +118,13 @@ describe("free-text character validation", () => {
       expect.objectContaining({
         ruleId: "FREE_TEXT_SPECIAL_CHARACTER",
         field: "City",
-        suggestedFix: "Guelph/Eramosa",
+        suggestedFix: "Exampleville/Testborough",
       }),
     ]);
   });
 
   it("defers to a specialized finding on the same field", () => {
-    const source = xml("Ada", "Guelph", "Example School")
+    const source = xml("Sample", "Exampleville", "Example School")
       .replace("<Address><City>", "<Address><StreetName>P.O. Box 42</StreetName><City>");
     const findings = validateXml(source).issues;
 

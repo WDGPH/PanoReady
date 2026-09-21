@@ -43,4 +43,7 @@ it("uses indeterminate progress until the parent has a committed recheck result"
   const completed = render({ ...session, revalidatedResult: session.initialResult, appliedFixCount: 0, finalXml: "" });
   expect(completed).not.toContain("<progress");
   expect(completed).toContain("Return to manual fixes");
+  expect(completed).toContain("After 0 Corrections · 0 Field Changes");
+  expect(completed).toContain("Automatic fixes");
+  expect(completed).toContain("Manual fixes");
 });

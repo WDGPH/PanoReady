@@ -24,6 +24,7 @@ const labels: Record<string, string> = {
   PHONE_FORMAT: "Invalid phone format", PHONE_NPA_STRUCTURE: "Invalid area code", PHONE_NXX_STRUCTURE: "Invalid phone exchange",
   PHONE_PLACEHOLDER: "Placeholder phone number", PHONE_EXTENSION_FORMAT: "Invalid phone extension", PHONE_EXTENSION_NORMALIZE: "Phone extension normalization",
   PHONE_CANADIAN_AREA_CODE: "Non-Canadian area code", STREET_NUMBER_UNIT_PREFIX: "Unit in street number",
+  STREET_TYPE_IN_STREET_NAME: "Street type in street name",
   ALTERNATE_DELIVERY_IN_STREET_FIELD: "Delivery address in street field", EMPTY_STUDENTS: "School has no students",
   FREE_TEXT_APOSTROPHE: "Apostrophe in free text", FREE_TEXT_QUOTATION: "Quotation mark in free text",
   FREE_TEXT_ACCENT: "Accent in free text", FREE_TEXT_SPECIAL_CHARACTER: "Special character in free text",

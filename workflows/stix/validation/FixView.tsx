@@ -12,6 +12,7 @@ import { guardianSectionForField } from "@/lib/fields";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 import { defaultRules } from "@/lib/rulesets";
 import { fieldValueMeetsRules } from "@/lib/validator";
+import { countAppliedCorrections, deduplicateAppliedFixes } from "@/lib/fixSummary";
 import type { AppliedFix, StudentRecord, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
 import { automaticFixes, isAutomaticIssue } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
@@ -112,7 +113,7 @@ export default function FixView({
   // pending: issueId → new value. A present empty value is an intentional removal.
   const [pending, setPending] = useState<Record<string, string>>({});
   const [selectionWave, setSelectionWave] = useState<string[]>([]);
-  const [operation, setOperation] = useState<{ phase: "applying" | "done"; count: number } | null>(null);
+  const [operation, setOperation] = useState<{ phase: "applying" | "done"; corrections: number; fieldChanges: number } | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [studentDrafts, setStudentDrafts] = useState<Record<string, Record<string, string>>>({});
   const studentFixes = (now: number): AppliedFix[] => records.flatMap(record => {
@@ -158,17 +159,18 @@ export default function FixView({
   };
   const applyAutomatic = async (candidates: ValidationIssue[]) => {
     if (operation || !candidates.length) return;
-    const batch = candidates.flatMap(issue => automaticFixes(issue, records, Date.now()));
+    const batch = deduplicateAppliedFixes(candidates.flatMap(issue => automaticFixes(issue, records, Date.now())));
+    const corrections = countAppliedCorrections(batch);
     const started = performance.now();
     setApplyError(null);
-    setOperation({ phase: "applying", count: batch.length });
+    setOperation({ phase: "applying", corrections, fieldChanges: batch.length });
     onBusyChange(true);
     try {
       await new Promise(resolve => window.setTimeout(resolve, 120));
       onAutoApply(batch);
       setSelectionWave([]);
       setPending({});
-      setOperation({ phase: "done", count: batch.length });
+      setOperation({ phase: "done", corrections, fieldChanges: batch.length });
       // Hold completed feedback briefly; never finish before processing does.
       await new Promise(resolve => window.setTimeout(resolve, Math.max(200, 1000 - (performance.now() - started))));
     } catch (cause) {
@@ -281,11 +283,12 @@ export default function FixView({
       });
     }
     const edits = studentFixes(now);
-    onApply([...session.fixes, ...fixes.filter(fix => {
+    const staged = deduplicateAppliedFixes([...fixes.filter(fix => {
       const draft = studentDrafts[fix.recordId] ?? {};
       const guardian = guardianSectionForField(fix.field);
       return draft[fix.field] === undefined && !(guardian && draft[guardian] === "");
     }), ...edits]);
+    onApply([...session.fixes, ...staged]);
   };
 
   const automaticSelectedCount = automaticCandidates.filter(issue => pending[issue.id] !== undefined).length;
@@ -297,8 +300,8 @@ export default function FixView({
       {operation && <div className="autofix-feedback" role="status" aria-live="polite">
         <div className={`autofix-feedback-card ${operation.phase === "done" ? "is-done" : ""}`}>
           {operation.phase === "done" ? <CheckCircle2 size={56} /> : <Wand2 size={48} className="autofix-wand" />}
-          <h2>{operation.phase === "done" ? `${operation.count} fixes applied` : "Working a little magic…"}</h2>
-          <p>{operation.phase === "done" ? "File rechecked. Ready for the next step." : "Applying corrections and checking the results."}</p>
+          <h2>{operation.phase === "done" ? `${operation.corrections} correction${operation.corrections !== 1 ? "s" : ""} applied` : "Working a little magic…"}</h2>
+          <p>{operation.phase === "done" ? `${operation.fieldChanges} field change${operation.fieldChanges !== 1 ? "s" : ""}. File rechecked and ready for the next step.` : "Applying corrections and checking the results."}</p>
           <div className="fix-operation-track" role="progressbar" aria-label="Apply automatic fixes and recheck" aria-valuemin={0} aria-valuemax={100} aria-valuenow={operation.phase === "done" ? 100 : 0}><span style={{ width: operation.phase === "done" ? "100%" : "0%" }} /></div>
         </div>
       </div>}

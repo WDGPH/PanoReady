@@ -34,6 +34,7 @@ import {
 import {
   ADDRESS_REPAIR_FIELDS,
   analyzeAlternateDeliveryInStreetFields,
+  analyzeStreetNameSuffix,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
   analyzeUnitOverflow,
@@ -312,6 +313,25 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         issue(issues, {
           ...base, severity: "warning", field: "StreetName", ruleId: "ALTERNATE_DELIVERY_IN_STREET_FIELD",
           message: alternateDeliveryProposal.explanation, autoFixable: false, repairProposal: alternateDeliveryProposal,
+        });
+      }
+
+      const streetNameSuffixProposal = analyzeStreetNameSuffix(
+        fields,
+        rules.allowedStreetTypeValues,
+        rules.allowedStreetDirectionValues,
+        recordId + "-address-street-name-suffix",
+      );
+      if (streetNameSuffixProposal) {
+        const safe = streetNameSuffixProposal.confidence === "safe";
+        issue(issues, {
+          ...base,
+          severity: "warning",
+          field: "StreetName",
+          ruleId: "STREET_TYPE_IN_STREET_NAME",
+          message: streetNameSuffixProposal.explanation,
+          autoFixable: safe,
+          repairProposal: streetNameSuffixProposal,
         });
       }
 
