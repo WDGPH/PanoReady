@@ -973,7 +973,7 @@ h1, h2, h3 {
 }
 .start-over-dialog h2 { margin: 0 0 8px; font-size: 19px; }
 .start-over-dialog p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.55; }
-.start-over-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.start-over-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .intake-main {
   flex: 1;
   display: flex;

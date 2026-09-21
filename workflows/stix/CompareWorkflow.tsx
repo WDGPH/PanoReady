@@ -1,7 +1,8 @@
 "use client";
 import PagedTable from "@/components/PagedTable";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { SaveProgressRegistration } from "@/components/SaveProgress";
 import * as Dialog from "@radix-ui/react-dialog";
 import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
 import { ArrowLeft, CheckCircle2, Download, FileCode, GitCompareArrows, Loader2, Lock, School, SlidersHorizontal, Users, Wrench, X } from "lucide-react";
@@ -9,10 +10,15 @@ import { applyReviewCorrections, extractSchoolXml, safeExportPart } from "@/lib/
 import { downloadBlob, downloadText, toCsv } from "@/lib/utils";
 import type { STIXComparison } from "@/lib/types";
 import StatCard from "@/components/StatCard";
+import { downloadProgress } from "@/components/SaveProgress";
 
 // ─── CompareView ──────────────────────────────────────────────────────────────
 
-export default function CompareWorkflow({ comparison, onStartOver }: { comparison: STIXComparison; onStartOver: () => void }) {
+export default function CompareWorkflow({ comparison, onStartOver, onSaveProgressChange }: {
+  comparison: STIXComparison;
+  onStartOver: () => void;
+  onSaveProgressChange: SaveProgressRegistration;
+}) {
   const [viewMode, setViewMode] = useState<"schools" | "records" | "fields" | "transfers">("records");
   const [selectedSchool, setSelectedSchool] = useState("all");
   const [selectedRecordKey, setSelectedRecordKey] = useState<string | null>(null);
@@ -35,13 +41,20 @@ export default function CompareWorkflow({ comparison, onStartOver }: { compariso
     setFieldFilter([]);
     setSelectedRecordKey(null);
   };
-  const getExportXml = () => {
+  const getExportXml = useCallback(() => {
     const sourceXml = extractSchoolXml(comparison.currentXml, selectedSchool);
     const records = selectedSchool === "all"
       ? comparison.recordChanges
       : comparison.recordChanges.filter((record) => record.schoolName === selectedSchool);
     return applyReviewCorrections(sourceXml, records, corrections);
-  };
+  }, [comparison, corrections, selectedSchool]);
+  useEffect(() => {
+    onSaveProgressChange(() => downloadProgress(
+      comparison.currentFileName,
+      applyReviewCorrections(comparison.currentXml, comparison.recordChanges, corrections),
+    ));
+    return () => onSaveProgressChange(null);
+  }, [comparison, corrections, onSaveProgressChange]);
   const downloadFullXml = () => {
     try {
       setExportError(null);
