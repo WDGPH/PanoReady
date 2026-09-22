@@ -289,7 +289,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
     const selectedFile = inputRef.current?.files?.[0] ?? file ?? syncFileFromInput();
     if (!selectedFile) { setError("Please select a file first."); return; }
     const selectedCurrent = currentInputRef.current?.files?.[0] ?? currentFile;
-    if (!setupMode && (/\.xlsm?$/i.test(selectedFile.name) || (workflow === "compare" && selectedCurrent && /\.xlsm?$/i.test(selectedCurrent.name)))) {
+    if (!setupMode && (/\.xls(?:x|m)?$/i.test(selectedFile.name) || (workflow === "compare" && selectedCurrent && /\.xls(?:x|m)?$/i.test(selectedCurrent.name)))) {
       setSetupMode(true);
       setError(null);
       return;
@@ -320,8 +320,8 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const selectedFile = inputRef.current?.files?.[0] ?? file;
   const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
   const setupLoading = setupMode && (
-    Boolean(selectedFile && /\.xlsm?$/i.test(selectedFile.name) && (!xlsmMeta || !xlsmPreview || !dateAnalysis))
-    || Boolean(workflow === "compare" && selectedCurrentFile && /\.xlsm?$/i.test(selectedCurrentFile.name) && (!currentXlsmMeta || !currentDateAnalysis))
+    Boolean(selectedFile && /\.xls(?:x|m)?$/i.test(selectedFile.name) && (!xlsmMeta || !xlsmPreview || !dateAnalysis))
+    || Boolean(workflow === "compare" && selectedCurrentFile && /\.xls(?:x|m)?$/i.test(selectedCurrentFile.name) && (!currentXlsmMeta || !currentDateAnalysis))
   );
 
   return (
@@ -419,8 +419,6 @@ export default function STIXIntake({ onValidate, onCompare }: {
             </div>
           </section>
         )}
-        </div>
-
         {xlsmPreview && (
           <section className="advanced-section">
             <h2>Import preview</h2>
@@ -507,6 +505,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
             </div>
           </details>
         )}
+        </div>
 
         {error && (
           <section className="intake-error">
