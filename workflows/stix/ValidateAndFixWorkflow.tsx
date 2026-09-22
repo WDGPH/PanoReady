@@ -27,11 +27,16 @@ type ValidateWorkflowState =
   | { step: "clean-summary"; input: ValidateWorkflowInput; session: ValidateSession; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
   | { step: "issues" | "fix" | "manual" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
 
-export default function ValidateAndFixWorkflow({ input, onExit }: { input: ValidateWorkflowInput; onExit: () => void }) {
+export default function ValidateAndFixWorkflow({ input, onExit, onRequestExit }: {
+  input: ValidateWorkflowInput;
+  onExit: () => void;
+  onRequestExit: (trigger?: HTMLButtonElement) => void;
+}) {
   const [applying, setApplying] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [reviewRevision, setReviewRevision] = useState(0);
+  const [unappliedFixCount, setUnappliedFixCount] = useState(0);
 
   const [profile, setProfile] = useState<{ id: string; rules: RulesProfile; cleaning: CleaningProfile | null; revision: number }>(() => {
     const saved = listCustomRulesets().find((candidate) => candidate.id === getActiveRulesetId());
@@ -69,7 +74,7 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
       />
   );
   const renderStep = () => {
-    if (state.step === "assessing") return <AssessmentView xml={state.xml} rules={state.rules} onBack={onExit} onComplete={(result) => setState({ step: "issues", session: { fileName: state.fileName, originalXml: state.xml, initialResult: result, fixes: [], validationRules: state.rules } })} />;
+    if (state.step === "assessing") return <AssessmentView xml={state.xml} rules={state.rules} onBack={onRequestExit} onComplete={(result) => setState({ step: "issues", session: { fileName: state.fileName, originalXml: state.xml, initialResult: result, fixes: [], validationRules: state.rules } })} />;
 
     if (state.step === "clean-summary") return (
       <CleaningSummaryView
@@ -103,13 +108,13 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
     );
 
     const session = state.session;
-    if (state.step === "issues") return <IssuesView onBack={onExit} advancedOptions={<RulesetSelector key={selectorRevision} compact initialId={profile.id} notifyOnMount={false} onRulesChange={(rules, cleaning, id) => {
+    if (state.step === "issues") return <IssuesView onBack={onRequestExit} advancedOptions={<RulesetSelector key={selectorRevision} compact initialId={profile.id} notifyOnMount={false} onRulesChange={(rules, cleaning, id) => {
       setProfile((current) => ({ id, rules, cleaning, revision: current.revision + 1 }));
       setDraftCleaning(cleaning);
       setExclusions([]);
       setState({ step: "issues", session: { ...session, validationRules: rules, revalidatedResult: validateXml(session.finalXml ?? session.originalXml, rules) } });
     }} />} session={session} exclusions={exclusions} onExclusionsChange={setExclusions} onFix={(filter) => setState({ step: "fix", session, filter })} onSkipToDownload={() => setState({ step: "download", session })} />;
-    if (state.step === "fix" || state.step === "manual") return <FixView onBack={() => setState({ step: state.step === "fix" ? "issues" : "fix", session })} advancedOptions={state.step === "fix" ? cleaningOptions(session) : undefined} key={JSON.stringify([state.step, state.filter ?? {}, exclusions, reviewRevision])} view={state.step === "fix" ? "automatic" : "manual"} exclusions={exclusions} session={session} filter={state.filter} onBusyChange={setApplying} onContinue={() => setState({ step: "manual", session, filter: state.filter })} onAutoApply={(batch) => {
+    if (state.step === "fix" || state.step === "manual") return <FixView onBack={() => setState({ step: state.step === "fix" ? "issues" : "fix", session })} advancedOptions={state.step === "fix" ? cleaningOptions(session) : undefined} key={JSON.stringify([state.step, state.filter ?? {}, exclusions, reviewRevision])} view={state.step === "fix" ? "automatic" : "manual"} exclusions={exclusions} session={session} filter={state.filter} onBusyChange={setApplying} onPendingChange={setUnappliedFixCount} onContinue={() => setState({ step: "manual", session, filter: state.filter })} onAutoApply={(batch) => {
       const fixes = [...session.fixes, ...batch];
       const updated = applyReviewChanges({ ...session, fixes }, "Automatic fixes");
       setHistoryError(null);
@@ -136,7 +141,7 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
     <p className="sr-only" role="status">{announcement}</p>
     {historyError && <p role="alert">{historyError}</p>}
     <div className={styles.layout}>
-      <WorkflowNavigationActions value={"session" in state ? <SaveProgress fileName={state.session.fileName} xml={state.session.finalXml ?? state.session.originalXml} disabled={applying || pendingChanges} /> : null}>
+      <WorkflowNavigationActions value={"session" in state ? <SaveProgress fileName={state.session.fileName} xml={state.session.finalXml ?? state.session.originalXml} disabled={applying || pendingChanges} unappliedFixCount={unappliedFixCount} /> : null}>
         {renderStep()}
       </WorkflowNavigationActions>
       {"session" in state && <ActionHistory

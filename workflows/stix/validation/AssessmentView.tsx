@@ -9,7 +9,7 @@ export default function AssessmentView({ xml, rules, onComplete, onBack }: {
   xml: string;
   rules: RulesProfile;
   onComplete: (result: ValidationResult) => void;
-  onBack: () => void;
+  onBack: (trigger?: HTMLButtonElement) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);

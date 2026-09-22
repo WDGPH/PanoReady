@@ -12,7 +12,7 @@ import { SeverityLabel, SeveritySummary, severityHelp } from "./ValidationBadges
 import type { ReviewFilter, ReviewExclusion } from "./overview";
 
 export default function IssuesView({ advancedOptions, onBack, session, onFix, onSkipToDownload, exclusions, onExclusionsChange }: {
-  onBack: () => void;
+  onBack: (trigger?: HTMLButtonElement) => void;
   advancedOptions?: ReactNode;
   session: ValidateSession;
   onFix: (filter?: ReviewFilter) => void;
