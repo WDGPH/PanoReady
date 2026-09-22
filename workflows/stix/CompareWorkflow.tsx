@@ -1,7 +1,7 @@
 "use client";
 import PagedTable from "@/components/PagedTable";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
 import { ArrowLeft, CheckCircle2, Download, FileCode, GitCompareArrows, Loader2, Lock, School, SlidersHorizontal, Users, Wrench, X } from "lucide-react";
@@ -35,13 +35,13 @@ export default function CompareWorkflow({ comparison, onStartOver }: { compariso
     setFieldFilter([]);
     setSelectedRecordKey(null);
   };
-  const getExportXml = () => {
+  const getExportXml = useCallback(() => {
     const sourceXml = extractSchoolXml(comparison.currentXml, selectedSchool);
     const records = selectedSchool === "all"
       ? comparison.recordChanges
       : comparison.recordChanges.filter((record) => record.schoolName === selectedSchool);
     return applyReviewCorrections(sourceXml, records, corrections);
-  };
+  }, [comparison, corrections, selectedSchool]);
   const downloadFullXml = () => {
     try {
       setExportError(null);

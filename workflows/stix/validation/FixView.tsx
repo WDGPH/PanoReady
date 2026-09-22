@@ -5,7 +5,7 @@ import WorkflowNavigation from "@/components/WorkflowNavigation";
 import SeverityFilter from "@/components/SeverityFilter";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
-import { type CSSProperties, type ReactNode, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { Wand2, CheckCircle2, Trash2, TriangleAlert, Minus } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { guardianSectionForField } from "@/lib/fields";
@@ -88,6 +88,7 @@ export default function FixView({
   onContinue,
   onAutoApply,
   onBusyChange,
+  onPendingChange,
 }: {
   advancedOptions?: ReactNode;
   onBack: () => void;
@@ -100,6 +101,7 @@ export default function FixView({
   onContinue: () => void;
   onAutoApply: (fixes: AppliedFix[]) => void;
   onBusyChange: (busy: boolean) => void;
+  onPendingChange?: (count: number) => void;
 }) {
   const currentResult = session.revalidatedResult ?? session.initialResult;
   const records = currentResult.records;
@@ -293,6 +295,10 @@ export default function FixView({
 
   const automaticSelectedCount = automaticCandidates.filter(issue => pending[issue.id] !== undefined).length;
   const pendingCount = Object.keys(pending).length + studentFixes(0).length;
+  useEffect(() => {
+    onPendingChange?.(pendingCount);
+    return () => onPendingChange?.(0);
+  }, [onPendingChange, pendingCount]);
 
   return (
     <main style={{ flex: 1, maxWidth: "var(--page-width)", width: "100%", margin: "0 auto", padding: "56px var(--page-gutter) 100px" }}>

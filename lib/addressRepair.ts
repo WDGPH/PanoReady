@@ -276,20 +276,38 @@ export function analyzeStreetNumberUnitPrefix(
 
 const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|BOX)\s*#?\s*(\w+)$/i;
 const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
-const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
+const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d{1,4})$/i;
+const CANONICAL_RURAL_ROUTE_PATTERN = /^RR \d{1,4}$/;
+const RURAL_ROUTE_WITH_STREET_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d{1,4})(?:\s*[-–—]+\s*|\s+)(\S[\s\S]*)$/i;
 const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
+const RURAL_ROUTE_REFERENCE = /(?:^|[^A-Z])(?:R\.?\s*R\.?|RURAL\s+ROUTE)(?=\s*#?\s*\d|\b)/i;
+
+export type AlternateDeliveryRepairProposal = AddressRepairProposal & {
+  deliveryType: "poBox" | "ruralRoute";
+  sourceField: "StreetName" | "StreetNumber";
+};
+
+function ruralRouteNumber(value: string): string | undefined {
+  const match = value.trim().match(RURAL_ROUTE_PATTERN);
+  return match?.[1] === undefined ? undefined : String(Number(match[1]));
+}
+
+/** Canonical format: the symbol RR, one space, then a 1–4 digit route number. */
+export function isCanonicalRuralRoute(value: string): boolean {
+  return CANONICAL_RURAL_ROUTE_PATTERN.test(value);
+}
 
 /**
  * Detect PO Box / rural-route delivery text typed into a street field instead
- * of PoBoxNumber/RuralRoute. A clean match proposes moving it (confirmation
- * required — clearing a street field is a bigger structural change than a
- * same-field split); a recognizable-but-unparsable prefix is surfaced as a
- * "manual" finding with no guessed value, per the three-tier confidence model.
+ * of PoBoxNumber/RuralRoute. Clean PO Box matches require confirmation, while
+ * an unambiguous, non-conflicting rural route can be moved automatically. A
+ * recognizable-but-unparsable prefix is surfaced as a manual finding with no
+ * guessed value.
  */
 export function analyzeAlternateDeliveryInStreetFields(
   fields: Record<string, string>,
   proposalId = "address-alternate-delivery",
-): AddressRepairProposal | undefined {
+): AlternateDeliveryRepairProposal | undefined {
   for (const field of ["StreetName", "StreetNumber"] as const) {
     const raw = (fields[field] ?? "").trim();
     if (!raw) continue;
@@ -301,6 +319,8 @@ export function analyzeAlternateDeliveryInStreetFields(
       const conflict = currentBox !== "" && currentBox !== boxId;
       return {
         kind: "address",
+        deliveryType: "poBox",
+        sourceField: field,
         id: proposalId,
         confidence: "review",
         title: conflict ? "Review PO Box text found in the street address" : "Move PO Box text out of the street address",
@@ -315,35 +335,49 @@ export function analyzeAlternateDeliveryInStreetFields(
     }
     if (PO_BOX_PREFIX.test(raw)) {
       return {
-        kind: "address", id: proposalId, confidence: "manual",
+        kind: "address", deliveryType: "poBox", sourceField: field,
+        id: proposalId, confidence: "manual",
         title: "Review possible PO Box text in the street address",
         explanation: `“${raw}” in ${field} looks like it starts with a PO Box reference, but the box number couldn't be parsed. Review the complete address and edit the fields directly.`,
         changes: [],
       };
     }
 
-    const rrMatch = raw.match(RURAL_ROUTE_PATTERN);
-    if (rrMatch) {
-      const proposedRoute = `RR ${rrMatch[1]}`;
+    const routeWithStreet = raw.match(RURAL_ROUTE_WITH_STREET_PATTERN);
+    const routeNumber = ruralRouteNumber(raw)
+      ?? (routeWithStreet?.[1] === undefined ? undefined : String(Number(routeWithStreet[1])));
+    if (routeNumber) {
+      const proposedRoute = `RR ${routeNumber}`;
+      const remainingStreet = routeWithStreet?.[2].trim() ?? "";
+      const hasAdditionalRouteReference = RURAL_ROUTE_REFERENCE.test(remainingStreet);
       const currentRoute = (fields.RuralRoute ?? "").trim();
-      const conflict = currentRoute !== "" && currentRoute.toUpperCase() !== proposedRoute.toUpperCase();
+      const conflict = currentRoute !== ""
+        && ruralRouteNumber(currentRoute) !== routeNumber;
+      const requiresReview = conflict || hasAdditionalRouteReference;
       return {
         kind: "address",
+        deliveryType: "ruralRoute",
+        sourceField: field,
         id: proposalId,
-        confidence: "review",
-        title: conflict ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
+        confidence: requiresReview ? "review" : "safe",
+        title: requiresReview ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
         explanation: conflict
           ? `“${raw}” in ${field} looks like a rural route, but RuralRoute is already “${currentRoute}”. Review the complete address before applying changes.`
-          : `“${raw}” in ${field} looks like a rural route and can be moved to RuralRoute (proposed “${proposedRoute}”).`,
-        changes: conflict ? [] : [
-          { field, currentValue: fields[field] ?? "", proposedValue: "" },
+          : hasAdditionalRouteReference
+            ? `“${raw}” in ${field} contains more than one rural route reference. Review the complete address before applying changes.`
+          : remainingStreet
+            ? `“${raw}” in ${field} starts with a rural route that can be moved to RuralRoute (proposed “${proposedRoute}”) while preserving the remaining street text.`
+            : `“${raw}” in ${field} looks like a rural route and can be moved to RuralRoute (proposed “${proposedRoute}”).`,
+        changes: requiresReview ? [] : [
+          { field, currentValue: fields[field] ?? "", proposedValue: remainingStreet },
           { field: "RuralRoute", currentValue: fields.RuralRoute ?? "", proposedValue: proposedRoute },
         ],
       };
     }
     if (RURAL_ROUTE_PREFIX.test(raw)) {
       return {
-        kind: "address", id: proposalId, confidence: "manual",
+        kind: "address", deliveryType: "ruralRoute", sourceField: field,
+        id: proposalId, confidence: "manual",
         title: "Review possible rural route text in the street address",
         explanation: `“${raw}” in ${field} looks like it starts with a rural route reference, but the route number couldn't be parsed. Review the complete address and edit the fields directly.`,
         changes: [],

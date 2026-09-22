@@ -37,6 +37,33 @@ it("keeps structural deletions out of manual review", () => {
   expect(html).not.toContain("Remove Guardian");
 });
 
+it("shows clean rural-route corrections in automatic fixes", () => {
+  const ruralSession: ValidateSession = {
+    fileName: "rural-route.xml", originalXml: "", fixes: [],
+    initialResult: {
+      schoolCount: 1, studentCount: 1, gate: "REVIEW_REQUIRED",
+      records: [{ id: "school0:student0", xmlPath: "", fields: { StreetName: "RR1", RuralRoute: "" } }],
+      issues: [{
+        id: "rural-route-0", recordId: "school0:student0", field: "StreetName",
+        ruleId: "RURAL_ROUTE_IN_STREET_FIELD", message: "Rural route text was found in StreetName.",
+        severity: "warning", autoFixable: true,
+        repairProposal: {
+          kind: "address", id: "rural-route-repair-0", confidence: "safe",
+          title: "Move rural route text out of the street address", explanation: "",
+          changes: [
+            { field: "StreetName", currentValue: "RR1", proposedValue: "" },
+            { field: "RuralRoute", currentValue: "", proposedValue: "RR 1" },
+          ],
+        },
+      }],
+    },
+  };
+
+  const automaticHtml = renderToStaticMarkup(<FixView session={ruralSession} view="automatic" onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
+  expect(automaticHtml).toContain('data-row-id="rural-route-0"');
+  expect(automaticHtml).toContain("RR 1");
+});
+
 it("keeps 1,000 safe compound street repairs in the 25-row paged table", () => {
   const count = 1000;
   const streetSession: ValidateSession = {

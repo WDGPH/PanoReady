@@ -250,26 +250,80 @@ describe("a street number and name found in Unit", () => {
 describe("PO Box and rural route text in street fields", () => {
   it("moves a clean PO Box match out of StreetName", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "PO Box 42", PoBoxNumber: "" });
-    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal).toMatchObject({ confidence: "review", deliveryType: "poBox", sourceField: "StreetName" });
     expect(proposal?.changes).toEqual([
       { field: "StreetName", currentValue: "PO Box 42", proposedValue: "" },
       { field: "PoBoxNumber", currentValue: "", proposedValue: "42" },
     ]);
   });
 
-  it("moves a clean rural route match out of StreetNumber", () => {
+  it("proposes automatically moving a clean rural route match out of StreetNumber", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetNumber: "RR 2", RuralRoute: "" });
-    expect(proposal).toMatchObject({ confidence: "review" });
+    expect(proposal).toMatchObject({ confidence: "safe", deliveryType: "ruralRoute", sourceField: "StreetNumber" });
     expect(proposal?.changes).toEqual([
       { field: "StreetNumber", currentValue: "RR 2", proposedValue: "" },
       { field: "RuralRoute", currentValue: "", proposedValue: "RR 2" },
     ]);
   });
 
+  it("normalizes an equivalent existing rural route without treating it as a conflict", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetNumber: "RR01", RuralRoute: "R.R. 1" });
+    expect(proposal).toMatchObject({ confidence: "safe" });
+    expect(proposal?.changes).toEqual([
+      { field: "StreetNumber", currentValue: "RR01", proposedValue: "" },
+      { field: "RuralRoute", currentValue: "R.R. 1", proposedValue: "RR 1" },
+    ]);
+  });
+
+  it("moves a leading rural route and preserves the remaining synthetic street text", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({
+      StreetName: "RR #7-123 Synthetic Avenue",
+      RuralRoute: "",
+    });
+    expect(proposal).toMatchObject({ confidence: "safe", deliveryType: "ruralRoute", sourceField: "StreetName" });
+    expect(proposal?.changes).toEqual([
+      { field: "StreetName", currentValue: "RR #7-123 Synthetic Avenue", proposedValue: "123 Synthetic Avenue" },
+      { field: "RuralRoute", currentValue: "", proposedValue: "RR 7" },
+    ]);
+  });
+
+  it("keeps a leading rural route with a conflicting canonical route in review", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({
+      StreetName: "Rural Route 4 789 Example Road",
+      RuralRoute: "RR 8",
+    });
+    expect(proposal).toMatchObject({ confidence: "review", deliveryType: "ruralRoute", changes: [] });
+  });
+
+  it("keeps multiple rural-route references in synthetic street text for manual review", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({
+      StreetName: "RR 3-987 Example Trail - RR# RR3",
+      RuralRoute: "",
+    });
+    expect(proposal).toMatchObject({ confidence: "review", deliveryType: "ruralRoute", changes: [] });
+    expect(proposal?.explanation).toContain("more than one rural route reference");
+  });
+
+  it("does not guess a route number from an unparseable rural-route prefix", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "RR # Example Road", RuralRoute: "" });
+    expect(proposal).toMatchObject({ confidence: "manual", deliveryType: "ruralRoute", changes: [] });
+  });
+
+  it.each(["RR 12345", "RR 12345-789 Example Road"])("keeps an oversized route number in manual review: %s", value => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: value, RuralRoute: "" });
+    expect(proposal).toMatchObject({ confidence: "manual", deliveryType: "ruralRoute", changes: [] });
+  });
+
   it("never overwrites an existing conflicting PoBoxNumber", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "PO Box 42", PoBoxNumber: "99" });
     expect(proposal).toMatchObject({ confidence: "review", changes: [] });
     expect(proposal?.explanation).toContain("PoBoxNumber is already “99”");
+  });
+
+  it("keeps a conflicting rural route in review", () => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "Rural Route 2", RuralRoute: "RR 9" });
+    expect(proposal).toMatchObject({ confidence: "review", changes: [] });
+    expect(proposal?.explanation).toContain("RuralRoute is already “RR 9”");
   });
 
   it("falls back to a manual, no-guess finding when the box number can't be parsed", () => {
@@ -279,6 +333,36 @@ describe("PO Box and rural route text in street fields", () => {
 
   it("does not fire on ordinary street names", () => {
     expect(analyzeAlternateDeliveryInStreetFields({ StreetName: "Boxwood Lane", PoBoxNumber: "" })).toBeUndefined();
+  });
+});
+
+describe("RuralRoute field validation", () => {
+  it("accepts the canonical RR and numeric route format", () => {
+    const result = validateXml(studentXml("<RuralRoute>RR 12</RuralRoute>"));
+    expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_FORMAT")).toBe(false);
+  });
+
+  it("reports a separate manual issue for a noncanonical populated value", () => {
+    const result = validateXml(studentXml("<RuralRoute>RR #12</RuralRoute>"));
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      ruleId: "RURAL_ROUTE_FORMAT",
+      field: "RuralRoute",
+      severity: "error",
+      currentValue: "RR #12",
+      autoFixable: false,
+    }));
+    expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_IN_STREET_FIELD")).toBe(false);
+    expect(result.issues.some(issue => issue.field === "RuralRoute" && issue.ruleId === "FREE_TEXT_SPECIAL_CHARACTER")).toBe(false);
+  });
+
+  it("rejects a rural-route field with more than four digits", () => {
+    const result = validateXml(studentXml("<RuralRoute>RR 12345</RuralRoute>"));
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      ruleId: "RURAL_ROUTE_FORMAT",
+      field: "RuralRoute",
+      severity: "error",
+      autoFixable: false,
+    }));
   });
 });
 
@@ -311,4 +395,36 @@ it("applies a safe automatic address correction as a complete repair", () => {
   const manualIssue = noSuggestion.issues.find(issue => issue.repairProposal)!;
   expect(manualIssue.autoFixable).toBe(false);
   expect(automaticFixes(manualIssue, noSuggestion.records, 1)).toEqual([]);
+});
+
+it("offers a clean rural route as a coordinated automatic address repair", () => {
+  const xml = studentXml("<StreetNumber>RR1</StreetNumber><City>Exampleville</City><Province>ON</Province>");
+  const result = validateXml(xml);
+  const issue = result.issues.find(candidate => candidate.ruleId === "RURAL_ROUTE_IN_STREET_FIELD");
+  expect(issue).toMatchObject({ field: "StreetNumber", autoFixable: true, repairProposal: { confidence: "safe" } });
+  expect(issue?.repairProposal?.changes).toEqual([
+    { field: "StreetNumber", currentValue: "RR1", proposedValue: "" },
+    { field: "RuralRoute", currentValue: "", proposedValue: "RR 1" },
+  ]);
+  expect(automaticFixes(issue!, result.records, 1).map(fix => [fix.field, fix.newValue])).toEqual([
+    ["StreetNumber", ""],
+    ["RuralRoute", "RR 1"],
+  ]);
+});
+
+it("applies a leading rural-route correction without dropping remaining synthetic street text", () => {
+  const xml = studentXml("<StreetName>RR#6-321 Synthetic Orchard</StreetName><City>Exampleville</City><Province>ON</Province>");
+  const result = validateXml(xml);
+  const issue = result.issues.find(candidate => candidate.ruleId === "RURAL_ROUTE_IN_STREET_FIELD")!;
+  expect(issue).toMatchObject({ field: "StreetName", autoFixable: true, repairProposal: { confidence: "safe" } });
+
+  const fixes = automaticFixes(issue, result.records, 1);
+  expect(fixes.map(fix => [fix.field, fix.newValue])).toEqual([
+    ["StreetName", "321 Synthetic Orchard"],
+    ["RuralRoute", "RR 6"],
+  ]);
+
+  const updated = validateXml(applyValidationFixes(xml, fixes));
+  expect(updated.records[0].fields).toMatchObject({ StreetName: "321 Synthetic Orchard", RuralRoute: "RR 6" });
+  expect(updated.issues.some(candidate => candidate.ruleId === "RURAL_ROUTE_IN_STREET_FIELD")).toBe(false);
 });

@@ -869,6 +869,14 @@ h1, h2, h3 {
   letter-spacing: 0.03em;
   color: var(--ink);
 }
+.brand-home {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.brand-home:hover { color: #fff; }
+.brand-home:focus-visible { outline: 2px solid #f5efdf; outline-offset: 5px; border-radius: 2px; }
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -944,6 +952,48 @@ h1, h2, h3 {
   font-size: 12px;
   line-height: 1.4;
 }
+.start-over-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--color-overlay);
+}
+.start-over-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 51;
+  width: min(92vw, 440px);
+  padding: 22px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-1);
+  box-shadow: 0 18px 60px var(--color-shadow);
+}
+.prompt-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.prompt-dialog-close:hover { background: var(--color-surface-2); color: var(--color-text-primary); }
+.start-over-dialog h2 { margin: 0 0 8px; font-size: 19px; }
+.start-over-dialog p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.55; }
+.start-over-dialog-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.start-over-dialog-actions .btn { width: 100%; }
+.save-progress-dialog { width: min(92vw, 500px); }
+@media (max-width: 480px) { .start-over-dialog-actions { grid-template-columns: 1fr; } }
 .intake-main {
   flex: 1;
   display: flex;
@@ -1463,6 +1513,15 @@ h1, h2, h3 {
 .manual-edit-status--invalid, .address-field-status--invalid { color: var(--color-warning-text); }
 .manual-edit-status--unaltered { color: var(--color-text-muted); font-weight: 500; }
 .address-field-label { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; color: var(--color-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.address-repair-card { border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface-1); overflow: hidden; }
+.address-repair-callout { padding: 16px 18px; border-bottom: 1px solid var(--color-border); background: var(--color-surface-2); }
+.address-repair-icon, .address-repair-description { color: var(--color-text-secondary); }
+.address-edited-preview { border-left: 2px solid var(--color-border); padding: 6px 10px; }
+.address-edited-preview--valid { border-left-color: var(--color-success-border); }
+.address-edited-preview--invalid { border-left-color: var(--color-warning-border); }
+.address-field-control { border: 1px solid var(--color-border); background: var(--color-surface-0); }
+.address-field-control--valid { border-color: var(--color-success-border); background: var(--color-success-bg); }
+.address-field-control--invalid { border-color: var(--color-warning-border); background: var(--color-warning-bg); }
 .manual-review-cell .btn { padding: 6px 9px; font-size: 11px; }
 .manual-review-cell--address > .btn { width: calc(100% / 3 - 16px); margin-inline: 8px; min-height: 30px; padding: 5px 8px; font-size: 12px; line-height: 1.4; }
 
