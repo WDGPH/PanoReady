@@ -501,6 +501,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
         )}
 
         <section className="intake-action">
+          <a className="btn btn-secondary" href={`${process.env.NEXT_PUBLIC_PAGES_BASE_PATH || "/PanoReady"}/reports/`}>Open Reports utility</a>
           <button onClick={run} disabled={processing} className="cta">
             {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : <>{wLabel}<ArrowRight size={16} /></>}
           </button>
