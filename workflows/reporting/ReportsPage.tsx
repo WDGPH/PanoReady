@@ -330,8 +330,6 @@ export default function ReportsPage({ initialXml = "", onBack }: { initialXml?: 
   } | null>(null);
   const [errors, setErrors] = useState<string | null>(null);
 
-  useEffect(() => { if (initialXml) setXml(initialXml); }, [initialXml]);
-
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
