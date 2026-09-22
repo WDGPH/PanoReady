@@ -57,3 +57,24 @@ test("logo protects active work before returning home", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Better data in/ })).toBeVisible();
   await expect(dialog).toHaveCount(0);
 });
+
+test("logo protects an active comparison before returning home", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Compare Files", exact: true }).first().click();
+  await page.locator("#xml-upload").setInputFiles(sample);
+  await page.locator("#xml-upload-current").setInputFiles(sample);
+  await page.getByRole("button", { name: "Compare Files", exact: true }).last().click();
+  await expect(page.getByRole("heading", { name: "STIX file comparison" })).toBeVisible();
+
+  const homeButton = page.getByRole("button", { name: "Return to PanoReady home" });
+  await homeButton.click();
+  const dialog = page.getByRole("dialog", { name: "Start over?" });
+  await expect(dialog).toContainText("abandon the current file");
+  await dialog.getByRole("button", { name: "Keep working" }).click();
+  await expect(homeButton).toBeFocused();
+  await expect(page.getByRole("heading", { name: "STIX file comparison" })).toBeVisible();
+
+  await homeButton.click();
+  await dialog.getByRole("button", { name: "Start over", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Better data in/ })).toBeVisible();
+});
