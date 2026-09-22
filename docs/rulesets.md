@@ -18,7 +18,7 @@ Accepting a value locally does not establish that a receiving system accepts it;
 base policy changes on that system's requirements.
 
 This reference describes the current configuration contract. Exact bundled values
-are in [rules.stix.default.json](../config/rules.stix.default.json).
+are in [rules.stix.default.json](https://github.com/WDGPH/PanoReady/blob/main/config/rules.stix.default.json).
 [Validation Rules](validation-rules.md) provides additional background; the
 implementation links below are the authority for current behavior and finding IDs.
 
@@ -342,7 +342,7 @@ Cleaning can change controlled values such as grade, gender, language, and
 province before validation. The cleaned result must still pass the active rules.
 Use cleaning for explicit substitutions and aliases for validation suggestions
 on invalid grade or gender values. The editor and cleaning view expose supported
-fields; [cleaning.ts](../lib/cleaning.ts) defines the list and matching behavior.
+fields; [cleaning.ts](https://github.com/WDGPH/PanoReady/blob/main/lib/cleaning.ts) defines the list and matching behavior.
 Use **Save mappings to profile** in the cleaning workflow to retain mappings,
 or **Save as new profile** when using the built-in profile. Omitting `cleaning`
 means no saved cleaning mappings.
@@ -358,14 +358,14 @@ Use this implementation map to keep a change consistent:
 
 | Responsibility | Source |
 |---|---|
-| Bundled values and defaults | [rules.stix.default.json](../config/rules.stix.default.json) |
-| Profile types and finding structure | [types.ts](../lib/types.ts) |
-| Import checks, persistence, and compatibility | [rulesets.ts](../lib/rulesets.ts) |
-| Selection, import/export, and editor controls | [RulesetSelector.tsx](../components/RulesetSelector.tsx), [RulesetEditor.tsx](../components/RulesetEditor.tsx) |
-| Rule execution, severity, precedence, and fixes | [validator.ts](../lib/validator.ts) |
-| Character categories and composed suggestions | [freeTextCharacters.ts](../lib/freeTextCharacters.ts) |
-| Cleaning fields and matching | [cleaning.ts](../lib/cleaning.ts) |
-| Regression evidence | [tests](../tests) |
+| Bundled values and defaults | [rules.stix.default.json](https://github.com/WDGPH/PanoReady/blob/main/config/rules.stix.default.json) |
+| Profile types and finding structure | [types.ts](https://github.com/WDGPH/PanoReady/blob/main/lib/types.ts) |
+| Import checks, persistence, and compatibility | [rulesets.ts](https://github.com/WDGPH/PanoReady/blob/main/lib/rulesets.ts) |
+| Selection, import/export, and editor controls | [RulesetSelector.tsx](https://github.com/WDGPH/PanoReady/blob/main/components/RulesetSelector.tsx), [RulesetEditor.tsx](https://github.com/WDGPH/PanoReady/blob/main/components/RulesetEditor.tsx) |
+| Rule execution, severity, precedence, and fixes | [validator.ts](https://github.com/WDGPH/PanoReady/blob/main/lib/validator.ts) |
+| Character categories and composed suggestions | [freeTextCharacters.ts](https://github.com/WDGPH/PanoReady/blob/main/lib/freeTextCharacters.ts) |
+| Cleaning fields and matching | [cleaning.ts](https://github.com/WDGPH/PanoReady/blob/main/lib/cleaning.ts) |
+| Regression evidence | [tests](https://github.com/WDGPH/PanoReady/tree/main/tests) |
 
 For a new setting, define omitted, empty, and explicit values before adding it to
 the importer and editor. Test existing imported profiles as well as new ones.
