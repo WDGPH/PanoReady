@@ -213,19 +213,6 @@ export default function FixView({
       candidate.id === id && candidate.recordId === record.id && candidate.field === field))));
   };
 
-  const openAddressReview = (record: StudentRecord, issue: ValidationIssue) => {
-    const changes = issue.ruleId === "RURAL_ROUTE_IN_STREET_FIELD"
-      ? issue.repairProposal?.changes ?? []
-      : [];
-    if (changes.length) setStudentDrafts(current => {
-      const existing = current[record.id] ?? {};
-      const proposed = { ...existing };
-      for (const change of changes) if (!(change.field in existing)) proposed[change.field] = change.proposedValue;
-      return { ...current, [record.id]: proposed };
-    });
-    setActiveAddressId(issue.id);
-  };
-
   const studentReview = (record: StudentRecord, issue: ValidationIssue) => {
     const proposal = issue.repairProposal;
     return <StudentEntry record={record} navigation={issue.id === activeAddressId ? {
@@ -402,7 +389,7 @@ export default function FixView({
                       ) : proposal && record ? (
                         <button type="button" className="btn btn-secondary" aria-label={`Review address for ${recordLabel}`} onClick={event => {
                           addressTrigger.current = event.currentTarget;
-                          openAddressReview(record, issue);
+                          setActiveAddressId(issue.id);
                         }}>{ADDRESS_REPAIR_FIELDS.some(field => studentDrafts[record.id]?.[field] !== undefined && studentDrafts[record.id][field] !== (record.fields[field] ?? "")) ? "Edit staged address" : "Review address"}</button>
                       ) : isEmptyGuardian ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>

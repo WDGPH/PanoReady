@@ -25,7 +25,8 @@ describe("field value status", () => {
     expect(fieldValueMeetsRules("RuralRoute", "", defaultRules)).toBe(true);
     expect(fieldValueMeetsRules("RuralRoute", "RR 7", defaultRules)).toBe(true);
     expect(fieldValueMeetsRules("RuralRoute", "RR 07", defaultRules)).toBe(true);
-    for (const value of ["RR7", "rr 7", "R.R. 7", "RR #7", "Rural Route 7", "RR 7 STN A"]) {
+    expect(fieldValueMeetsRules("RuralRoute", "RR 9999", defaultRules)).toBe(true);
+    for (const value of ["RR7", "rr 7", "R.R. 7", "RR #7", "Rural Route 7", "RR 7 STN A", "RR 10000"]) {
       expect(fieldValueMeetsRules("RuralRoute", value, defaultRules), value).toBe(false);
     }
   });

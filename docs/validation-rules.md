@@ -412,10 +412,10 @@ in the remaining text, remains manual review.
 **Field:** `RuralRoute`
 
 A populated rural-route field must contain the uppercase identifier `RR`, one
-space, and one or more route-number digits—for example, `RR 4`. A `#`, periods,
-expanded wording, station information, additional spaces, and other text are
-not accepted in this canonical field. An empty value remains valid because the
-field is optional.
+space, and a route number containing one to four digits—for example, `RR 4`. A
+`#`, periods, expanded wording, station information, additional spaces, five or
+more route-number digits, and other text are not accepted in this canonical
+field. An empty value remains valid because the field is optional.
 
 The same rule is applied while editing an address during manual review, so an
 invalid draft is marked **Check value** before it is applied.

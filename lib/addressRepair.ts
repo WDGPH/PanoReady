@@ -276,9 +276,9 @@ export function analyzeStreetNumberUnitPrefix(
 
 const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|BOX)\s*#?\s*(\w+)$/i;
 const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
-const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
-const CANONICAL_RURAL_ROUTE_PATTERN = /^RR \d+$/;
-const RURAL_ROUTE_WITH_STREET_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)(?:\s*[-–—]+\s*|\s+)(\S[\s\S]*)$/i;
+const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d{1,4})$/i;
+const CANONICAL_RURAL_ROUTE_PATTERN = /^RR \d{1,4}$/;
+const RURAL_ROUTE_WITH_STREET_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d{1,4})(?:\s*[-–—]+\s*|\s+)(\S[\s\S]*)$/i;
 const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
 const RURAL_ROUTE_REFERENCE = /(?:^|[^A-Z])(?:R\.?\s*R\.?|RURAL\s+ROUTE)(?=\s*#?\s*\d|\b)/i;
 
@@ -292,7 +292,7 @@ function ruralRouteNumber(value: string): string | undefined {
   return match?.[1] === undefined ? undefined : String(Number(match[1]));
 }
 
-/** Canada Post format: the symbol RR, one space, then the route number. */
+/** Canonical format: the symbol RR, one space, then a 1–4 digit route number. */
 export function isCanonicalRuralRoute(value: string): boolean {
   return CANONICAL_RURAL_ROUTE_PATTERN.test(value);
 }

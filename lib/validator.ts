@@ -331,7 +331,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           field: "RuralRoute",
           currentValue: fields.RuralRoute,
           ruleId: "RURAL_ROUTE_FORMAT",
-          message: `RuralRoute "${fields.RuralRoute}" must use RR followed by one space and the route number, such as RR 4. Do not use # or punctuation.`,
+          message: `RuralRoute "${fields.RuralRoute}" must use RR followed by one space and a 1–4 digit route number, such as RR 4. Do not use # or punctuation.`,
           autoFixable: false,
         });
       }

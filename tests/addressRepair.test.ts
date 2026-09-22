@@ -309,6 +309,11 @@ describe("PO Box and rural route text in street fields", () => {
     expect(proposal).toMatchObject({ confidence: "manual", deliveryType: "ruralRoute", changes: [] });
   });
 
+  it.each(["RR 12345", "RR 12345-789 Example Road"])("keeps an oversized route number in manual review: %s", value => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: value, RuralRoute: "" });
+    expect(proposal).toMatchObject({ confidence: "manual", deliveryType: "ruralRoute", changes: [] });
+  });
+
   it("never overwrites an existing conflicting PoBoxNumber", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "PO Box 42", PoBoxNumber: "99" });
     expect(proposal).toMatchObject({ confidence: "review", changes: [] });
@@ -348,6 +353,16 @@ describe("RuralRoute field validation", () => {
     }));
     expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_IN_STREET_FIELD")).toBe(false);
     expect(result.issues.some(issue => issue.field === "RuralRoute" && issue.ruleId === "FREE_TEXT_SPECIAL_CHARACTER")).toBe(false);
+  });
+
+  it("rejects a rural-route field with more than four digits", () => {
+    const result = validateXml(studentXml("<RuralRoute>RR 12345</RuralRoute>"));
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      ruleId: "RURAL_ROUTE_FORMAT",
+      field: "RuralRoute",
+      severity: "error",
+      autoFixable: false,
+    }));
   });
 });
 
