@@ -221,7 +221,7 @@ export function fieldValueMeetsRules(field: string, value: string, rules: RulesP
 }
 
 /** Namespace-aware validation of the canonical STIX model. */
-export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
+export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile, onProgress?: (completed: number, total: number) => void): ValidationResult {
   const issues: ValidationIssue[] = [];
   const effectiveRules: RulesProfile = {
     ...rules,
@@ -282,6 +282,9 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
   ].map(field => [field, allowedValuesForField(field, rules)!]));
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
   const schoolFields = new Set<string>(SCHOOL_FIELDS);
+  const studentTotal = upload.schools.reduce((total, school) => total + school.students.length, 0);
+  let studentsCompleted = 0;
+  onProgress?.(0, studentTotal);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {
     const school = upload.schools[schoolIndex];
     if (rules.requiredFields.includes("SchoolNumber") && !school.schoolNumber) issue(issues, { severity: "error", field: "SchoolNumber", schoolNumber: "", ruleId: "SCHOOL_NUMBER_REQUIRED", layer: "CANONICAL", message: `School "${school.name || schoolIndex + 1}" is missing SchoolNumber.` });
@@ -506,7 +509,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
   }
   for (const record of records) {
     const studentName = [record.fields.FirstName, record.fields.LastName].filter(Boolean).join(" ");
-    for (const field of FREE_TEXT_FIELDS) {
+      for (const field of FREE_TEXT_FIELDS) {
       if (field === "SchoolName" || !record.fields[field] || claimedFields.has(`${record.id}\u0000${field}`)) continue;
       for (const finding of freeTextCharacterFindings(record.fields[field], field, effectiveRules)) {
         issue(issues, {
@@ -514,6 +517,8 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           field, currentValue: record.fields[field], autoFixable: true, layer: "CANONICAL", ...finding,
         });
       }
+      studentsCompleted++;
+      onProgress?.(studentsCompleted, studentTotal);
     }
   }
   const hasErrors = issues.some((finding) => finding.severity === "error");
