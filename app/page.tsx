@@ -16,6 +16,7 @@ type ActiveWorkflow =
 
 export default function PanoReady() {
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow>({ kind: "home" });
+  const [intakeRevision, setIntakeRevision] = useState(0);
   const [startOverOpen, setStartOverOpen] = useState(false);
   const homeButtonRef = useRef<HTMLButtonElement>(null);
   const startOverReturnFocusRef = useRef<HTMLButtonElement>(null);
@@ -30,6 +31,7 @@ export default function PanoReady() {
   };
   const handleLogoClick = () => {
     if (activeWorkflow.kind === "home") {
+      setIntakeRevision((revision) => revision + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -41,6 +43,7 @@ export default function PanoReady() {
       <NavBar onHome={handleLogoClick} homeButtonRef={homeButtonRef} />
       {activeWorkflow.kind === "home" && (
         <STIXIntake
+          key={intakeRevision}
           onCompare={(comparison) => setActiveWorkflow({ kind: "compare", comparison })}
           onValidate={(input) => setActiveWorkflow({ kind: "validate", input })}
         />

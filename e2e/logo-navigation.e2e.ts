@@ -3,6 +3,20 @@ import { expect, test } from "@playwright/test";
 
 const sample = path.join(process.cwd(), "public/samples/stix-validation-demo.stix");
 
+test("logo clears files selected on the landing page", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Compare Files", exact: true }).first().click();
+  await page.locator("#xml-upload").setInputFiles(sample);
+  await page.locator("#xml-upload-current").setInputFiles(sample);
+  await expect(page.getByText("stix-validation-demo.stix", { exact: true })).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Return to PanoReady home" }).click();
+
+  expect(await page.locator("#xml-upload").evaluate((input: HTMLInputElement) => input.files?.length)).toBe(0);
+  await expect(page.locator("#xml-upload-current")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Validate & Fix", exact: true }).first()).toHaveAttribute("aria-pressed", "true");
+});
+
 test("logo protects active work before returning home", async ({ page }) => {
   await page.goto("./");
   await page.locator("#xml-upload").setInputFiles(sample);
