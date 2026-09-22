@@ -1513,6 +1513,15 @@ h1, h2, h3 {
 .manual-edit-status--invalid, .address-field-status--invalid { color: var(--color-warning-text); }
 .manual-edit-status--unaltered { color: var(--color-text-muted); font-weight: 500; }
 .address-field-label { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; color: var(--color-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.address-repair-card { border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface-1); overflow: hidden; }
+.address-repair-callout { padding: 16px 18px; border-bottom: 1px solid var(--color-border); background: var(--color-surface-2); }
+.address-repair-icon, .address-repair-description { color: var(--color-text-secondary); }
+.address-edited-preview { border-left: 2px solid var(--color-border); padding: 6px 10px; }
+.address-edited-preview--valid { border-left-color: var(--color-success-border); }
+.address-edited-preview--invalid { border-left-color: var(--color-warning-border); }
+.address-field-control { border: 1px solid var(--color-border); background: var(--color-surface-0); }
+.address-field-control--valid { border-color: var(--color-success-border); background: var(--color-success-bg); }
+.address-field-control--invalid { border-color: var(--color-warning-border); background: var(--color-warning-bg); }
 .manual-review-cell .btn { padding: 6px 9px; font-size: 11px; }
 .manual-review-cell--address > .btn { width: calc(100% / 3 - 16px); margin-inline: 8px; min-height: 30px; padding: 5px 8px; font-size: 12px; line-height: 1.4; }
 

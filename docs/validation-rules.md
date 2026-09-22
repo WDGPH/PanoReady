@@ -385,6 +385,47 @@ issue.
 
 ---
 
+### Rule: `RURAL_ROUTE_IN_STREET_FIELD`
+
+**Severity:** warning
+**Fields:** `StreetName`, `StreetNumber`
+
+Detects rural-route delivery text entered in a street field. Detection runs
+before the generic character policy so punctuation can contribute to
+recognition. For example, `R.R. #01` is accepted as input even though that
+punctuation is not retained in the canonical rural-route value.
+
+**Auto-fix:** Yes for an unambiguous route number when `RuralRoute` is empty or
+already identifies the same route. The fix writes the normalized value, such as
+`RR 1`, to `RuralRoute`. If the route is the complete source value, that source
+field is cleared. If it is a leading token followed by a hyphen or whitespace,
+the token and separator are removed while the remaining street text is
+preserved. A conflicting existing `RuralRoute`, or another rural-route marker
+in the remaining text, remains manual review.
+
+---
+
+### Rule: `RURAL_ROUTE_FORMAT`
+
+**Severity:** error
+
+**Field:** `RuralRoute`
+
+A populated rural-route field must contain the uppercase identifier `RR`, one
+space, and a route number containing one to four digits—for example, `RR 4`. A
+`#`, periods, expanded wording, station information, additional spaces, five or
+more route-number digits, and other text are not accepted in this canonical
+field. An empty value remains valid because the field is optional.
+
+The same rule is applied while editing an address during manual review, so an
+invalid draft is marked **Check value** before it is applied.
+
+**Auto-fix:** No. Confirm and enter the canonical rural-route identifier.
+
+**Rule source:** [Canada Post — Addressing guidelines: Civic address](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/civic-address.page)
+
+---
+
 ### Rules: free-text characters
 
 **Severity:** info
@@ -415,9 +456,9 @@ Balanced parenthetical spans are excluded entirely: the brackets and their
 contents are preserved for possible future handling as aliases or former names.
 An unmatched round bracket is allowed but does not shield the remaining text.
 
-Character checks run last and act only as a fallback. If another validator
-already reports the same record field, its specialized correction owns that
-field and no character finding is added.
+Character checks run last and act only as a fallback. If another validator,
+including rural-route detection, already reports the same record field, its
+specialized correction owns that field and no character finding is added.
 
 **Auto-fix:** Yes. These findings never change the validation gate.
 
@@ -459,6 +500,8 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
+| `RURAL_ROUTE_IN_STREET_FIELD` | Yes when unambiguous | Move to `RuralRoute` and normalize to `RR n` |
+| `RURAL_ROUTE_FORMAT` | No | Enter `RR n` without `#` or punctuation |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
 | `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
 | `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |

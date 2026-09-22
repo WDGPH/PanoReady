@@ -161,6 +161,29 @@ for (const apply of [false, true]) test(`suggestions stay on automatic fixes (ap
   if (!apply) expect(output).toContain(">51 Example<");
 });
 
+test("a bypassed rural-route autofix is not staged in manual review", async ({ page }) => {
+  const ruralStudent = student.replace(
+    /<ns1:Address>[\s\S]*?<\/ns1:Address>/,
+    "<ns1:Address><ns1:StreetName>RR1</ns1:StreetName><ns1:City>Exampleville</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>",
+  );
+  const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${ruralStudent}</ns1:Students>`);
+  await page.goto("./");
+  await page.locator("#xml-upload").setInputFiles({ name: "rural-route-bypass.xml", mimeType: "application/xml", buffer: Buffer.from(fixture) });
+  await page.getByRole("button", { name: "Validate & Fix", exact: true }).last().click();
+  await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Select fix for Student 1.1: StreetName", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Manual fixes", exact: true }).click();
+  const trigger = page.getByRole("button", { name: "Review address for Student 1.1", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox", { name: /^Street name/i })).toHaveValue("RR1");
+  await expect(dialog.getByRole("textbox", { name: /^Rural route/i })).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Back to fixes", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(trigger.locator("xpath=ancestor::tr[@data-row-id]")).toHaveAttribute("data-staged", "false");
+});
+
 for (const scope of ["selected", "page", "all"] as const) test(`safe address repairs support ${scope} apply`, async ({ page }) => {
   const repairStudent = student.replace(/<ns1:Address>[\s\S]*?<\/ns1:Address>/, "<ns1:Address><ns1:StreetNumber>654321 Qwerty</ns1:StreetNumber><ns1:City>Exampleville</ns1:City><ns1:Province>ON</ns1:Province></ns1:Address>");
   const fixture = sample.replace(/<ns1:Students>[\s\S]*?<\/ns1:Students>/, `<ns1:Students>${repairStudent.repeat(30)}</ns1:Students>`);
