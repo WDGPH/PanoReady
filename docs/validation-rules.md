@@ -395,10 +395,13 @@ before the generic character policy so punctuation can contribute to
 recognition. For example, `R.R. #01` is accepted as input even though that
 punctuation is not retained in the canonical rural-route value.
 
-**Review fix:** Yes for an unambiguous route number when `RuralRoute` is empty
-or already identifies the same route. The address editor stages clearing the
-source street field and writing the normalized value, such as `RR 1`, to
-`RuralRoute`. A conflicting existing `RuralRoute` remains manual review.
+**Auto-fix:** Yes for an unambiguous route number when `RuralRoute` is empty or
+already identifies the same route. The fix writes the normalized value, such as
+`RR 1`, to `RuralRoute`. If the route is the complete source value, that source
+field is cleared. If it is a leading token followed by a hyphen or whitespace,
+the token and separator are removed while the remaining street text is
+preserved. A conflicting existing `RuralRoute`, or another rural-route marker
+in the remaining text, remains manual review.
 
 ---
 
@@ -476,7 +479,7 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
-| `RURAL_ROUTE_IN_STREET_FIELD` | Review proposal | Stage move to `RuralRoute` and normalize to `RR n` |
+| `RURAL_ROUTE_IN_STREET_FIELD` | Yes when unambiguous | Move to `RuralRoute` and normalize to `RR n` |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
 | `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
 | `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |

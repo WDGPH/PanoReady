@@ -318,7 +318,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
             ? "RURAL_ROUTE_IN_STREET_FIELD"
             : "ALTERNATE_DELIVERY_IN_STREET_FIELD",
           message: alternateDeliveryProposal.explanation,
-          autoFixable: false,
+          autoFixable: alternateDeliveryProposal.confidence === "safe",
           repairProposal: alternateDeliveryProposal,
         });
       }

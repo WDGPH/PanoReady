@@ -144,8 +144,8 @@ describe("free-text character validation", () => {
     expect(findings).toContainEqual(expect.objectContaining({
       ruleId: "RURAL_ROUTE_IN_STREET_FIELD",
       field: "StreetNumber",
-      autoFixable: false,
-      repairProposal: expect.objectContaining({ confidence: "review" }),
+      autoFixable: true,
+      repairProposal: expect.objectContaining({ confidence: "safe" }),
     }));
     expect(findings).not.toContainEqual(expect.objectContaining({
       ruleId: "FREE_TEXT_SPECIAL_CHARACTER",

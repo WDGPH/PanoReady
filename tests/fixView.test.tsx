@@ -37,7 +37,7 @@ it("keeps structural deletions out of manual review", () => {
   expect(html).not.toContain("Remove Guardian");
 });
 
-it("shows rural-route warnings in manual fixes with an address review action", () => {
+it("shows clean rural-route corrections in automatic fixes", () => {
   const ruralSession: ValidateSession = {
     fileName: "rural-route.xml", originalXml: "", fixes: [],
     initialResult: {
@@ -46,9 +46,9 @@ it("shows rural-route warnings in manual fixes with an address review action", (
       issues: [{
         id: "rural-route-0", recordId: "school0:student0", field: "StreetName",
         ruleId: "RURAL_ROUTE_IN_STREET_FIELD", message: "Rural route text was found in StreetName.",
-        severity: "warning", autoFixable: false,
+        severity: "warning", autoFixable: true,
         repairProposal: {
-          kind: "address", id: "rural-route-repair-0", confidence: "review",
+          kind: "address", id: "rural-route-repair-0", confidence: "safe",
           title: "Move rural route text out of the street address", explanation: "",
           changes: [
             { field: "StreetName", currentValue: "RR1", proposedValue: "" },
@@ -59,10 +59,9 @@ it("shows rural-route warnings in manual fixes with an address review action", (
     },
   };
 
-  const html = renderToStaticMarkup(<FixView session={ruralSession} view="manual" onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
-  expect(html).not.toContain("Address fixes needing review");
-  expect(html).toContain('data-row-id="rural-route-0"');
-  expect(html).toContain("Review address");
+  const automaticHtml = renderToStaticMarkup(<FixView session={ruralSession} view="automatic" onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
+  expect(automaticHtml).toContain('data-row-id="rural-route-0"');
+  expect(automaticHtml).toContain("RR 1");
 });
 
 it("keeps 1,000 safe compound street repairs in the 25-row paged table", () => {

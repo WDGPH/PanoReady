@@ -277,7 +277,9 @@ export function analyzeStreetNumberUnitPrefix(
 const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|BOX)\s*#?\s*(\w+)$/i;
 const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
 const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
+const RURAL_ROUTE_WITH_STREET_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)(?:\s*[-–—]+\s*|\s+)(\S[\s\S]*)$/i;
 const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
+const RURAL_ROUTE_REFERENCE = /(?:^|[^A-Z])(?:R\.?\s*R\.?|RURAL\s+ROUTE)(?=\s*#?\s*\d|\b)/i;
 
 export type AlternateDeliveryRepairProposal = AddressRepairProposal & {
   deliveryType: "poBox" | "ruralRoute";
@@ -291,8 +293,8 @@ function ruralRouteNumber(value: string): string | undefined {
 
 /**
  * Detect PO Box / rural-route delivery text typed into a street field instead
- * of PoBoxNumber/RuralRoute. A clean match proposes moving it for confirmation
- * because clearing a street field is a bigger structural change. A
+ * of PoBoxNumber/RuralRoute. Clean PO Box matches require confirmation, while
+ * an unambiguous, non-conflicting rural route can be moved automatically. A
  * recognizable-but-unparsable prefix is surfaced as a manual finding with no
  * guessed value.
  */
@@ -335,24 +337,33 @@ export function analyzeAlternateDeliveryInStreetFields(
       };
     }
 
-    const routeNumber = ruralRouteNumber(raw);
+    const routeWithStreet = raw.match(RURAL_ROUTE_WITH_STREET_PATTERN);
+    const routeNumber = ruralRouteNumber(raw)
+      ?? (routeWithStreet?.[1] === undefined ? undefined : String(Number(routeWithStreet[1])));
     if (routeNumber) {
       const proposedRoute = `RR ${routeNumber}`;
+      const remainingStreet = routeWithStreet?.[2].trim() ?? "";
+      const hasAdditionalRouteReference = RURAL_ROUTE_REFERENCE.test(remainingStreet);
       const currentRoute = (fields.RuralRoute ?? "").trim();
       const conflict = currentRoute !== ""
         && ruralRouteNumber(currentRoute) !== routeNumber;
+      const requiresReview = conflict || hasAdditionalRouteReference;
       return {
         kind: "address",
         deliveryType: "ruralRoute",
         sourceField: field,
         id: proposalId,
-        confidence: "review",
-        title: conflict ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
+        confidence: requiresReview ? "review" : "safe",
+        title: requiresReview ? "Review rural route text found in the street address" : "Move rural route text out of the street address",
         explanation: conflict
           ? `“${raw}” in ${field} looks like a rural route, but RuralRoute is already “${currentRoute}”. Review the complete address before applying changes.`
-          : `“${raw}” in ${field} looks like a rural route and can be moved to RuralRoute (proposed “${proposedRoute}”).`,
-        changes: conflict ? [] : [
-          { field, currentValue: fields[field] ?? "", proposedValue: "" },
+          : hasAdditionalRouteReference
+            ? `“${raw}” in ${field} contains more than one rural route reference. Review the complete address before applying changes.`
+          : remainingStreet
+            ? `“${raw}” in ${field} starts with a rural route that can be moved to RuralRoute (proposed “${proposedRoute}”) while preserving the remaining street text.`
+            : `“${raw}” in ${field} looks like a rural route and can be moved to RuralRoute (proposed “${proposedRoute}”).`,
+        changes: requiresReview ? [] : [
+          { field, currentValue: fields[field] ?? "", proposedValue: remainingStreet },
           { field: "RuralRoute", currentValue: fields.RuralRoute ?? "", proposedValue: proposedRoute },
         ],
       };
