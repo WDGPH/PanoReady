@@ -102,6 +102,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const [currentDragging, setCurrentDragging] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [setupMode, setSetupMode] = useState(false);
   const [xlsmMeta, setXlsmMeta] = useState<XlsmMetadata | null>(null);
   const [xlsmPreview, setXlsmPreview] = useState<ImportPreview | null>(null);
   const [dateConvention, setDateConvention] = useState<DateConvention>();
@@ -112,6 +113,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const [currentXlsmMeta, setCurrentXlsmMeta] = useState<XlsmMetadata | null>(null);
 
   const handleFile = useCallback((f: File) => {
+    setSetupMode(false);
     setError(null);
     setFile(f);
     setXlsmMeta(null);
@@ -177,6 +179,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
   }, [handleFile]);
 
   const handleCurrentFile = useCallback((f: File) => {
+    setSetupMode(false);
     setError(null);
     setCurrentFile(f);
     setCurrentXlsmMeta(null);
@@ -285,6 +288,12 @@ export default function STIXIntake({ onValidate, onCompare }: {
   const run = async () => {
     const selectedFile = inputRef.current?.files?.[0] ?? file ?? syncFileFromInput();
     if (!selectedFile) { setError("Please select a file first."); return; }
+    const selectedCurrent = currentInputRef.current?.files?.[0] ?? currentFile;
+    if (!setupMode && (/\.xlsm?$/i.test(selectedFile.name) || (workflow === "compare" && selectedCurrent && /\.xlsm?$/i.test(selectedCurrent.name)))) {
+      setSetupMode(true);
+      setError(null);
+      return;
+    }
     setProcessing(true); setError(null);
     try {
       const xmlText = await readInputAsSTIXXml(selectedFile, xlsmMeta ?? undefined, columnOverrides, dateConvention);
@@ -312,14 +321,14 @@ export default function STIXIntake({ onValidate, onCompare }: {
   return (
     <main className="intake-main">
       <div className="intake-shell">
-        <header className="landing-intro" id="intro">
+        {!setupMode && <header className="landing-intro" id="intro">
           <div>
             <h1>Better data in.<br />Fewer problems later.</h1>
           </div>
           <p className="landing-lede">A workspace for preparing data for Panorama. Check school-enrolment files, review automatic corrections, and compare changes before import.</p>
-        </header>
+        </header>}
         <section id="tools" aria-label="File tools">
-        <header className="workflow-context">
+        {!setupMode && <header className="workflow-context">
           <div className="workflow-tabs" role="group" aria-label="Workflow">
             {WORKFLOWS.map((w) => (
               <button
@@ -337,9 +346,9 @@ export default function STIXIntake({ onValidate, onCompare }: {
             ))}
           </div>
           <p>{WORKFLOWS.find((candidate) => candidate.id === workflow)?.description}</p>
-        </header>
+        </header>}
 
-        <div className={`file-fields${workflow === "compare" ? " compare" : ""}`}>
+        {!setupMode && <div className={`file-fields${workflow === "compare" ? " compare" : ""}`}>
           <FileDropZone
             id="xml-upload"
             label={workflow === "compare" ? "Previous file" : undefined}
@@ -365,10 +374,10 @@ export default function STIXIntake({ onValidate, onCompare }: {
               onDraggingChange={setCurrentDragging}
             />
           )}
-        </div>
+        </div>}
 
-
-
+        {setupMode && <header className="landing-intro" style={{ marginTop: 0 }}><div><h1>File setup</h1></div><p className="landing-lede">Review workbook details, dates, and column mappings before continuing to {workflow === "compare" ? "Compare Files" : "Validate & Fix"}.</p></header>}
+        <div hidden={!setupMode}>
         {dateAnalysis && <WorkbookDateReview label={workflow === "compare" ? "Previous file" : "File"} analysis={dateAnalysis} convention={dateConvention} onChange={value => { setDateConvention(value); setError(null); }} />}
         {workflow === "compare" && currentDateAnalysis && <WorkbookDateReview label="Current file" analysis={currentDateAnalysis} convention={currentDateConvention} onChange={value => { setCurrentDateConvention(value); setError(null); }} />}
 
@@ -404,6 +413,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
             </div>
           </section>
         )}
+        </div>
 
         {xlsmPreview && (
           <section className="advanced-section">
@@ -502,8 +512,9 @@ export default function STIXIntake({ onValidate, onCompare }: {
 
         <section className="intake-action">
           <button onClick={run} disabled={processing} className="cta">
-            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : <>{wLabel}<ArrowRight size={16} /></>}
+            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : <>{setupMode ? `Continue to ${wLabel}` : wLabel}<ArrowRight size={16} /></>}
           </button>
+          {setupMode && <button type="button" className="btn btn-secondary" onClick={() => { setSetupMode(false); setError(null); }}>Back to file selection</button>}
         </section>
 
         </section>
