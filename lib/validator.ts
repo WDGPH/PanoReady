@@ -586,42 +586,48 @@ function setCanonicalMetadataField(metadata: CanonicalMetadata, field: string, v
 }
 
 /** Apply fixes through the canonical model so every namespace-prefix form behaves identically. */
-export function applyValidationFixes(xmlText: string, fixes: AppliedFix[]): string {
+export function applyValidationFixes(xmlText: string, fixes: AppliedFix[], onProgress?: (completed: number, total: number) => void): string {
   const upload = parseCanonicalXml(xmlText);
   const guardianRemovals = new Map<CanonicalStudent, Set<number>>();
   const removedSchools = new Set<number>();
+  let completed = 0;
   for (const fix of fixes) {
-    if (isOenIdentityFinding(fix.ruleId)) continue;
-    if (fix.field === "RemoveSchool") {
-      const schoolMatch = fix.recordId.match(/^school(\d+)$/);
-      if (fix.newValue === "REMOVE" && schoolMatch) {
-        const index = Number(schoolMatch[1]);
-        if (upload.schools[index]?.students.length === 0) removedSchools.add(index);
+    try {
+      if (isOenIdentityFinding(fix.ruleId)) continue;
+      if (fix.field === "RemoveSchool") {
+        const schoolMatch = fix.recordId.match(/^school(\d+)$/);
+        if (fix.newValue === "REMOVE" && schoolMatch) {
+          const index = Number(schoolMatch[1]);
+          if (upload.schools[index]?.students.length === 0) removedSchools.add(index);
+        }
+        continue;
       }
-      continue;
+      if (fix.recordId === "metadata") {
+        setCanonicalMetadataField(upload.metadata, fix.field, fix.newValue);
+        continue;
+      }
+      const schoolMatch = fix.recordId.match(/^school(\d+)$/);
+      if (schoolMatch) {
+        const school = upload.schools[Number(schoolMatch[1])];
+        if (school && fix.field === "SchoolName") school.name = fix.newValue;
+        continue;
+      }
+      const coordinates = decodeRecordId(fix.recordId);
+      if (!coordinates) continue;
+      const school = upload.schools[coordinates.si];
+      const student = school?.students[coordinates.pi];
+      if (!school || !student) continue;
+      if (fix.field === "Guardian" || fix.field === "Guardian2") {
+        const removals = guardianRemovals.get(student) ?? new Set<number>();
+        removals.add(fix.field === "Guardian2" ? 1 : 0);
+        guardianRemovals.set(student, removals);
+        continue;
+      }
+      setCanonicalStudentField(student, school, fix.field, fix.newValue);
+    } finally {
+      completed++;
+      onProgress?.(completed, fixes.length);
     }
-    if (fix.recordId === "metadata") {
-      setCanonicalMetadataField(upload.metadata, fix.field, fix.newValue);
-      continue;
-    }
-    const schoolMatch = fix.recordId.match(/^school(\d+)$/);
-    if (schoolMatch) {
-      const school = upload.schools[Number(schoolMatch[1])];
-      if (school && fix.field === "SchoolName") school.name = fix.newValue;
-      continue;
-    }
-    const coordinates = decodeRecordId(fix.recordId);
-    if (!coordinates) continue;
-    const school = upload.schools[coordinates.si];
-    const student = school?.students[coordinates.pi];
-    if (!school || !student) continue;
-    if (fix.field === "Guardian" || fix.field === "Guardian2") {
-      const removals = guardianRemovals.get(student) ?? new Set<number>();
-      removals.add(fix.field === "Guardian2" ? 1 : 0);
-      guardianRemovals.set(student, removals);
-      continue;
-    }
-    setCanonicalStudentField(student, school, fix.field, fix.newValue);
   }
   for (const [student, indexes] of guardianRemovals) {
     for (const index of [...indexes].sort((a, b) => b - a)) student.guardians.splice(index, 1);

@@ -6,6 +6,7 @@ import CleaningView from "@/components/CleaningView";
 import { BUILTIN_ID, defaultRules, getActiveRulesetId, listCustomRulesets, saveCustomRuleset, setActiveRulesetId } from "@/lib/rulesets";
 import { validateXml } from "@/lib/validator";
 import { applyReviewChanges, undoLastReviewAction } from "@/lib/reviewHistory";
+import type { ApplyReviewProgress } from "@/lib/reviewHistory";
 import type { AppliedFix, CleaningProfile, CleaningSummaryEntry, RulesProfile, StudentRecord, ValidateSession } from "@/lib/types";
 import type { ValidateWorkflowInput } from "./STIXIntake";
 import DownloadView from "./validation/DownloadView";
@@ -114,12 +115,31 @@ export default function ValidateAndFixWorkflow({ input, onExit, onRequestExit }:
       setExclusions([]);
       setState({ step: "issues", session: { ...session, validationRules: rules, revalidatedResult: validateXml(session.finalXml ?? session.originalXml, rules) } });
     }} />} session={session} exclusions={exclusions} onExclusionsChange={setExclusions} onFix={(filter) => setState({ step: "fix", session, filter })} onSkipToDownload={() => setState({ step: "download", session })} />;
-    if (state.step === "fix" || state.step === "manual") return <FixView onBack={() => setState({ step: state.step === "fix" ? "issues" : "fix", session })} advancedOptions={state.step === "fix" ? cleaningOptions(session) : undefined} key={JSON.stringify([state.step, state.filter ?? {}, exclusions, reviewRevision])} view={state.step === "fix" ? "automatic" : "manual"} exclusions={exclusions} session={session} filter={state.filter} onBusyChange={setApplying} onPendingChange={setUnappliedFixCount} onContinue={() => setState({ step: "manual", session, filter: state.filter })} onAutoApply={(batch) => {
-      const fixes = [...session.fixes, ...batch];
-      const updated = applyReviewChanges({ ...session, fixes }, "Automatic fixes");
-      setHistoryError(null);
-      setState({ ...state, session: updated });
-    }} onClearFilter={() => setState({ step: state.step, session })} onApply={(fixes) => setState({ step: "revalidate", session: { ...session, fixes } })} />;
+    if (state.step === "fix" || state.step === "manual") return <FixView onBack={() => setState({ step: state.step === "fix" ? "issues" : "fix", session })} advancedOptions={state.step === "fix" ? cleaningOptions(session) : undefined} key={JSON.stringify([state.step, state.filter ?? {}, exclusions, reviewRevision])} view={state.step === "fix" ? "automatic" : "manual"} exclusions={exclusions} session={session} filter={state.filter} onBusyChange={setApplying} onPendingChange={setUnappliedFixCount} onContinue={() => setState({ step: "manual", session, filter: state.filter })} onAutoApply={(batch, onProgress) => new Promise<void>((resolve, reject) => {
+      const worker = new Worker(new URL("../../lib/apply-fixes.worker.ts", import.meta.url), { type: "module" });
+      worker.onmessage = (event: MessageEvent<
+        | { type: "progress"; progress: ApplyReviewProgress }
+        | { type: "complete"; session: ValidateSession }
+        | { type: "error"; message: string }
+      >) => {
+        const message = event.data;
+        if (message.type === "progress") onProgress(message.progress);
+        else if (message.type === "complete") {
+          worker.terminate();
+          setHistoryError(null);
+          setState(current => current.step === "fix" ? { ...current, session: message.session } : current);
+          resolve();
+        } else {
+          worker.terminate();
+          reject(new Error(message.message));
+        }
+      };
+      worker.onerror = () => {
+        worker.terminate();
+        reject(new Error("Unable to apply fixes."));
+      };
+      worker.postMessage({ session, fixes: batch });
+    })} onClearFilter={() => setState({ step: state.step, session })} onApply={(fixes) => setState({ step: "revalidate", session: { ...session, fixes } })} />;
     if (state.step === "revalidate") return <RevalidateView onComplete={completeRecheck} onBack={() => setState({ step: "manual", session: { ...session, fixes: session.fixes.slice(0, session.appliedFixCount ?? 0) } })} session={session} onReturnToFixes={(updated, step) => { setState({ step, session: updated }); window.scrollTo({ top: 0 }); }} onContinue={(updated) => setState({ step: "download", session: updated })} />;
     return <DownloadView onReturnToFixes={(step) => { setState({ step, session }); window.scrollTo({ top: 0 }); }} session={session} onStartOver={onExit} />;
   };
