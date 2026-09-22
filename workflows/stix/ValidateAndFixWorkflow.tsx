@@ -27,7 +27,7 @@ type ValidateWorkflowState =
   | { step: "clean-summary"; input: ValidateWorkflowInput; session: ValidateSession; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
   | { step: "issues" | "fix" | "manual" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
 
-export default function ValidateAndFixWorkflow({ input, onExit }: { input: ValidateWorkflowInput; onExit: () => void }) {
+export default function ValidateAndFixWorkflow({ input, onExit }: { input: ValidateWorkflowInput; onExit: (trigger?: HTMLButtonElement) => void }) {
   const [applying, setApplying] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");

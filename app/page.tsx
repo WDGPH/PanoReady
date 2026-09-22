@@ -18,17 +18,22 @@ export default function PanoReady() {
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow>({ kind: "home" });
   const [startOverOpen, setStartOverOpen] = useState(false);
   const homeButtonRef = useRef<HTMLButtonElement>(null);
+  const startOverReturnFocusRef = useRef<HTMLButtonElement>(null);
   const returnHome = () => {
     setStartOverOpen(false);
     setActiveWorkflow({ kind: "home" });
     window.scrollTo({ top: 0 });
+  };
+  const requestStartOver = (trigger?: HTMLButtonElement | null) => {
+    startOverReturnFocusRef.current = trigger ?? homeButtonRef.current;
+    setStartOverOpen(true);
   };
   const handleLogoClick = () => {
     if (activeWorkflow.kind === "home") {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    setStartOverOpen(true);
+    requestStartOver(homeButtonRef.current);
   };
 
   return (
@@ -41,13 +46,13 @@ export default function PanoReady() {
         />
       )}
       {activeWorkflow.kind === "validate" && (
-        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={returnHome} />
+        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={requestStartOver} />
       )}
       {activeWorkflow.kind === "compare" && (
         <CompareWorkflow comparison={activeWorkflow.comparison} onStartOver={returnHome} />
       )}
       <StartOverDialog open={startOverOpen} onOpenChange={setStartOverOpen} onStartOver={returnHome}
-        returnFocusRef={homeButtonRef} />
+        returnFocusRef={startOverReturnFocusRef} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

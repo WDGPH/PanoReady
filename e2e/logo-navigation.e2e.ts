@@ -20,6 +20,12 @@ test("logo protects active work before returning home", async ({ page }) => {
   await expect(homeButton).toBeFocused();
 
   await expect(page.getByRole("button", { name: "Save progress", exact: true })).toBeVisible();
+  const backButton = page.getByRole("button", { name: "Back", exact: true });
+  await backButton.click();
+  await expect(dialog).toContainText("abandon the current file");
+  await dialog.getByRole("button", { name: "Keep working" }).click();
+  await expect(backButton).toBeFocused();
+
   await page.getByRole("button", { name: "Automatic fixes", exact: true }).click();
   const firstFix = page.getByRole("checkbox", { name: /^Select fix for/ }).first();
   await firstFix.check();
