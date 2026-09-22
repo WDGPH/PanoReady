@@ -277,6 +277,7 @@ export function analyzeStreetNumberUnitPrefix(
 const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|BOX)\s*#?\s*(\w+)$/i;
 const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
 const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)$/i;
+const CANONICAL_RURAL_ROUTE_PATTERN = /^RR \d+$/;
 const RURAL_ROUTE_WITH_STREET_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d+)(?:\s*[-–—]+\s*|\s+)(\S[\s\S]*)$/i;
 const RURAL_ROUTE_PREFIX = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\b/i;
 const RURAL_ROUTE_REFERENCE = /(?:^|[^A-Z])(?:R\.?\s*R\.?|RURAL\s+ROUTE)(?=\s*#?\s*\d|\b)/i;
@@ -289,6 +290,11 @@ export type AlternateDeliveryRepairProposal = AddressRepairProposal & {
 function ruralRouteNumber(value: string): string | undefined {
   const match = value.trim().match(RURAL_ROUTE_PATTERN);
   return match?.[1] === undefined ? undefined : String(Number(match[1]));
+}
+
+/** Canada Post format: the symbol RR, one space, then the route number. */
+export function isCanonicalRuralRoute(value: string): boolean {
+  return CANONICAL_RURAL_ROUTE_PATTERN.test(value);
 }
 
 /**

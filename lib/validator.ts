@@ -34,6 +34,7 @@ import {
 import {
   ADDRESS_REPAIR_FIELDS,
   analyzeAlternateDeliveryInStreetFields,
+  isCanonicalRuralRoute,
   analyzeStreetNameSuffix,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
@@ -214,6 +215,7 @@ export function fieldValueMeetsRules(field: string, value: string, rules: RulesP
     && canonicalPhoneFindings(value, field, rules).length) return false;
   if (field === "BirthDate" && (!validRealDate(value) || value > new Date().toISOString().slice(0, 10))) return false;
   if (field === "OEN" && !/^\d{9}$/.test(value)) return false;
+  if (field === "RuralRoute" && !isCanonicalRuralRoute(value)) return false;
   if (field === "BoardNumber" && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(value)) return false;
   return true;
 }
@@ -320,6 +322,17 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           message: alternateDeliveryProposal.explanation,
           autoFixable: alternateDeliveryProposal.confidence === "safe",
           repairProposal: alternateDeliveryProposal,
+        });
+      }
+      if (fields.RuralRoute && !isCanonicalRuralRoute(fields.RuralRoute)) {
+        issue(issues, {
+          ...base,
+          severity: "error",
+          field: "RuralRoute",
+          currentValue: fields.RuralRoute,
+          ruleId: "RURAL_ROUTE_FORMAT",
+          message: `RuralRoute "${fields.RuralRoute}" must use RR followed by one space and the route number, such as RR 4. Do not use # or punctuation.`,
+          autoFixable: false,
         });
       }
 

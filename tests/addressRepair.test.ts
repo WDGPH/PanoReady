@@ -331,6 +331,26 @@ describe("PO Box and rural route text in street fields", () => {
   });
 });
 
+describe("RuralRoute field validation", () => {
+  it("accepts the canonical RR and numeric route format", () => {
+    const result = validateXml(studentXml("<RuralRoute>RR 12</RuralRoute>"));
+    expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_FORMAT")).toBe(false);
+  });
+
+  it("reports a separate manual issue for a noncanonical populated value", () => {
+    const result = validateXml(studentXml("<RuralRoute>RR #12</RuralRoute>"));
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      ruleId: "RURAL_ROUTE_FORMAT",
+      field: "RuralRoute",
+      severity: "error",
+      currentValue: "RR #12",
+      autoFixable: false,
+    }));
+    expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_IN_STREET_FIELD")).toBe(false);
+    expect(result.issues.some(issue => issue.field === "RuralRoute" && issue.ruleId === "FREE_TEXT_SPECIAL_CHARACTER")).toBe(false);
+  });
+});
+
 it("applies a safe automatic address correction as a complete repair", () => {
   const xml = studentXml("<StreetNumber>51 Example</StreetNumber><City>Exampleville</City><Province>ON</Province>");
   const result = validateXml(xml);

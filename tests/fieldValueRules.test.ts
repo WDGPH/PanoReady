@@ -20,4 +20,13 @@ describe("field value status", () => {
     expect(fieldValueMeetsRules("City", "", defaultRules)).toBe(true);
     expect(fieldValueMeetsRules("FirstName", "", defaultRules)).toBe(false);
   });
+
+  it("requires Canada Post format for a populated rural route", () => {
+    expect(fieldValueMeetsRules("RuralRoute", "", defaultRules)).toBe(true);
+    expect(fieldValueMeetsRules("RuralRoute", "RR 7", defaultRules)).toBe(true);
+    expect(fieldValueMeetsRules("RuralRoute", "RR 07", defaultRules)).toBe(true);
+    for (const value of ["RR7", "rr 7", "R.R. 7", "RR #7", "Rural Route 7", "RR 7 STN A"]) {
+      expect(fieldValueMeetsRules("RuralRoute", value, defaultRules), value).toBe(false);
+    }
+  });
 });

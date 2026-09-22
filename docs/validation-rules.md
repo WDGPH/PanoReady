@@ -405,6 +405,27 @@ in the remaining text, remains manual review.
 
 ---
 
+### Rule: `RURAL_ROUTE_FORMAT`
+
+**Severity:** error
+
+**Field:** `RuralRoute`
+
+A populated rural-route field must contain the uppercase identifier `RR`, one
+space, and one or more route-number digits—for example, `RR 4`. A `#`, periods,
+expanded wording, station information, additional spaces, and other text are
+not accepted in this canonical field. An empty value remains valid because the
+field is optional.
+
+The same rule is applied while editing an address during manual review, so an
+invalid draft is marked **Check value** before it is applied.
+
+**Auto-fix:** No. Confirm and enter the canonical rural-route identifier.
+
+**Rule source:** [Canada Post — Addressing guidelines: Civic address](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/civic-address.page)
+
+---
+
 ### Rules: free-text characters
 
 **Severity:** info
@@ -480,6 +501,7 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
 | `RURAL_ROUTE_IN_STREET_FIELD` | Yes when unambiguous | Move to `RuralRoute` and normalize to `RR n` |
+| `RURAL_ROUTE_FORMAT` | No | Enter `RR n` without `#` or punctuation |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
 | `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
 | `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |
