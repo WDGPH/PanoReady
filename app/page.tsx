@@ -49,7 +49,7 @@ export default function PanoReady() {
         />
       )}
       {activeWorkflow.kind === "validate" && (
-        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={requestStartOver} />
+        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={returnHome} onRequestExit={requestStartOver} />
       )}
       {activeWorkflow.kind === "compare" && (
         <CompareWorkflow comparison={activeWorkflow.comparison} onStartOver={returnHome} />

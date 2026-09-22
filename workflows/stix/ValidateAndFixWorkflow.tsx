@@ -27,7 +27,11 @@ type ValidateWorkflowState =
   | { step: "clean-summary"; input: ValidateWorkflowInput; session: ValidateSession; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
   | { step: "issues" | "fix" | "manual" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
 
-export default function ValidateAndFixWorkflow({ input, onExit }: { input: ValidateWorkflowInput; onExit: (trigger?: HTMLButtonElement) => void }) {
+export default function ValidateAndFixWorkflow({ input, onExit, onRequestExit }: {
+  input: ValidateWorkflowInput;
+  onExit: () => void;
+  onRequestExit: (trigger?: HTMLButtonElement) => void;
+}) {
   const [applying, setApplying] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -70,7 +74,7 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
       />
   );
   const renderStep = () => {
-    if (state.step === "assessing") return <AssessmentView xml={state.xml} rules={state.rules} onBack={onExit} onComplete={(result) => setState({ step: "issues", session: { fileName: state.fileName, originalXml: state.xml, initialResult: result, fixes: [], validationRules: state.rules } })} />;
+    if (state.step === "assessing") return <AssessmentView xml={state.xml} rules={state.rules} onBack={onRequestExit} onComplete={(result) => setState({ step: "issues", session: { fileName: state.fileName, originalXml: state.xml, initialResult: result, fixes: [], validationRules: state.rules } })} />;
 
     if (state.step === "clean-summary") return (
       <CleaningSummaryView
@@ -104,7 +108,7 @@ export default function ValidateAndFixWorkflow({ input, onExit }: { input: Valid
     );
 
     const session = state.session;
-    if (state.step === "issues") return <IssuesView onBack={onExit} advancedOptions={<RulesetSelector key={selectorRevision} compact initialId={profile.id} notifyOnMount={false} onRulesChange={(rules, cleaning, id) => {
+    if (state.step === "issues") return <IssuesView onBack={onRequestExit} advancedOptions={<RulesetSelector key={selectorRevision} compact initialId={profile.id} notifyOnMount={false} onRulesChange={(rules, cleaning, id) => {
       setProfile((current) => ({ id, rules, cleaning, revision: current.revision + 1 }));
       setDraftCleaning(cleaning);
       setExclusions([]);
