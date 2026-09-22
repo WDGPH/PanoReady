@@ -317,6 +317,12 @@ export default function STIXIntake({ onValidate, onCompare }: {
   };
 
   const wLabel = workflow === "validate" ? "Validate & Fix" : "Compare Files";
+  const selectedFile = inputRef.current?.files?.[0] ?? file;
+  const selectedCurrentFile = currentInputRef.current?.files?.[0] ?? currentFile;
+  const setupLoading = setupMode && (
+    Boolean(selectedFile && /\.xlsm?$/i.test(selectedFile.name) && (!xlsmMeta || !xlsmPreview || !dateAnalysis))
+    || Boolean(workflow === "compare" && selectedCurrentFile && /\.xlsm?$/i.test(selectedCurrentFile.name) && (!currentXlsmMeta || !currentDateAnalysis))
+  );
 
   return (
     <main className="intake-main">
@@ -382,7 +388,7 @@ export default function STIXIntake({ onValidate, onCompare }: {
         {workflow === "compare" && currentDateAnalysis && <WorkbookDateReview label="Current file" analysis={currentDateAnalysis} convention={currentDateConvention} onChange={value => { setCurrentDateConvention(value); setError(null); }} />}
 
         {(xlsmMeta || xlsmPreview || (workflow === "compare" && currentXlsmMeta)) && (
-          <details className="advanced-options">
+          <details className="advanced-options" open={setupMode}>
             <summary><ChevronRight size={16} aria-hidden="true" /> Workbook import settings</summary>
             <div className="advanced-options-content">
 
@@ -511,8 +517,8 @@ export default function STIXIntake({ onValidate, onCompare }: {
         )}
 
         <section className="intake-action">
-          <button onClick={run} disabled={processing} className="cta">
-            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : <>{setupMode ? `Continue to ${wLabel}` : wLabel}<ArrowRight size={16} /></>}
+          <button onClick={run} disabled={processing || setupLoading} className="cta">
+            {processing ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Processing…</> : setupLoading ? "Loading workbook setup…" : <>{setupMode ? `Continue to ${wLabel}` : wLabel}<ArrowRight size={16} /></>}
           </button>
           {setupMode && <button type="button" className="btn btn-secondary" onClick={() => { setSetupMode(false); setError(null); }}>Back to file selection</button>}
         </section>
