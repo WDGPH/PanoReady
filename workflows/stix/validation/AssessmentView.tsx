@@ -13,8 +13,6 @@ export default function AssessmentView({ xml, rules, onComplete, onBack }: {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
   useEffect(() => {
-    setError(null);
-    setProgress({ completed: 0, total: 0 });
     const worker = new Worker(new URL("../../../lib/validator.worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (event: MessageEvent<{ type: "progress"; completed: number; total: number } | { type: "complete"; result: ValidationResult } | { type: "error"; message: string }>) => {
       const message = event.data;

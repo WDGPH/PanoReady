@@ -488,6 +488,8 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           seenIdentity.set(identity, { studentName, schoolNumber: school.schoolNumber, schoolName: school.name });
         }
       }
+      studentsCompleted++;
+      onProgress?.(studentsCompleted, studentTotal);
     }
   }
   // Character policy is a final fallback. If a specialized validator already
@@ -509,7 +511,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
   }
   for (const record of records) {
     const studentName = [record.fields.FirstName, record.fields.LastName].filter(Boolean).join(" ");
-      for (const field of FREE_TEXT_FIELDS) {
+    for (const field of FREE_TEXT_FIELDS) {
       if (field === "SchoolName" || !record.fields[field] || claimedFields.has(`${record.id}\u0000${field}`)) continue;
       for (const finding of freeTextCharacterFindings(record.fields[field], field, effectiveRules)) {
         issue(issues, {
@@ -517,8 +519,6 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           field, currentValue: record.fields[field], autoFixable: true, layer: "CANONICAL", ...finding,
         });
       }
-      studentsCompleted++;
-      onProgress?.(studentsCompleted, studentTotal);
     }
   }
   const hasErrors = issues.some((finding) => finding.severity === "error");
