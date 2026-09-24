@@ -191,7 +191,7 @@ export function validatePhix(
               proposedValue: ciEntry.snomed,
               options: rules.allowedTradeNameValues,
             };
-            issues.push(issue("warning", "PHIX_TRADE_NAME_VALUE",
+            issues.push(issue("warning", "PHIX_TRADE_NAME_ALLOWED_VALUE",
               `TRADE NAME "${tradeName}" is not a recognised SNOMED CT code. Did you mean SNOMED ${ciEntry.snomed} ("${ciEntry.tradeName}")?`,
               rec, "TRADE NAME",
               { suggestedFix: ciEntry.snomed, autoFixable: true, repairProposal: tradeProposal }));
@@ -242,7 +242,7 @@ export function validatePhix(
             proposedValue: "",
             options: rules.allowedImmunizingAgentValues,
           };
-      issues.push(issue("warning", "PHIX_IMMUNIZING_AGENT_VALUE",
+      issues.push(issue("warning", "PHIX_IMMUNIZING_AGENT_ALLOWED_VALUE",
         `IMMUNIZING AGENT "${agent}" is not a recognised value${proposedAgent ? `. Did you mean "${proposedAgent}"${snomedHint}?` : "."}`,
         rec, "IMMUNIZING AGENT",
         { suggestedFix: proposedAgent, autoFixable: !!proposedAgent, repairProposal: agentProposal }));
@@ -393,7 +393,7 @@ export function validatePhix(
               proposedValue: "",
               options: rules.allowedGenderValues,
             };
-        issues.push(issue(requiredFieldsUpper.has("GENDER") ? "error" : "warning", "PHIX_GENDER_VALUE",
+        issues.push(issue(requiredFieldsUpper.has("GENDER") ? "error" : "warning", "PHIX_GENDER_ALLOWED_VALUE",
           `GENDER "${gender}" is not an allowed value.${proposedValue ? ` Did you mean "${proposedValue}"?` : ""}`,
           rec, "GENDER",
           { suggestedFix: proposedValue, autoFixable: !!proposedValue, repairProposal: proposal }));
@@ -502,25 +502,25 @@ export function validatePhix(
     // ── Allowed-value checks for other coded fields ───────────────────────
 
     const allowedValueChecks: Array<[string, string[], string]> = [
-      ["ADDRESS TYPE",               rules.allowedAddressTypeValues,           "PHIX_ADDRESS_TYPE_VALUE"],
-      ["STREET TYPE",                rules.allowedStreetTypeValues,            "PHIX_STREET_TYPE_VALUE"],
-      ["STREET DIRECTION",           rules.allowedStreetDirectionValues,       "PHIX_STREET_DIRECTION_VALUE"],
-      ["RELATIONSHIP",               rules.allowedRelationshipValues,          "PHIX_RELATIONSHIP_VALUE"],
-      ["PHONE TYPE",                 rules.allowedPhoneTypeValues,             "PHIX_PHONE_TYPE_VALUE"],
-      ["PROVINCE",                   rules.allowedProvinceValues,              "PHIX_PROVINCE_VALUE"],
-      ["ESTIMATED INDICATOR",        rules.allowedEstimatedIndicatorValues,    "PHIX_ESTIMATED_INDICATOR_VALUE"],
-      ["TIMEZONE",                   rules.allowedTimezoneValues,              "PHIX_TIMEZONE_VALUE"],
-      ["DOSAGE UOM",                 rules.allowedDosageUomValues,             "PHIX_DOSAGE_UOM_VALUE"],
-      ["SITE",                       rules.allowedSiteValues,                  "PHIX_SITE_VALUE"],
-      ["ROUTE",                      rules.allowedRouteValues,                 "PHIX_ROUTE_VALUE"],
-      ["REASON",                     rules.allowedReasonValues,                "PHIX_REASON_VALUE"],
-      ["PROVIDER ROLE",              rules.allowedProviderRoleValues,          "PHIX_PROVIDER_ROLE_VALUE"],
+      ["ADDRESS TYPE",               rules.allowedAddressTypeValues,           "PHIX_ADDRESS_TYPE_ALLOWED_VALUE"],
+      ["STREET TYPE",                rules.allowedStreetTypeValues,            "PHIX_STREET_TYPE_ALLOWED_VALUE"],
+      ["STREET DIRECTION",           rules.allowedStreetDirectionValues,       "PHIX_STREET_DIRECTION_ALLOWED_VALUE"],
+      ["RELATIONSHIP",               rules.allowedRelationshipValues,          "PHIX_RELATIONSHIP_ALLOWED_VALUE"],
+      ["PHONE TYPE",                 rules.allowedPhoneTypeValues,             "PHIX_PHONE_TYPE_ALLOWED_VALUE"],
+      ["PROVINCE",                   rules.allowedProvinceValues,              "PHIX_PROVINCE_ALLOWED_VALUE"],
+      ["ESTIMATED INDICATOR",        rules.allowedEstimatedIndicatorValues,    "PHIX_ESTIMATED_INDICATOR_ALLOWED_VALUE"],
+      ["TIMEZONE",                   rules.allowedTimezoneValues,              "PHIX_TIMEZONE_ALLOWED_VALUE"],
+      ["DOSAGE UOM",                 rules.allowedDosageUomValues,             "PHIX_DOSAGE_UOM_ALLOWED_VALUE"],
+      ["SITE",                       rules.allowedSiteValues,                  "PHIX_SITE_ALLOWED_VALUE"],
+      ["ROUTE",                      rules.allowedRouteValues,                 "PHIX_ROUTE_ALLOWED_VALUE"],
+      ["REASON",                     rules.allowedReasonValues,                "PHIX_REASON_ALLOWED_VALUE"],
+      ["PROVIDER ROLE",              rules.allowedProviderRoleValues,          "PHIX_PROVIDER_ROLE_ALLOWED_VALUE"],
     ];
 
     // Fields where an unrecognised value is saved as an immunization comment instead of flagged for manual correction
     const commentFallbackChecks: Array<[string, string[], string]> = [
-      ["ORGANIZATION",              rules.allowedOrganizationValues,             "PHIX_ORGANIZATION_VALUE"],
-      ["SERVICE DELIVERY LOCATION", rules.allowedServiceDeliveryLocationValues,  "PHIX_SDL_VALUE"],
+      ["ORGANIZATION",              rules.allowedOrganizationValues,             "PHIX_ORGANIZATION_ALLOWED_VALUE"],
+      ["SERVICE DELIVERY LOCATION", rules.allowedServiceDeliveryLocationValues,  "PHIX_SDL_ALLOWED_VALUE"],
     ];
 
     for (const [col, allowedList, ruleIdStr] of allowedValueChecks) {
