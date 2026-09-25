@@ -59,4 +59,9 @@ describe("validation overview", () => {
     const issue = { ...finding("repair", "a"), repairProposal: { kind: "address" as const, id: "repair", confidence, title: "Repair", explanation: "", changes: [{ field: "Unit", currentValue: "old", proposedValue: "new" }] } };
     expect(summarizeValidation({ ...result, issues: [issue] }).automatic).toBe(expected);
   });
+  it("adds a category field to each types entry", () => {
+    const summary = summarizeValidation(result);
+    expect(summary.types.find(row => row.ruleId === "FIELD_LENGTH")?.category).toBe("field-length");
+    expect(summary.types.find(row => row.ruleId === "METADATA_REQUIRED")?.category).toBe("metadata");
+  });
 });
