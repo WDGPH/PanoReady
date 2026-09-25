@@ -71,6 +71,11 @@ export default function PHIXIntake({ onResult }: { onResult: (input: PHIXWorkflo
     try {
       const csvText = await readFileText(selected);
       const result = validatePhix(csvText, defaultPhixRules as Parameters<typeof validatePhix>[1]);
+      if (result.records.length === 0) {
+        setError(result.issues.map(i => i.message).join(" · "));
+        setProcessing(false);
+        return;
+      }
       onResult({ result, fileName: selected.name, csvText });
     } catch (err) {
       setError(`Processing failed: ${err instanceof Error ? err.message : String(err)}`);
