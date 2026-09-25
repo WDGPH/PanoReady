@@ -383,6 +383,7 @@ export interface PhixRulesProfile {
   requiredFields: string[];
   fieldLengths: Record<string, number>;
   postalCodePattern: string;
+  submitterEmailPattern: string;
   phoneConfig: { placeholderNumbers: string[] };
   genderAliases: Record<string, string>;
   duplicateDetection: { checkHcn: boolean; checkNameDobAgent: boolean };

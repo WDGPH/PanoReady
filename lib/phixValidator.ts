@@ -499,6 +499,17 @@ export function validatePhix(
       }
     }
 
+    // ── SUBMITTER EMAIL format ────────────────────────────────────────────
+
+    const submitterEmail = f("SUBMITTER EMAIL");
+    if (submitterEmail !== "" && rules.submitterEmailPattern) {
+      const emailRe = new RegExp(rules.submitterEmailPattern);
+      if (!emailRe.test(submitterEmail)) {
+        issues.push(issue("warning", "PHIX_SUBMITTER_EMAIL_FORMAT",
+          `SUBMITTER EMAIL "${submitterEmail}" is not a valid email address.`, rec, "SUBMITTER EMAIL"));
+      }
+    }
+
     // ── Allowed-value checks for other coded fields ───────────────────────
 
     const allowedValueChecks: Array<[string, string[], string]> = [

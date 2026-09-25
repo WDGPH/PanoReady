@@ -93812,6 +93812,7 @@
     "SUBMITTER PHONE NUMBER 1": 25,
     "SUBMITTER PHONE NUMBER 2": 25,
     "SUBMITTER EMAIL": 50,
+    "DOSAGE": 4,
     "LOT NUMBER": 40,
     "PROVIDER ID": 100,
     "PROVIDER FIRST NAME": 100,
@@ -93819,6 +93820,7 @@
     "OTHER DETAILS": 4000
   },
   "postalCodePattern": "^[ABCEGHJKLMNPRSTVXY]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d[ABCEGHJKLMNPRSTVWXYZ]\\d$",
+  "submitterEmailPattern": "^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
   "phoneConfig": {
     "placeholderNumbers": []
   },
