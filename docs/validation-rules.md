@@ -196,7 +196,7 @@ resolution workflow is outside the current scope.
 
 ### Rule: `postal-code`
 
-**Severity:** info or warning
+**Severity:** info, warning, or error
 **Field:** `PostalCode`
 
 The built-in rule validates Canadian postal-code structure and produces the
@@ -226,13 +226,19 @@ connector. For example, `N1G / 2W1` safely normalizes to `N1G2W1`. A connector
 in any other position, repeated punctuation, or arbitrary punctuation remains
 invalid; PanoReady does not globally strip punctuation.
 
-The validator reports one of three issue outcomes:
+The validator reports one of four issue outcomes:
 
 | Outcome | Severity | Auto-fix | Example |
 |---|---|---|---|
 | Formatting/case normalization | info | Yes | `n1g 2w1` → `N1G2W1` |
 | Numeric-position transcription repair | warning | Yes | `NIG2W1` → `N1G2W1` |
 | Unresolved invalid structure | warning | No | `N1/G2W1` |
+| U.S. ZIP / ZIP+4 shape | error | No | `12345` or `12345-6789` |
+
+A five-digit numeric value or a five-digit value followed by a hyphen and four
+digits matches the standard U.S. ZIP / ZIP+4 shape. These values produce a
+blocking `POSTAL_CODE_US_ZIP` error and must be replaced with a Canadian postal
+code. PanoReady does not convert U.S. ZIP codes automatically.
 
 Only `O → 0`, `I → 1`, and `L → 1` are repaired, and only in positions that
 must be numeric. PanoReady does not truncate, stitch, reverse a digit into a
@@ -407,7 +413,7 @@ in the remaining text, remains manual review.
 
 ### Rule: `RURAL_ROUTE_FORMAT`
 
-**Severity:** error
+**Severity:** warning
 
 **Field:** `RuralRoute`
 
@@ -415,12 +421,16 @@ A populated rural-route field must contain the uppercase identifier `RR`, one
 space, and a route number containing one to four digits—for example, `RR 4`. A
 `#`, periods, expanded wording, station information, additional spaces, five or
 more route-number digits, and other text are not accepted in this canonical
-field. An empty value remains valid because the field is optional.
+field. An empty value remains valid because the field is optional. This is a
+data-quality finding and does not block submission.
 
 The same rule is applied while editing an address during manual review, so an
 invalid draft is marked **Check value** before it is applied.
 
-**Auto-fix:** No. Confirm and enter the canonical rural-route identifier.
+**Auto-fix:** Yes when a one-to-four digit route number can be parsed
+unambiguously, including a bare number in the `RuralRoute` field (for example,
+`2` becomes `RR 2` and `R.R. #01` becomes `RR 1`). Longer route numbers and
+values containing other text remain manual review.
 
 **Rule source:** [Canada Post — Addressing guidelines: Civic address](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/civic-address.page)
 
@@ -501,7 +511,7 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
 | `RURAL_ROUTE_IN_STREET_FIELD` | Yes when unambiguous | Move to `RuralRoute` and normalize to `RR n` |
-| `RURAL_ROUTE_FORMAT` | No | Enter `RR n` without `#` or punctuation |
+| `RURAL_ROUTE_FORMAT` | Yes when a 1–4 digit number is unambiguous | Normalize to `RR n`; other values need manual review |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
 | `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
 | `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |

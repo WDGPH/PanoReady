@@ -35,6 +35,7 @@ import {
   ADDRESS_REPAIR_FIELDS,
   analyzeAlternateDeliveryInStreetFields,
   isCanonicalRuralRoute,
+  normalizeRuralRoute,
   analyzeStreetNameSuffix,
   analyzeStreetNumberRepair,
   analyzeStreetNumberUnitPrefix,
@@ -183,6 +184,14 @@ function canonicalPhoneFindings(
 }
 
 function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFinding | null {
+  if (/^\d{5}(?:-\d{4})?$/.test(raw.trim())) {
+    return {
+      severity: "error",
+      message: `PostalCode "${raw}" looks like a U.S. ZIP code. Enter a Canadian postal code in A1A1A1 format.`,
+      autoFixable: false,
+      ruleId: "POSTAL_CODE_US_ZIP",
+    };
+  }
   const normalized = normalizeCanadianPostalCode(raw);
   const usesBuiltInRule = rules.postalCodePattern === defaultRules.postalCodePattern;
   if (!usesBuiltInRule) {
@@ -325,14 +334,18 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         });
       }
       if (fields.RuralRoute && !isCanonicalRuralRoute(fields.RuralRoute)) {
+        const suggestedFix = normalizeRuralRoute(fields.RuralRoute);
         issue(issues, {
           ...base,
-          severity: "error",
+          severity: "warning",
           field: "RuralRoute",
           currentValue: fields.RuralRoute,
           ruleId: "RURAL_ROUTE_FORMAT",
-          message: `RuralRoute "${fields.RuralRoute}" must use RR followed by one space and a 1–4 digit route number, such as RR 4. Do not use # or punctuation.`,
-          autoFixable: false,
+          message: suggestedFix
+            ? `RuralRoute "${fields.RuralRoute}" can be normalized to "${suggestedFix}".`
+            : `RuralRoute "${fields.RuralRoute}" must use RR followed by one space and a 1–4 digit route number, such as RR 4. Do not use # or punctuation.`,
+          suggestedFix,
+          autoFixable: suggestedFix !== undefined,
         });
       }
 
