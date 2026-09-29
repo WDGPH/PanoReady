@@ -35,6 +35,15 @@ function stixWithPostalCodes(postalCodes: string[]): string {
 }
 
 describe("postal-code validator integration", () => {
+  it("blocks five-digit U.S. ZIP and ZIP+4 values", () => {
+    const result = validateXml(stixWithPostalCodes(["12345", "12345-6789", "H1H1H1"]));
+    const zipIssues = result.issues.filter((issue) => issue.ruleId === "POSTAL_CODE_US_ZIP");
+
+    expect(zipIssues).toHaveLength(2);
+    expect(zipIssues.every((issue) => issue.severity === "error" && !issue.autoFixable)).toBe(true);
+    expect(result.gate).toBe("BLOCKED");
+  });
+
   it("creates dedicated normalization and repair fixes without generic duplicates", () => {
     const xml = stixWithPostalCodes(["H0H0H0", " h0h / 0h0 ", "HOH/OHO", "D0H0H0"]);
     const result = validateXml(xml);
@@ -101,7 +110,8 @@ describe("postal-code validator integration", () => {
     expect(postalIssues).toHaveLength(10);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_NORMALIZE")).toHaveLength(3);
     expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_REPAIR")).toHaveLength(3);
-    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_FORMAT")).toHaveLength(4);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_FORMAT")).toHaveLength(3);
+    expect(postalIssues.filter((issue) => issue.ruleId === "POSTAL_CODE_US_ZIP")).toHaveLength(1);
     expect(postalIssues.filter((issue) => issue.autoFixable)).toHaveLength(6);
     expect(postalIssues.find((issue) => issue.studentName === "Indiana Jones")?.suggestedFix).toBe("H1H1H1");
     expect(postalIssues.find((issue) => issue.studentName === "Lara Croft")?.suggestedFix).toBe("H1H1H1");

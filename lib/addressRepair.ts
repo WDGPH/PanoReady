@@ -297,6 +297,14 @@ export function isCanonicalRuralRoute(value: string): boolean {
   return CANONICAL_RURAL_ROUTE_PATTERN.test(value);
 }
 
+/** Normalize a clearly identified rural-route number; leave other text for review. */
+export function normalizeRuralRoute(value: string): string | undefined {
+  const trimmed = value.trim();
+  const bareNumber = trimmed.match(/^\d{1,4}$/)?.[0];
+  const routeNumber = bareNumber === undefined ? ruralRouteNumber(trimmed) : String(Number(bareNumber));
+  return routeNumber === undefined ? undefined : `RR ${routeNumber}`;
+}
+
 /**
  * Detect PO Box / rural-route delivery text typed into a street field instead
  * of PoBoxNumber/RuralRoute. Clean PO Box matches require confirmation, while

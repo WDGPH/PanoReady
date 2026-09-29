@@ -18,7 +18,7 @@ export function matchesReviewFilter(issue: ValidationIssue, filter: ReviewFilter
 const labels: Record<string, string> = {
   EMPTY_GUARDIAN: "Empty Guardian placeholder", GUARDIAN_RELATIONSHIP_REQUIRED: "Missing Guardian relationship",
   REQUIRED_FIELD: "Missing required field", FIELD_LENGTH: "Value too long", ALLOWED_VALUE: "Invalid code",
-  POSTAL_CODE_NORMALIZE: "Postal code normalization", POSTAL_CODE_REPAIR: "Postal code repair", POSTAL_CODE_FORMAT: "Invalid postal code",
+  POSTAL_CODE_NORMALIZE: "Postal code normalization", POSTAL_CODE_REPAIR: "Postal code repair", POSTAL_CODE_FORMAT: "Invalid postal code", POSTAL_CODE_US_ZIP: "U.S. ZIP code in postal code field",
   BIRTHDATE_FORMAT: "Invalid birth date", BIRTHDATE_FUTURE: "Future birth date", OEN_FORMAT: "Invalid OEN",
   OEN_DUPLICATE: "Duplicate OEN", OEN_DUAL_ENROLLMENT: "Possible dual enrollment", NAME_DOB_DUPLICATE: "Possible duplicate student",
   PHONE_FORMAT: "Invalid phone format", PHONE_NPA_STRUCTURE: "Invalid area code", PHONE_NXX_STRUCTURE: "Invalid phone exchange",
@@ -26,7 +26,7 @@ const labels: Record<string, string> = {
   PHONE_CANADIAN_AREA_CODE: "Non-Canadian area code", STREET_NUMBER_UNIT_PREFIX: "Unit in street number",
   STREET_TYPE_IN_STREET_NAME: "Street type in street name",
   ALTERNATE_DELIVERY_IN_STREET_FIELD: "Delivery address in street field",
-  RURAL_ROUTE_IN_STREET_FIELD: "Rural route in street field", RURAL_ROUTE_FORMAT: "Invalid rural route format", EMPTY_STUDENTS: "School has no students",
+  RURAL_ROUTE_IN_STREET_FIELD: "Rural route in street field", RURAL_ROUTE_FORMAT: "Rural route format review", EMPTY_STUDENTS: "School has no students",
   FREE_TEXT_APOSTROPHE: "Apostrophe in free text", FREE_TEXT_QUOTATION: "Quotation mark in free text",
   FREE_TEXT_ACCENT: "Accent in free text", FREE_TEXT_SPECIAL_CHARACTER: "Special character in free text",
   METADATA_REQUIRED: "Missing file information", METADATA_EMAIL: "Invalid contact email", METADATA_DATE: "Invalid file date",

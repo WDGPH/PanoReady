@@ -342,17 +342,31 @@ describe("RuralRoute field validation", () => {
     expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_FORMAT")).toBe(false);
   });
 
-  it("reports a separate manual issue for a noncanonical populated value", () => {
+  it("reports a nonblocking format warning and safely normalizes a recognizable route", () => {
     const result = validateXml(studentXml("<RuralRoute>RR #12</RuralRoute>"));
     expect(result.issues).toContainEqual(expect.objectContaining({
       ruleId: "RURAL_ROUTE_FORMAT",
       field: "RuralRoute",
-      severity: "error",
+      severity: "warning",
       currentValue: "RR #12",
-      autoFixable: false,
+      suggestedFix: "RR 12",
+      autoFixable: true,
     }));
     expect(result.issues.some(issue => issue.ruleId === "RURAL_ROUTE_IN_STREET_FIELD")).toBe(false);
     expect(result.issues.some(issue => issue.field === "RuralRoute" && issue.ruleId === "FREE_TEXT_SPECIAL_CHARACTER")).toBe(false);
+  });
+
+  it("normalizes a bare one-to-four digit route number without blocking", () => {
+    const result = validateXml(studentXml("<RuralRoute>2</RuralRoute>"));
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      ruleId: "RURAL_ROUTE_FORMAT",
+      field: "RuralRoute",
+      severity: "warning",
+      currentValue: "2",
+      suggestedFix: "RR 2",
+      autoFixable: true,
+    }));
+    expect(result.gate).not.toBe("BLOCKED");
   });
 
   it("rejects a rural-route field with more than four digits", () => {
@@ -360,7 +374,7 @@ describe("RuralRoute field validation", () => {
     expect(result.issues).toContainEqual(expect.objectContaining({
       ruleId: "RURAL_ROUTE_FORMAT",
       field: "RuralRoute",
-      severity: "error",
+      severity: "warning",
       autoFixable: false,
     }));
   });
