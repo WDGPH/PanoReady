@@ -8,6 +8,7 @@ import CompareWorkflow from "@/workflows/stix/CompareWorkflow";
 import STIXIntake from "@/workflows/stix/STIXIntake";
 import type { ValidateWorkflowInput } from "@/workflows/stix/STIXIntake";
 import ValidateAndFixWorkflow from "@/workflows/stix/ValidateAndFixWorkflow";
+import ReportsPage from "@/workflows/reporting/ReportsPage";
 
 type ActiveWorkflow =
   | { kind: "home" }
@@ -18,6 +19,7 @@ export default function PanoReady() {
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow>({ kind: "home" });
   const [intakeRevision, setIntakeRevision] = useState(0);
   const [startOverOpen, setStartOverOpen] = useState(false);
+  const [reportXml, setReportXml] = useState<string | null>(null);
   const homeButtonRef = useRef<HTMLButtonElement>(null);
   const startOverReturnFocusRef = useRef<HTMLButtonElement>(null);
   const returnHome = () => {
@@ -49,11 +51,14 @@ export default function PanoReady() {
         />
       )}
       {activeWorkflow.kind === "validate" && (
-        <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={returnHome} onRequestExit={requestStartOver} />
+        <div hidden={reportXml !== null}>
+          <ValidateAndFixWorkflow input={activeWorkflow.input} onExit={returnHome} onRequestExit={requestStartOver} onOpenReports={setReportXml} />
+        </div>
       )}
       {activeWorkflow.kind === "compare" && (
         <CompareWorkflow comparison={activeWorkflow.comparison} onStartOver={returnHome} />
       )}
+      {reportXml !== null && <ReportsPage initialXml={reportXml} onBack={() => setReportXml(null)} />}
       <StartOverDialog open={startOverOpen} onOpenChange={setStartOverOpen} onStartOver={returnHome}
         returnFocusRef={startOverReturnFocusRef} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

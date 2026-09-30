@@ -15,6 +15,9 @@ export default function NavBar({ onHome, homeButtonRef }: { onHome: () => void; 
           <span className="brand-tagline">Tools for faster, more reliable Panorama imports</span>
         </div>
         <nav aria-label="Primary navigation" style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <a href={`${process.env.NEXT_PUBLIC_PAGES_BASE_PATH || "/PanoReady"}/reports/`} className="no-underline" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+            Reports
+          </a>
           <a href={`${process.env.NEXT_PUBLIC_PAGES_BASE_PATH || "/PanoReady"}/docs/`} className="no-underline" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
             Docs
           </a>

@@ -27,10 +27,11 @@ type ValidateWorkflowState =
   | { step: "clean-summary"; input: ValidateWorkflowInput; session: ValidateSession; cleanedRecords: StudentRecord[]; summary: CleaningSummaryEntry[] }
   | { step: "issues" | "fix" | "manual" | "revalidate" | "download"; session: ValidateSession; filter?: ReviewFilter };
 
-export default function ValidateAndFixWorkflow({ input, onExit, onRequestExit }: {
+export default function ValidateAndFixWorkflow({ input, onExit, onRequestExit, onOpenReports }: {
   input: ValidateWorkflowInput;
   onExit: () => void;
   onRequestExit: (trigger?: HTMLButtonElement) => void;
+  onOpenReports?: (xml: string) => void;
 }) {
   const [applying, setApplying] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -121,7 +122,7 @@ export default function ValidateAndFixWorkflow({ input, onExit, onRequestExit }:
       setState({ ...state, session: updated });
     }} onClearFilter={() => setState({ step: state.step, session })} onApply={(fixes) => setState({ step: "revalidate", session: { ...session, fixes } })} />;
     if (state.step === "revalidate") return <RevalidateView onComplete={completeRecheck} onBack={() => setState({ step: "manual", session: { ...session, fixes: session.fixes.slice(0, session.appliedFixCount ?? 0) } })} session={session} onReturnToFixes={(updated, step) => { setState({ step, session: updated }); window.scrollTo({ top: 0 }); }} onContinue={(updated) => setState({ step: "download", session: updated })} />;
-    return <DownloadView onReturnToFixes={(step) => { setState({ step, session }); window.scrollTo({ top: 0 }); }} session={session} onStartOver={onExit} />;
+    return <DownloadView onReturnToFixes={(step) => { setState({ step, session }); window.scrollTo({ top: 0 }); }} session={session} onStartOver={onExit} onOpenReports={onOpenReports} />;
   };
 
   const stage = state.step === "issues" || state.step === "assessing" ? 1 : state.step === "fix" || state.step === "clean-summary" ? 2 : state.step === "manual" ? 3 : state.step === "revalidate" ? 4 : 5;

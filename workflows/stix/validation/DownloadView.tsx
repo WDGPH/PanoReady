@@ -108,11 +108,13 @@ function AgeRangeFilter({
 export default function DownloadView({
   session,
   onStartOver,
+  onOpenReports,
   onReturnToFixes,
 }: {
   onReturnToFixes: (view: "fix" | "manual") => void;
   session: ValidateSession;
   onStartOver: () => void;
+  onOpenReports?: (xml: string) => void;
 }) {
   const baseName = session.fileName.replace(/\.xml$/i, "");
   const result = session.revalidatedResult ?? session.initialResult;
@@ -252,6 +254,7 @@ export default function DownloadView({
         <button type="button" onClick={() => onReturnToFixes("fix")} className="btn btn-secondary"><ArrowLeft size={16} /> Return to automatic fixes</button>
         <button type="button" onClick={() => onReturnToFixes("manual")} className="btn btn-secondary"><ArrowLeft size={16} /> Return to manual fixes</button>
       </div>} onNext={onStartOver} nextLabel="Process another file" />
+      {onOpenReports && <button type="button" className="btn btn-secondary" onClick={() => onOpenReports(xml)} style={{ marginBottom: 20 }}>Create reports from this file</button>}
 
       {/* Gate banner */}
       <h1 style={{ fontSize: 22, margin: "0 0 24px" }}>Output</h1>
