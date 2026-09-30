@@ -24,6 +24,23 @@ def version(ref):
     return tag, sha, tag + ("+" if sha != tagged_sha else "")
 
 
+def snapshots(latest_ref, release_tag=None):
+    latest_sha = run("git", "rev-parse", f"{latest_ref}^{{commit}}")
+    if release_tag:
+        if not re.fullmatch(r"v\d+\.\d+\.\d+", release_tag):
+            raise RuntimeError(f"Not a stable vX.Y.Z release tag: {release_tag}")
+        release_sha = run("git", "rev-parse", f"refs/tags/{release_tag}^{{commit}}")
+        ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", release_sha, latest_sha])
+        if ancestor.returncode != 0:
+            raise RuntimeError(f"Release tag {release_tag} is not reachable from {latest_ref}; refusing to publish")
+    stable_tag, _, latest_label = version(latest_sha)
+    stable_sha = run("git", "rev-parse", f"refs/tags/{stable_tag}^{{commit}}")
+    return [
+        {"channel": "stable", "version": stable_tag, "sha": stable_sha},
+        {"channel": "latest", "version": latest_label, "sha": latest_sha},
+    ]
+
+
 def prepare(source, base_path):
     # v0.1.0 predates the deployment environment variables. Patch only the
     # deployment path and presentation in the disposable release checkout.
@@ -48,8 +65,8 @@ def prepare(source, base_path):
 
 
 
-def build(ref, channel, output, base):
-    _, sha, label = version(ref)
+def build(snapshot, output, base):
+    channel, sha, label = (snapshot[key] for key in ("channel", "sha", "version"))
     with tempfile.TemporaryDirectory(prefix=f"panoready-{channel}-") as tmp:
         source = Path(tmp)
         archive = subprocess.Popen(["git", "archive", sha], stdout=subprocess.PIPE)
@@ -73,7 +90,7 @@ def build(ref, channel, output, base):
         config = source / "mkdocs.yml"
         config.write_text(re.sub(r"(?m)^site_url:.*$", f"site_url: https://wdgph.github.io{path}/docs/", config.read_text()))
         subprocess.run([python, "-m", "mkdocs", "build", "--strict", "--site-dir", "out/docs"], cwd=tmp, check=True)
-        (source / "out/build.json").write_text(json.dumps({"version": label, "sha": sha, "channel": channel}) + "\n")
+        (source / "out/build.json").write_text(json.dumps(snapshot) + "\n")
         shutil.copytree(source / "out", output / channel)
 
 
@@ -87,22 +104,33 @@ def redirect(destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--latest-ref", default="origin/main")
+    parser.add_argument("--release-tag", help="Require the triggering stable release tag to be reachable from latest-ref")
     parser.add_argument("--base-path", default="/PanoReady")
     parser.add_argument("--output", default="pages-out")
     args = parser.parse_args()
     if not re.fullmatch(r"/[A-Za-z0-9_-]+", args.base_path):
         parser.error("base-path must be a single repository path")
+    builds = snapshots(args.latest_ref, args.release_tag)
+    print(json.dumps(builds, indent=2), flush=True)
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
-    stable, _, _ = version(args.latest_ref)
-    build(stable, "stable", output, args.base_path)
-    build(args.latest_ref, "latest", output, args.base_path)
+    for snapshot in builds:
+        build(snapshot, output, args.base_path)
     # Preserve the old application and documentation entry points.
     for route in ("", "about", "reports", "docs"):
         target = output / route
         target.mkdir(exist_ok=True)
         (target / "index.html").write_text(redirect(f"{args.base_path}/stable/{route + '/' if route else ''}"))
     (output / ".nojekyll").touch()
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+            stream.write(f"builds={json.dumps(builds)}\n")
+            stream.write(f"source-sha={run('git', 'rev-parse', 'HEAD')}\n")
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
+            stream.write("## Pages artifact\n\n| Channel | Version | Source commit |\n| --- | --- | --- |\n")
+            for snapshot in builds:
+                stream.write(f"| {snapshot['channel']} | {snapshot['version']} | `{snapshot['sha']}` |\n")
 
 
 if __name__ == "__main__":
