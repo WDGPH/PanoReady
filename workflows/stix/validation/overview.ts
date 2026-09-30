@@ -1,4 +1,5 @@
 import { isAutomaticIssue } from "./helpers";
+import { issueCategory } from "@/lib/issueCategories";
 import type { ValidationIssue, ValidationResult, ValidationSeverity } from "@/lib/types";
 
 export type ReviewFilter = { schoolNumber?: string; ruleId?: string; field?: string; severity?: ValidationSeverity };
@@ -66,7 +67,7 @@ export function summarizeValidation(result: ValidationResult, inventory: { schoo
   return {
     ...count(result.issues), students: records.size,
     schools: [...schools.values()].map(({ issues, ...entry }) => ({ ...entry, ...count(issues) })).sort((a, b) => b.errors - a.errors || b.total - a.total || a.schoolNumber.localeCompare(b.schoolNumber)),
-    types: [...types.values()].map(({ issues, ...entry }) => ({ ...entry, ...count(issues) })).sort((a, b) => b.total - a.total || a.ruleId.localeCompare(b.ruleId)),
+    types: [...types.values()].map(({ issues, ...entry }) => ({ ...entry, category: issueCategory(entry.ruleId, "stix"), ...count(issues) })).sort((a, b) => b.total - a.total || a.ruleId.localeCompare(b.ruleId)),
   };
 }
 
