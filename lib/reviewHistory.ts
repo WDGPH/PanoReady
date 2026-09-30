@@ -1,11 +1,22 @@
 import type { ReviewAction, ValidateSession } from "./types";
 import { applyValidationFixes, validateXml } from "./validator";
 
+export type ApplyReviewProgress = {
+  stage: "applying" | "rechecking";
+  completed: number;
+  total: number;
+};
+
 /** Publish the XML, findings, audit entries and history only after validation succeeds. */
-export function applyReviewChanges(session: ValidateSession, label: ReviewAction["label"]): ValidateSession {
+export function applyReviewChanges(session: ValidateSession, label: ReviewAction["label"], onProgress?: (progress: ApplyReviewProgress) => void): ValidateSession {
   const changes = session.fixes.slice(session.appliedFixCount ?? 0);
-  const finalXml = applyValidationFixes(session.finalXml ?? session.originalXml, changes);
-  const revalidatedResult = validateXml(finalXml, session.validationRules);
+  const finalXml = applyValidationFixes(session.finalXml ?? session.originalXml, changes, (completed, total) => {
+    onProgress?.({ stage: "applying", completed, total });
+  });
+  onProgress?.({ stage: "rechecking", completed: 0, total: 0 });
+  const revalidatedResult = validateXml(finalXml, session.validationRules, (completed, total) => {
+    onProgress?.({ stage: "rechecking", completed, total });
+  });
   return {
     ...session, finalXml, revalidatedResult, appliedFixCount: session.fixes.length,
     history: changes.length ? [
