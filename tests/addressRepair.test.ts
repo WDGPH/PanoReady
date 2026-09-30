@@ -9,6 +9,7 @@ import {
 } from "../lib/addressRepair";
 import { applyValidationFixes, parseSTIXXml, validateXml } from "../lib/validator";
 import type { AppliedFix } from "../lib/types";
+import { defaultRules } from "../lib/rulesets";
 
 const address = (streetNumber: string, streetName = "", suffix = "") => ({
   Unit: "", StreetNumber: streetNumber, StreetNumberSuffix: suffix, StreetName: streetName,
@@ -250,7 +251,7 @@ describe("a street number and name found in Unit", () => {
 describe("PO Box and rural route text in street fields", () => {
   it("moves a clean PO Box match out of StreetName", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "PO Box 42", PoBoxNumber: "" });
-    expect(proposal).toMatchObject({ confidence: "review", deliveryType: "poBox", sourceField: "StreetName" });
+    expect(proposal).toMatchObject({ confidence: "safe", deliveryType: "poBox", sourceField: "StreetName" });
     expect(proposal?.changes).toEqual([
       { field: "StreetName", currentValue: "PO Box 42", proposedValue: "" },
       { field: "PoBoxNumber", currentValue: "", proposedValue: "42" },
@@ -320,6 +321,40 @@ describe("PO Box and rural route text in street fields", () => {
     expect(proposal?.explanation).toContain("PoBoxNumber is already “99”");
   });
 
+  it.each(["P.O. Box #0042", "Box 0042", "Post Office Box 0042"])("recognizes an equivalent populated box field: %s", value => {
+    const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: value, PoBoxNumber: "PO Box 0042" });
+    expect(proposal).toMatchObject({ confidence: "safe", changes: [
+      { field: "StreetName", currentValue: value, proposedValue: "" },
+      { field: "PoBoxNumber", currentValue: "PO Box 0042", proposedValue: "0042" },
+    ] });
+  });
+
+  it.each(["PO Box ABC", "PO Box 42A", "POBOX42A", "PO Box 4_2", "PO Box 42 STN A", "PO Box 57-918", "PO Box 42 / PO Box 99"])("keeps ambiguous box text for manual review: %s", value => {
+    expect(analyzeAlternateDeliveryInStreetFields({ StreetName: value })).toMatchObject({
+      confidence: "manual", deliveryType: "poBox", changes: [],
+    });
+  });
+
+  it.each([
+    ["PO BOX 57 918 Example Grove", "57", "918 Example Grove"],
+    ["P.O Box 68-427 Sample Way", "68", "427 Sample Way"],
+    ["P.O. Box #0042 – 123 Example Road", "0042", "123 Example Road"],
+  ])("extracts a leading box number and preserves the civic address: %s", (value, box, remainingStreet) => {
+    expect(analyzeAlternateDeliveryInStreetFields({ StreetName: value })).toMatchObject({
+      confidence: "safe", deliveryType: "poBox", sourceField: "StreetName",
+      changes: [
+        { field: "StreetName", currentValue: value, proposedValue: remainingStreet },
+        { field: "PoBoxNumber", currentValue: "", proposedValue: box },
+      ],
+    });
+  });
+
+  it.each(["PO Box 42 123 PO Box 99", "PO Box 42 123 RR 7", "PO Box 42 123 STN A", "PO Box 42 123 456"])("keeps an ambiguous numeric remainder in review: %s", value => {
+    expect(analyzeAlternateDeliveryInStreetFields({ StreetName: value })).toMatchObject({
+      confidence: "review", deliveryType: "poBox", changes: [],
+    });
+  });
+
   it("keeps a conflicting rural route in review", () => {
     const proposal = analyzeAlternateDeliveryInStreetFields({ StreetName: "Rural Route 2", RuralRoute: "RR 9" });
     expect(proposal).toMatchObject({ confidence: "review", changes: [] });
@@ -333,6 +368,118 @@ describe("PO Box and rural route text in street fields", () => {
 
   it("does not fire on ordinary street names", () => {
     expect(analyzeAlternateDeliveryInStreetFields({ StreetName: "Boxwood Lane", PoBoxNumber: "" })).toBeUndefined();
+  });
+});
+
+describe("PoBoxNumber validation and automatic fixes", () => {
+  it.each(["", "42", "0042"])("accepts a bare box number or optional empty field: %s", value => {
+    expect(validateXml(studentXml(`<PoBoxNumber>${value}</PoBoxNumber>`)).issues
+      .some(issue => issue.ruleId === "PO_BOX_NUMBER_FORMAT")).toBe(false);
+  });
+
+  it.each(["PO Box 0042", "P.O. Box #0042", "BOX 0042", "Post Office Box 0042", "#0042"])("normalizes the dedicated field without losing zeroes: %s", value => {
+    const xml = studentXml(`<PoBoxNumber>${value}</PoBoxNumber>`);
+    const initial = validateXml(xml);
+    const finding = initial.issues.find(issue => issue.ruleId === "PO_BOX_NUMBER_FORMAT")!;
+    expect(finding).toMatchObject({ field: "PoBoxNumber", suggestedFix: "0042", autoFixable: true });
+    expect(initial.issues.some(issue => issue.field === "PoBoxNumber" && issue.ruleId.startsWith("FREE_TEXT_"))).toBe(false);
+    const fixedXml = applyValidationFixes(xml, automaticFixes(finding, initial.records, 1));
+    expect(parseSTIXXml(fixedXml)[0].fields.PoBoxNumber).toBe("0042");
+    expect(validateXml(fixedXml).issues.some(issue => issue.ruleId === "PO_BOX_NUMBER_FORMAT")).toBe(false);
+  });
+
+  it.each(["42A", "4_2", "4 2", "PO Box", "PO Box 42 STN A", "42 / 99", "PO BOX 57 918 Example Grove", "P.O Box 68-427 Sample Way"])("does not guess a box number from malformed text: %s", value => {
+    const result = validateXml(studentXml(`<PoBoxNumber>${value}</PoBoxNumber>`));
+    const finding = result.issues.find(issue => issue.ruleId === "PO_BOX_NUMBER_FORMAT")!;
+    expect(finding).toMatchObject({ autoFixable: false });
+    expect(finding.suggestedFix).toBeUndefined();
+    expect(automaticFixes(finding, result.records, 1)).toEqual([]);
+    expect(result.issues.some(issue => issue.field === "PoBoxNumber" && issue.ruleId.startsWith("FREE_TEXT_"))).toBe(false);
+  });
+
+  it.each(["StreetName", "StreetNumber"])("moves a complete box reference out of %s in both XML namespaces", field => {
+    for (const prefix of ["", "stix"]) {
+      const xml = studentXml(`<${field}>P.O. Box #0042</${field}><PoBoxNumber>Box 0042</PoBoxNumber><City>Exampleville</City>`, prefix);
+      const initial = validateXml(xml);
+      const findings = initial.issues.filter(issue => issue.autoFixable);
+      // Apply the whole automatic batch, including the source's length finding.
+      const fixedXml = applyValidationFixes(xml, findings.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+      expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ [field]: "", PoBoxNumber: "0042", City: "Exampleville" });
+      expect(validateXml(fixedXml).issues.some(issue => ["ALTERNATE_DELIVERY_IN_STREET_FIELD", "PO_BOX_NUMBER_FORMAT", "FIELD_LENGTH"].includes(issue.ruleId))).toBe(false);
+    }
+  });
+
+  it("preserves both fields when the existing box number conflicts", () => {
+    const xml = studentXml("<StreetNumber>PO Box 42</StreetNumber><PoBoxNumber>99</PoBoxNumber>");
+    const initial = validateXml(xml);
+    const fixedXml = applyValidationFixes(xml, initial.issues.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetNumber: "PO Box 42", PoBoxNumber: "99" });
+  });
+
+  it.each(["PO Box 99", "POBOX99"])("keeps multiple street-field box references in review: %s", otherBox => {
+    const xml = studentXml(`<StreetName>PO Box 42</StreetName><StreetNumber>${otherBox}</StreetNumber>`);
+    const initial = validateXml(xml);
+    const fixedXml = applyValidationFixes(xml, initial.issues.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetName: "PO Box 42", StreetNumber: otherBox, PoBoxNumber: "" });
+  });
+
+  it("preserves trailing civic text without applying competing street suffix repairs", () => {
+    const xml = studentXml("<StreetName>PO Box 42 123 Example Road</StreetName>");
+    const initial = validateXml(xml);
+    expect(initial.issues.find(issue => issue.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD")?.autoFixable).toBe(true);
+    expect(initial.issues.some(issue => issue.ruleId === "STREET_TYPE_IN_STREET_NAME")).toBe(false);
+    const fixedXml = applyValidationFixes(xml, initial.issues.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetName: "123 Example Road", PoBoxNumber: "42", StreetType: "" });
+  });
+
+  it.each([
+    ["PO BOX 57 918 Example Grove", "57", "918 Example Grove"],
+    ["P.O Box 68-427 Sample Way", "68", "427 Sample Way"],
+  ])("applies and revalidates a combined PO box and civic address: %s", (value, box, remainingStreet) => {
+    for (const prefix of ["", "stix"]) {
+      const xml = studentXml(`<StreetName>${value}</StreetName><City>Exampleville</City>`, prefix);
+      const initial = validateXml(xml);
+      const finding = initial.issues.find(issue => issue.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD")!;
+      expect(finding).toMatchObject({ autoFixable: true });
+      const fixedXml = applyValidationFixes(xml, automaticFixes(finding, initial.records, 1));
+      expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetName: remainingStreet, PoBoxNumber: box, City: "Exampleville" });
+      expect(validateXml(fixedXml).issues.some(issue => ["ALTERNATE_DELIVERY_IN_STREET_FIELD", "PO_BOX_NUMBER_FORMAT"].includes(issue.ruleId))).toBe(false);
+    }
+  });
+
+  it("does not move a combined reference when its retained street text exceeds field limits", () => {
+    const xml = studentXml("<StreetNumber>PO Box 42-123 Example Road</StreetNumber>");
+    const initial = validateXml(xml);
+    expect(initial.issues.find(issue => issue.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD")?.autoFixable).toBe(false);
+    const fixedXml = applyValidationFixes(xml, initial.issues.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetNumber: "PO Box 42-123 Example Road", PoBoxNumber: "" });
+  });
+
+  it("preserves a combined source when the existing box conflicts", () => {
+    const xml = studentXml("<StreetName>PO Box 42 123 Example Road</StreetName><PoBoxNumber>99</PoBoxNumber>");
+    const initial = validateXml(xml);
+    const fixedXml = applyValidationFixes(xml, initial.issues.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetName: "PO Box 42 123 Example Road", PoBoxNumber: "99" });
+  });
+
+  it("respects a custom box length limit without truncating or moving an oversized number", () => {
+    const rules = { ...defaultRules, fieldLengths: { ...defaultRules.fieldLengths, PoBoxNumber: 3 } };
+    const xml = studentXml("<StreetName>PO Box 1234</StreetName><PoBoxNumber>PO Box 1234</PoBoxNumber>");
+    const initial = validateXml(xml, rules);
+    const finding = initial.issues.find(issue => issue.ruleId === "PO_BOX_NUMBER_FORMAT")!;
+    expect(finding).toMatchObject({ severity: "error", autoFixable: false });
+    expect(finding.suggestedFix).toBeUndefined();
+    expect(initial.issues.find(issue => issue.ruleId === "ALTERNATE_DELIVERY_IN_STREET_FIELD")?.autoFixable).toBe(false);
+    const fixedXml = applyValidationFixes(xml, initial.issues.flatMap(issue => automaticFixes(issue, initial.records, 1)));
+    expect(parseSTIXXml(fixedXml)[0].fields).toMatchObject({ StreetName: "PO Box 1234", PoBoxNumber: "PO Box 1234" });
+  });
+
+  it("allows stripping a prefix when the number meets a custom limit", () => {
+    const rules = { ...defaultRules, fieldLengths: { ...defaultRules.fieldLengths, PoBoxNumber: 3 } };
+    const initial = validateXml(studentXml("<PoBoxNumber>PO Box 42</PoBoxNumber>"), rules);
+    expect(initial.issues.filter(issue => issue.field === "PoBoxNumber")).toEqual([
+      expect.objectContaining({ ruleId: "PO_BOX_NUMBER_FORMAT", suggestedFix: "42", autoFixable: true }),
+    ]);
   });
 });
 

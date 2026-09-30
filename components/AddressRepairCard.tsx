@@ -15,7 +15,7 @@ const LABELS: Record<(typeof ADDRESS_REPAIR_FIELDS)[number], string> = {
   StreetType: "Street type",
   StreetDirection: "Direction",
   RuralRoute: "Rural route",
-  PoBoxNumber: "PO box",
+  PoBoxNumber: "PO box number (digits only)",
   City: "City",
   Province: "Province",
   PostalCode: "Postal code",
