@@ -274,8 +274,12 @@ export function analyzeStreetNumberUnitPrefix(
   };
 }
 
-const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|BOX)\s*#?\s*(\w+)$/i;
-const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|BOX)\b/i;
+const PO_BOX_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|POST\s+OFFICE\s+BOX|BOX)\s*#?\s*(\d+)$/i;
+// A numeric civic address after the separator distinguishes these from box ranges.
+const PO_BOX_WITH_STREET_PATTERN = /^(?:P\.?\s*O\.?\s*BOX|POST\s+OFFICE\s+BOX|BOX)\s*#?\s*(\d+)(?:\s*[-–—]\s*|\s+)(\d+[A-Za-z]?\s+\S[\s\S]*)$/i;
+const PO_BOX_PREFIX = /^(?:P\.?\s*O\.?\s*BOX|POST\s+OFFICE\s+BOX|BOX)(?=\d|\b)/i;
+const PO_BOX_REFERENCE = /(?:^|[^A-Z])(?:P\.?\s*O\.?\s*BOX|POST\s+OFFICE\s+BOX|BOX)(?=\s*#?\s*\d|\b)/i;
+const DELIVERY_STATION_REFERENCE = /\b(?:STN|RPO)\b|\bSTATION\s+[A-Z0-9]\b/i;
 const RURAL_ROUTE_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d{1,4})$/i;
 const CANONICAL_RURAL_ROUTE_PATTERN = /^RR \d{1,4}$/;
 const RURAL_ROUTE_WITH_STREET_PATTERN = /^(?:R\.?\s*R\.?|RURAL\s+ROUTE)\s*#?\s*(\d{1,4})(?:\s*[-–—]+\s*|\s+)(\S[\s\S]*)$/i;
@@ -286,6 +290,17 @@ export type AlternateDeliveryRepairProposal = AddressRepairProposal & {
   deliveryType: "poBox" | "ruralRoute";
   sourceField: "StreetName" | "StreetNumber";
 };
+
+/** The dedicated box field stores only digits, preserving leading zeroes. */
+export function isCanonicalPoBoxNumber(value: string): boolean {
+  return /^\d+$/.test(value);
+}
+
+/** Remove a recognizable box label or number marker without guessing digits. */
+export function normalizePoBoxNumber(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed.match(/^#?\s*(\d+)$/)?.[1] ?? trimmed.match(PO_BOX_PATTERN)?.[1];
+}
 
 function ruralRouteNumber(value: string): string | undefined {
   const match = value.trim().match(RURAL_ROUTE_PATTERN);
@@ -307,8 +322,8 @@ export function normalizeRuralRoute(value: string): string | undefined {
 
 /**
  * Detect PO Box / rural-route delivery text typed into a street field instead
- * of PoBoxNumber/RuralRoute. Clean PO Box matches require confirmation, while
- * an unambiguous, non-conflicting rural route can be moved automatically. A
+ * of PoBoxNumber/RuralRoute. Unambiguous, non-conflicting numeric delivery
+ * references can be moved automatically. A
  * recognizable-but-unparsable prefix is surfaced as a manual finding with no
  * guessed value.
  */
@@ -320,23 +335,39 @@ export function analyzeAlternateDeliveryInStreetFields(
     const raw = (fields[field] ?? "").trim();
     if (!raw) continue;
 
-    const poMatch = raw.match(PO_BOX_PATTERN);
+    const poMatch = raw.match(PO_BOX_PATTERN) ?? raw.match(PO_BOX_WITH_STREET_PATTERN);
     if (poMatch) {
       const boxId = poMatch[1];
+      const remainingStreet = poMatch[2]?.trim() ?? "";
+      const ambiguousRemainder = remainingStreet !== "" && (
+        !/[A-Za-z]/.test(remainingStreet)
+        || PO_BOX_REFERENCE.test(remainingStreet)
+        || RURAL_ROUTE_REFERENCE.test(remainingStreet)
+        || DELIVERY_STATION_REFERENCE.test(remainingStreet)
+      );
       const currentBox = (fields.PoBoxNumber ?? "").trim();
-      const conflict = currentBox !== "" && currentBox !== boxId;
+      const conflict = currentBox !== "" && normalizePoBoxNumber(currentBox) !== boxId;
+      const otherStreetField = field === "StreetName" ? "StreetNumber" : "StreetName";
+      const multipleReferences = PO_BOX_PREFIX.test((fields[otherStreetField] ?? "").trim());
+      const requiresReview = conflict || multipleReferences || ambiguousRemainder;
       return {
         kind: "address",
         deliveryType: "poBox",
         sourceField: field,
         id: proposalId,
-        confidence: "review",
-        title: conflict ? "Review PO Box text found in the street address" : "Move PO Box text out of the street address",
+        confidence: requiresReview ? "review" : "safe",
+        title: requiresReview ? "Review PO Box text found in the street address" : "Move PO Box text out of the street address",
         explanation: conflict
           ? `“${raw}” in ${field} looks like a PO Box, but PoBoxNumber is already “${currentBox}”. Review the complete address before applying changes.`
+          : multipleReferences
+            ? "Both street fields contain PO Box references. Review the complete address before applying changes."
+          : ambiguousRemainder
+            ? `“${raw}” in ${field} starts with box number “${boxId}”, but the remaining text contains ambiguous or additional delivery information. Review the complete address before applying changes.`
+          : remainingStreet
+            ? `“${raw}” in ${field} starts with box number “${boxId}”, which can be moved to PoBoxNumber while preserving “${remainingStreet}” in ${field}.`
           : `“${raw}” in ${field} looks like a PO Box and can be moved to PoBoxNumber (proposed “${boxId}”).`,
-        changes: conflict ? [] : [
-          { field, currentValue: fields[field] ?? "", proposedValue: "" },
+        changes: requiresReview ? [] : [
+          { field, currentValue: fields[field] ?? "", proposedValue: remainingStreet },
           { field: "PoBoxNumber", currentValue: fields.PoBoxNumber ?? "", proposedValue: boxId },
         ],
       };
@@ -346,7 +377,7 @@ export function analyzeAlternateDeliveryInStreetFields(
         kind: "address", deliveryType: "poBox", sourceField: field,
         id: proposalId, confidence: "manual",
         title: "Review possible PO Box text in the street address",
-        explanation: `“${raw}” in ${field} looks like it starts with a PO Box reference, but the box number couldn't be parsed. Review the complete address and edit the fields directly.`,
+        explanation: `“${raw}” in ${field} starts with a PO Box reference, but it could not be safely separated into a box number and any remaining address text. Review the complete address and edit the fields directly.`,
         changes: [],
       };
     }

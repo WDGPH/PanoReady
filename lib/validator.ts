@@ -34,6 +34,8 @@ import {
 import {
   ADDRESS_REPAIR_FIELDS,
   analyzeAlternateDeliveryInStreetFields,
+  isCanonicalPoBoxNumber,
+  normalizePoBoxNumber,
   isCanonicalRuralRoute,
   normalizeRuralRoute,
   analyzeStreetNameSuffix,
@@ -225,6 +227,7 @@ export function fieldValueMeetsRules(field: string, value: string, rules: RulesP
   if (field === "BirthDate" && (!validRealDate(value) || value > new Date().toISOString().slice(0, 10))) return false;
   if (field === "OEN" && !/^\d{9}$/.test(value)) return false;
   if (field === "RuralRoute" && !isCanonicalRuralRoute(value)) return false;
+  if (field === "PoBoxNumber" && !isCanonicalPoBoxNumber(value)) return false;
   if (field === "BoardNumber" && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(value)) return false;
   return true;
 }
@@ -320,6 +323,13 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         });
       }
       const alternateDeliveryProposal = analyzeAlternateDeliveryInStreetFields(fields, `${recordId}-address-alternate-delivery`);
+      // Both the box number and any retained street text must meet field rules.
+      if (alternateDeliveryProposal?.deliveryType === "poBox"
+        && alternateDeliveryProposal.changes.some(change => !fieldValueMeetsRules(change.field, change.proposedValue, rules))) {
+        alternateDeliveryProposal.confidence = "manual";
+        alternateDeliveryProposal.changes = [];
+        alternateDeliveryProposal.explanation = "The separated PO Box number or remaining street value does not meet its field rules. Review the complete address and edit the fields directly.";
+      }
       if (alternateDeliveryProposal) {
         issue(issues, {
           ...base,
@@ -331,6 +341,24 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           message: alternateDeliveryProposal.explanation,
           autoFixable: alternateDeliveryProposal.confidence === "safe",
           repairProposal: alternateDeliveryProposal,
+        });
+      }
+      const boxValue = fields.PoBoxNumber;
+      if (boxValue && !fieldValueMeetsRules("PoBoxNumber", boxValue, rules)) {
+        const normalized = normalizePoBoxNumber(boxValue);
+        const suggestedFix = normalized !== undefined && fieldValueMeetsRules("PoBoxNumber", normalized, rules)
+          ? normalized : undefined;
+        issue(issues, {
+          ...base,
+          severity: boxValue.length > (rules.fieldLengths.PoBoxNumber ?? Infinity) ? "error" : "warning",
+          field: "PoBoxNumber",
+          currentValue: boxValue,
+          ruleId: "PO_BOX_NUMBER_FORMAT",
+          message: suggestedFix
+            ? `PoBoxNumber "${boxValue}" can be normalized to "${suggestedFix}". Store only the box number, without a PO Box prefix.`
+            : `PoBoxNumber "${boxValue}" must contain only the box number in digits, within its configured length limit. Do not include a PO Box prefix or other address text.`,
+          suggestedFix,
+          autoFixable: suggestedFix !== undefined,
         });
       }
       if (fields.RuralRoute && !isCanonicalRuralRoute(fields.RuralRoute)) {
@@ -349,7 +377,8 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
         });
       }
 
-      const streetNameSuffixProposal = analyzeStreetNameSuffix(
+      const streetNameSuffixProposal = alternateDeliveryProposal?.deliveryType === "poBox"
+        && alternateDeliveryProposal.sourceField === "StreetName" ? undefined : analyzeStreetNameSuffix(
         fields,
         rules.allowedStreetTypeValues,
         rules.allowedStreetDirectionValues,
@@ -442,7 +471,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       });
       for (const [field, limit] of Object.entries(rules.fieldLengths)) {
         const val = fields[field] ?? "";
-        if (field === "PostalCode") continue;
+        if (field === "PostalCode" || field === "PoBoxNumber") continue;
         if (val.length <= limit) continue;
         if (field === "Unit") {
           const [standardized, changed] = standardizeUnit(val);
@@ -459,7 +488,9 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
             repairProposal,
           });
         } else if (field === "StreetNumber") {
-          const repairProposal = analyzeStreetNumberRepair(fields, limit, `${recordId}-address-street-number`)
+          const repairProposal = (alternateDeliveryProposal?.deliveryType === "poBox"
+            && alternateDeliveryProposal.sourceField === field ? alternateDeliveryProposal : undefined)
+            ?? analyzeStreetNumberRepair(fields, limit, `${recordId}-address-street-number`)
             ?? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-street-number-unit-prefix`)
             ?? manualAddressProposal(field, val, limit);
           const safe = repairProposal.confidence === "safe";

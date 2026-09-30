@@ -50,4 +50,13 @@ describe("manual address field styling", () => {
     expect(html).toContain("lucide-pen-line");
     expect(html).not.toContain("lucide-shield-check");
   });
+
+  it("flags a PO box prefix in the field and accepts a bare box number", () => {
+    expect(render({ PoBoxNumber: "PO Box 42" })).toContain("address-field-control--invalid");
+    const html = render({ PoBoxNumber: "0042" });
+    expect(html).toContain("address-field-control--valid");
+    expect(html).toContain("PO box number (digits only)");
+    expect(html).toContain('value="0042"');
+    expect(html).toContain("PO Box 0042");
+  });
 });
