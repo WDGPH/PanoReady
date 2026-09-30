@@ -371,8 +371,9 @@ Field values must not exceed the maximum length for that field.
 
 **Auto-fix:** No. Values exceeding the limit must be shortened manually.
 
-`PostalCode` is intentionally handled by its dedicated structural rule rather
-than this generic length rule. Invalid postal codes are never auto-truncated.
+`PostalCode` and `PoBoxNumber` are handled by their dedicated format rules rather
+than this generic length rule. Invalid postal codes and box numbers are never
+auto-truncated.
 
 ---
 
@@ -388,6 +389,53 @@ canonical value so the same input does not also receive a generic whitespace
 issue.
 
 **Auto-fix:** Yes. The suggested fix is the trimmed value (whitespace removed from both ends).
+
+---
+
+### Rule: `ALTERNATE_DELIVERY_IN_STREET_FIELD`
+
+**Severity:** warning
+
+**Fields:** `StreetName`, `StreetNumber`
+
+Detects complete numeric PO Box references entered in a street field, including
+`PO Box 42`, `P.O. Box #42`, `Post Office Box 42`, and `Box 42`. Detection runs
+before the generic character policy.
+
+**Auto-fix:** Yes when `PoBoxNumber` is empty or identifies the same number and
+the proposed values meet their field rules. The fix stores only the digits in
+`PoBoxNumber`. Leading zeroes are preserved. A complete box reference clears
+the source field. A leading reference followed by whitespace or a hyphen and
+a civic-address fragment (street number followed by street text) preserves
+that fragment in the source field. For example, `PO BOX 57 918 Example Grove`
+becomes box number `57` with `918 Example Grove` retained in `StreetName`, and
+`P.O Box 68-427 Sample Way` becomes box number `68` with `427 Sample Way` retained.
+The retained fragment can then be reviewed as part of the street address.
+Conflicting destinations, references in both street fields, letters in the box
+number, additional delivery references, station information, and unrecognized
+trailing text remain manual review. A numeric range without street text, such
+as `PO Box 57-918`, is not automatically split.
+
+---
+
+### Rule: `PO_BOX_NUMBER_FORMAT`
+
+**Severity:** warning; error when the configured length limit is exceeded
+
+**Field:** `PoBoxNumber`
+
+A populated field must contain only the box number in digits, such as `42` or
+`0042`. Do not include `PO Box`, a `#`, spaces, letters, or other address text.
+The optional field may be empty. Manual field editing uses the same validation
+and marks an invalid draft **Check value**. The formatted address preview adds
+`PO Box` for readability; the field and exported value contain only the number.
+
+**Auto-fix:** Yes for a complete recognizable numeric value: `PO Box 0042`,
+`P.O. Box #0042`, `Post Office Box 0042`, `Box 0042`, and `#0042` become `0042`.
+Numbers are never truncated or converted to integers. Values containing other
+text or numbers exceeding the configured limit remain manual review. This rule
+owns the field, so generic character cleanup cannot remove punctuation to turn
+an ambiguous value into a different box number.
 
 ---
 
@@ -510,6 +558,8 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
+| `ALTERNATE_DELIVERY_IN_STREET_FIELD` | Yes when unambiguous | Move the numeric PO Box reference to `PoBoxNumber`, without a prefix |
+| `PO_BOX_NUMBER_FORMAT` | Yes when the complete number is unambiguous | Remove a recognized prefix or number marker; preserve leading zeroes |
 | `RURAL_ROUTE_IN_STREET_FIELD` | Yes when unambiguous | Move to `RuralRoute` and normalize to `RR n` |
 | `RURAL_ROUTE_FORMAT` | Yes when a 1–4 digit number is unambiguous | Normalize to `RR n`; other values need manual review |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
