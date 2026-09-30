@@ -31,7 +31,7 @@ Manually check both workflows with synthetic inputs. Cover XML and workbook inta
 
 Update `package.json` and its lockfile version, update `CHANGELOG.md` with changes and known limitations, and tag the reviewed commit as `vX.Y.Z`. Publish a GitHub release from that tag after the checks pass. The package remains `private: true` because this is an application, not an npm package; this does not affect its MIT license.
 
-Record the application URL separately from the documentation URL. Verify both sites after deployment.
+The tag must be on main's history. Confirm the Pages workflow succeeds, including its public-version verification, and compare the stable version and source commit in its Actions summary with the intended release. Record the application URL separately from the documentation URL and check both sites in a browser; manifest verification does not check rendering.
 
 ## Dependency maintenance
 
