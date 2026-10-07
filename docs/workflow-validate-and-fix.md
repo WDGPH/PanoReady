@@ -137,41 +137,25 @@ A READY / BLOCKED badge in the top-right corner reflects the overall gate state:
 
 ### Step 3 — Fix Data
 
-The Fix screen presents every issue that has either a suggested fix or can accept a manual correction.
+Automatic address fixes now show one combined preview per student: the original values beside the final values. The Issue column describes what is wrong with the address; the Before/After values show the correction. Single-step repairs need no expandable details. Only repairs with multiple steps offer **Repair steps** to explain the sequence. Any remaining address findings are noted. Select the row to apply the complete sequence as one correction; the file is rechecked afterward. **Undo last action** reverses the entire applied batch.
 
-**Table columns:**
+The planner reassesses the address after each complete repair. Filters and review exclusions apply to subsequent steps too. Changing a severity filter clears automatic selections and regenerates the previews. A sequence that cannot safely finish explains why and stays unavailable for selection; use Manual fixes to review it.
 
-| Column | Description |
-|---|---|
-| Student | Student name |
-| Field | The XML field to change |
-| Current Value | The value in the original XML |
-| New Value | Editable input — pre-filled with the suggested fix if one exists |
+Assessment counts individual findings, so its automatic-suggestion counts may differ from the combined correction count. See [Rule order and automatic address repairs](autofix-sequencing.md) for examples and the maintained order.
+
+The automatic-fix table shows severity, the student or file record, the issue or combined repair, a Before/After comparison, and a selection checkbox. Changes remain unapplied until you choose **Apply selected**.
 
 **Controls:**
 
-- **Auto-fill All Fixable** — Populates every empty "New Value" cell with its suggested fix in one click.
-- **Clear All** — Removes all staged values, resetting the form.
-- **Use suggested** (per-row button) — Applies the suggested fix for that row only.
-- **Fixes staged counter** — Shows how many fixes are currently staged.
+- **Select all on current page** selects eligible corrections on the visible page.
+- **Select all across all pages** selects eligible corrections within the active filters.
+- **Apply selected** applies the selected corrections and rechecks the file.
+- **Clear all** clears selections.
+- **Manual fixes** continues to direct field and address review.
 
-**Rules for entering manual fixes:**
+Postal-code and deterministic phone corrections use the same selected, audited application path. Ambiguous or invalid values remain available for manual review.
 
-- Leave the New Value blank to skip that issue — the original value is preserved.
-- Any non-blank value you type will be applied as-is; ensure it matches the expected format for that field (see [Validation Rules](./validation-rules.md)).
-- Postal-code normalization and numeric-position O/I/L repairs are bulk-safe
-  suggestions. They are staged, audited, applied, and revalidated through this
-  same screen; unresolved postal-code values remain manual issues.
-- Deterministic phone formatting and leading-country-code removal use the same
-  staged and audited path. Unambiguous extension variants (`X`, spaced `x`,
-  `ext`, `ext.`, `extension`, and `#`) are normalized to canonical form: lowercase
-  `x` followed by 1–5 digits. Missing, overlong, or non-numeric extensions,
-  invalid NPA/NXX digits, placeholders, and Canadian geographic area-code
-  policy findings are never auto-fixed.
-
-**Action:**
-
-- **Apply & Revalidate** — Applies all staged fixes to the XML and reruns the full validation pass.
+In Manual fixes, edit the current value or open **Review address** to edit the complete address together. An untouched input preserves its value. Deliberately clearing an input stages a removal. Use **Apply fixes and view summary** to apply manual changes and revalidate the file.
 
 ---
 

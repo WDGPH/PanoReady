@@ -5,19 +5,24 @@ import WorkflowNavigation from "@/components/WorkflowNavigation";
 import SeverityFilter from "@/components/SeverityFilter";
 import PagedTable from "@/components/PagedTable";
 import StudentEntry, { studentReference } from "@/components/StudentEntry";
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-import { Wand2, CheckCircle2, Trash2, TriangleAlert, Minus } from "lucide-react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Wand2, CheckCircle2, Trash2, TriangleAlert, Minus, ChevronDown } from "lucide-react";
 import AddressRepairCard from "@/components/AddressRepairCard";
 import { guardianSectionForField } from "@/lib/fields";
 import { ADDRESS_REPAIR_FIELDS } from "@/lib/addressRepair";
 import { defaultRules } from "@/lib/rulesets";
 import { fieldValueMeetsRules } from "@/lib/validator";
 import { countAppliedCorrections, deduplicateAppliedFixes } from "@/lib/fixSummary";
-import type { AppliedFix, StudentRecord, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
+import type { AppliedFix, AutomaticFixItem, StudentRecord, ValidateSession, ValidationIssue, ValidationSeverity } from "@/lib/types";
+import AddressRepairDetails from "./AddressRepairDetails";
+import { automaticReviewItems } from "./automaticReview";
 import { automaticFixes, isAutomaticIssue } from "./helpers";
 import { SeverityBadge } from "./ValidationBadges";
 import { issueTypeLabel, matchesReviewFilter, isExcludedFromReview } from "./overview";
 import type { ReviewFilter, ReviewExclusion } from "./overview";
+
+const EMPTY_FILTER: ReviewFilter = {};
+const EMPTY_EXCLUSIONS: ReviewExclusion[] = [];
 
 function SectionRemoval({ field }: { field: string }) {
   const name = field === "School" ? "empty school" : guardianSectionForField(field) === "Guardian2" ? "Guardian 2" : "Guardian 1";
@@ -81,9 +86,9 @@ export default function FixView({
   advancedOptions,
   onApply,
   onBack,
-  filter = {},
+  filter = EMPTY_FILTER,
   onClearFilter,
-  exclusions = [],
+  exclusions = EMPTY_EXCLUSIONS,
   view,
   onContinue,
   onAutoApply,
@@ -137,6 +142,7 @@ export default function FixView({
 
   const [severityFilter, setSeverityFilter] = useState<"all" | ValidationSeverity>("all");
 
+  const [expandedAddresses, setExpandedAddresses] = useState<Set<string>>(new Set());
   const [activeAddressId, setActiveAddressId] = useState<string | null>(null);
   const addressTrigger = useRef<HTMLButtonElement | null>(null);
   const activeAddress = addressIssues.find(issue => issue.id === activeAddressId);
@@ -145,13 +151,15 @@ export default function FixView({
     && records.some(record => record.id === issue.recordId));
   const activeAddressIndex = addressQueue.findIndex(issue => issue.id === activeAddressId);
 
-  const groups = [
-    { label: "Automatic fixes", items: issues.filter(isAutomaticIssue), automatic: true },
+  const automaticItems = useMemo(() => view === "automatic" ? automaticReviewItems(currentResult, rules, filter, exclusions, severityFilter) : [],
+    [view, currentResult, rules, filter, exclusions, severityFilter]);
+  const groups: { label: string; items: AutomaticFixItem[]; automatic: boolean }[] = [
+    { label: "Automatic fixes", items: automaticItems, automatic: true },
     { label: "Needs review", items: issues.filter(issue => issue.ruleId !== "EMPTY_GUARDIAN"), automatic: false },
   ];
 
-  const automaticCandidates = issues.filter(issue => isAutomaticIssue(issue) && issue.recordId && issue.field && (issue.repairProposal || issue.ruleId === "EMPTY_GUARDIAN" || issue.suggestedFix !== undefined));
-  const selectAutomatic = (candidates: ValidationIssue[], visibleIds: string[]) => {
+  const automaticCandidates = automaticItems.filter(issue => isAutomaticIssue(issue) && issue.recordId && issue.field && (issue.repairProposal || issue.ruleId === "EMPTY_GUARDIAN" || issue.suggestedFix !== undefined));
+  const selectAutomatic = (candidates: AutomaticFixItem[], visibleIds: string[]) => {
     const values = Object.fromEntries(candidates.map(issue => [issue.id,
       issue.ruleId === "EMPTY_GUARDIAN" ? "" : issue.suggestedFix
         ?? issue.repairProposal!.changes.find(change => change.proposedValue !== change.currentValue)!.proposedValue,
@@ -159,7 +167,7 @@ export default function FixView({
     setSelectionWave(visibleIds.filter(id => id in values && pending[id] === undefined));
     setPending(current => ({ ...current, ...values }));
   };
-  const applyAutomatic = async (candidates: ValidationIssue[]) => {
+  const applyAutomatic = async (candidates: AutomaticFixItem[]) => {
     if (operation || !candidates.length) return;
     const batch = deduplicateAppliedFixes(candidates.flatMap(issue => automaticFixes(issue, records, Date.now())));
     const corrections = countAppliedCorrections(batch);
@@ -316,6 +324,7 @@ export default function FixView({
 
       <WorkflowHeading title={view === "automatic" ? "Choose automatic fixes" : "Review manual fixes"} advancedOptions={view === "automatic" ? advancedOptions : undefined} />
 
+      {view === "automatic" && <p className="cleaning-description">Address fixes are combined into one preview per student. Repairs with multiple steps can be expanded to show the sequence. Filters and review exclusions apply to every step.</p>}
       {/* Filters */}
       {exclusions.length > 0 && <p className="cleaning-description">Review exclusions are active. Manage them in Assess quality; validation results are unchanged.</p>}
       {Object.keys(filter).length > 0 && <div className="review-filter">
@@ -327,19 +336,31 @@ export default function FixView({
         const visible = group.items.filter(issue => severityFilter === "all" || issue.severity === severityFilter);
         const visibleIssues = visible;
         return <section key={group.label} aria-label={group.label} className="fix-group fix-group--review">
-          {visible.length === 0 && <p className="cleaning-description">{group.items.length ? "No issues match this filter." : "No issues."}</p>}
+          {visible.length === 0 && <p className="cleaning-description">{group.items.length ? "No issues match this filter." : group.automatic ? "No automatic corrections in this scope. Review remaining findings in Manual fixes." : "No issues."}</p>}
 
       {/* Fix table */}
       <div style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
         <div style={{ overflowX: "auto" }}>
-          <PagedTable className={`data-table fix-table${group.automatic ? " fix-table--automatic" : " fix-table--manual"}`} headerControls={{ 0: <SeverityFilter value={severityFilter} onChange={setSeverityFilter} /> }} pageActions={ids => <div className="autofix-page-actions">
+          <PagedTable className={`data-table fix-table${group.automatic ? " fix-table--automatic" : " fix-table--manual"}`} headerControls={{ 0: <SeverityFilter value={severityFilter} onChange={value => {
+            if (group.automatic) { setPending({}); setSelectionWave([]); setExpandedAddresses(new Set()); }
+            setSeverityFilter(value);
+          }} /> }} rowDetails={group.automatic ? id => {
+            const item = automaticItems.find(item => item.id === id);
+            const plan = item?.addressPlan;
+            if (!plan || plan.steps.length < 2 || !expandedAddresses.has(plan.recordId)) return null;
+            const record = records.find(record => record.id === plan.recordId)!;
+            return <AddressRepairDetails plan={plan} id={`repair-details-${plan.recordId}`} recordLabel={studentReference(record)} />;
+          } : undefined} pageActions={ids => {
+            const pageCandidates = automaticCandidates.filter(issue => ids.includes(issue.id));
+            return <div className="autofix-page-actions">
             <button type="button" className="btn btn-secondary" disabled={!pendingCount} onClick={clearAll}>Clear all</button>
             {group.automatic && <div className="autofix-apply-actions">
-            <button type="button" className="btn btn-secondary" disabled={!ids.length} onClick={() => selectAutomatic(automaticCandidates.filter(issue => ids.includes(issue.id)), ids)}>Select all on current page ({ids.length})</button>
+            <button type="button" className="btn btn-secondary" disabled={!pageCandidates.length} onClick={() => selectAutomatic(pageCandidates, ids)}>Select all on current page ({pageCandidates.length})</button>
             <button type="button" className="btn btn-secondary" disabled={!automaticCandidates.some(issue => severityFilter === "all" || issue.severity === severityFilter)} onClick={() => selectAutomatic(automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter), ids)}>Select all across all pages ({automaticCandidates.filter(issue => severityFilter === "all" || issue.severity === severityFilter).length})</button>
             <button type="button" className="btn btn-secondary" disabled={!automaticSelectedCount} onClick={() => applyAutomatic(automaticCandidates.filter(issue => pending[issue.id] !== undefined))}><Wand2 size={16} aria-hidden="true" /> Apply selected ({automaticSelectedCount})</button>
             </div>}
-          </div>}>
+          </div>;
+          }}>
             <thead>
               <tr>
                 <th className="fix-severity-column">Severity</th>
@@ -441,17 +462,37 @@ export default function FixView({
                   <tr key={issue.id} data-row-id={issue.id} className={group.automatic ? `autofix-row${selected && waveIndex >= 0 ? " autofix-row--selecting" : ""}` : undefined} data-selected={group.automatic ? selected : undefined} data-staged={!group.automatic ? manualStaged : undefined} onAnimationEnd={event => {
                     if (event.animationName === "autofix-select-row" && waveIndex === selectionWave.length - 1) setSelectionWave([]);
                   }} onClick={group.automatic ? event => {
-                    if ((event.target as HTMLElement).closest("button, input, label, a, select") || window.getSelection()?.toString()) return;
+                    if ((event.target as HTMLElement).closest("button, input, label, a, select, details") || window.getSelection()?.toString()) return;
                     toggleSelection();
                   } : undefined} style={{ opacity: !record && !issue.field && !issue.repairProposal ? 0.5 : 1, "--selection-delay": `${Math.max(0, waveIndex) * 180 / Math.max(1, selectionWave.length - 1)}ms` } as CSSProperties}>
                     <td data-sort-value={issue.severity === "error" ? 0 : issue.severity === "warning" ? 1 : 2}><SeverityBadge severity={issue.severity} /></td>
                     <td className="fix-record-column" data-sort-value={recordLabel} style={{ fontSize: 12 }}>
                       {record ? <StudentEntry record={record} /> : recordLabel}
                     </td>
-                    <td style={{ fontSize: 12 }}>{issue.message}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {issue.message}
+                      {group.automatic && issue.addressPlan && issue.addressPlan.steps.length < 2
+                        && !issue.addressPlan.stoppedReason && issue.addressPlan.remaining.length > 0 && <p className="repair-remaining">
+                          {issue.addressPlan.remaining.length} address issue{issue.addressPlan.remaining.length === 1 ? " remains" : "s remain"} after this correction.
+                        </p>}
+                      {group.automatic && issue.addressPlan && issue.addressPlan.steps.length > 1 && <button type="button" className="repair-details-toggle"
+                        aria-label={`Repair steps for ${recordLabel}`}
+                        aria-expanded={expandedAddresses.has(issue.addressPlan.recordId)}
+                        aria-controls={`repair-details-${issue.addressPlan.recordId}`}
+                        onClick={() => setExpandedAddresses(current => {
+                          const next = new Set(current);
+                          const id = issue.addressPlan!.recordId;
+                          if (next.has(id)) next.delete(id); else next.add(id);
+                          return next;
+                        })}>
+                        <ChevronDown size={14} aria-hidden="true" />
+                        Repair steps
+                      </button>}
+                    </td>
                     {group.automatic ? [
                       <td key="comparison" data-sort-value={changes.map(change => `${change.field}: ${change.currentValue}`).join(" · ")}>
-                        {isEmptyGuardian || issue.ruleId === "EMPTY_STUDENTS" ? <SectionRemoval field={issue.field ?? "Guardian"} /> : <FixValues changes={changes} />}
+                        {isEmptyGuardian || issue.ruleId === "EMPTY_STUDENTS" ? <SectionRemoval field={issue.field ?? "Guardian"} /> : changes.length > 0 ? <FixValues changes={changes} /> : <span>Review this address in Manual fixes.</span>}
+
                       </td>,
                       <td key="selection" className="fix-selection-column">
                         <label className="fix-select-control" title={selected ? "Deselect fix" : "Select fix"}>

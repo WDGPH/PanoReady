@@ -32,4 +32,21 @@ describe("paged tables", () => {
     expect(html).toContain('<tbody></tbody>');
   });
 
+  it("renders full-width details without counting them as records or selection IDs", () => {
+    let visibleIds: string[] = [];
+    const html = renderToStaticMarkup(<PagedTable
+      pageActions={ids => { visibleIds = ids; return null; }}
+      rowDetails={id => <section>Details for {id}</section>}>
+      <thead><tr><th>Name</th><th>Value</th></tr></thead>
+      <tbody>{Array.from({ length: 30 }, (_, index) => <tr key={index} data-row-id={`record-${index}`}>
+        <td>Record {index}</td><td>{index}</td>
+      </tr>)}</tbody>
+    </PagedTable>);
+    expect(visibleIds).toHaveLength(25);
+    expect(html).toContain('<td colSpan="2"><section>Details for record-0</section></td>');
+    expect(html).toContain('Details for record-24');
+    expect(html).not.toContain('Details for record-25');
+    expect(html).toContain('1–25 of 30');
+  });
+
 });

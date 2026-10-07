@@ -1,0 +1,21 @@
+.panel {
+  padding: 12px 18px;
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.steps { margin: 0; padding-left: 18px; list-style: decimal; }
+.steps > li + li { margin-top: 6px; }
+.steps > li::marker { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.title { font-weight: 600; }
+.changes, .stopped { color: var(--color-text-secondary); }
+.changes strong { font-weight: 500; color: var(--color-text-primary); white-space: pre-wrap; }
+.stopped { margin: 0 0 8px; }
+.remaining { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.remaining h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 12px; font-weight: 600; }
+.remaining h3 svg { flex-shrink: 0; }
+.remaining ul { margin: 0; padding-left: 18px; list-style: disc; color: var(--color-text-secondary); }
+.remaining li + li { margin-top: 4px; }
