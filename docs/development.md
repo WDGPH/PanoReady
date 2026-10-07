@@ -72,6 +72,10 @@ Use `mkdocs build --strict` before submitting documentation changes. The `site/`
 
 Automatic data fixes must be deterministic and explainable. Changes that transmit record data, add analytics, or persist it beyond existing browser-local behaviour require explicit privacy and security review. See the repository's [contribution guide](https://github.com/WDGPH/PanoReady/blob/main/CONTRIBUTING.md).
 
+## Adding rules and automatic fixes
+
+Read [Rule order and automatic address repairs](autofix-sequencing.md) for the executable order, the distinction between findings and combined corrections, and the procedure for adding and testing a rule. Keep address rules in the shared registry so assessment and repair planning use the same definitions.
+
 ## Tests and dependency updates
 
 `npm test` runs the Vitest suite. Tests use synthetic values and cover the canonical model, field definitions, address repair, phone and postal-code handling, ruleset import, and validator integration.

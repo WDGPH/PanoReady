@@ -1,6 +1,6 @@
 "use client";
 
-import { Children, cloneElement, isValidElement, useState, type ReactElement, type ReactNode, type TableHTMLAttributes } from "react";
+import { Fragment, Children, cloneElement, isValidElement, useState, type ReactElement, type ReactNode, type TableHTMLAttributes } from "react";
 
 type CellProps = { children?: ReactNode; "data-sort-value"?: string | number; "data-sortable"?: boolean; "data-row-id"?: string };
 const elements = (children: ReactNode) => Children.toArray(children).filter(isValidElement<CellProps>);
@@ -21,8 +21,15 @@ export function compareTableValues(a: string, b: string) {
   return left !== null && right !== null ? left - right : a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
+type PagedTableProps = TableHTMLAttributes<HTMLTableElement> & {
+  pageActions?: (ids: string[]) => ReactNode;
+  headerControls?: Record<number, ReactNode>;
+  /** Full-width content below a row, excluded from sorting and page counts. */
+  rowDetails?: (id: string) => ReactNode;
+};
+
 /** Presentation-only paging: callers retain the complete data and edit state. */
-export default function PagedTable({ children, pageActions, headerControls, ...props }: TableHTMLAttributes<HTMLTableElement> & { pageActions?: (ids: string[]) => ReactNode; headerControls?: Record<number, ReactNode> }) {
+export default function PagedTable({ children, pageActions, headerControls, rowDetails, ...props }: PagedTableProps) {
   const sections = elements(children);
   const body = sections.find(section => section.type === "tbody");
   const rows = elements(body?.props.children);
@@ -36,12 +43,24 @@ export default function PagedTable({ children, pageActions, headerControls, ...p
     const right = elements(b.props.children)[sort.column];
     return compareTableValues(cellText(left), cellText(right)) * (sort.descending ? -1 : 1);
   }) : rows;
+  const visibleRows = sorted.slice(page * 25, (page + 1) * 25);
+  const header = sections.find(section => section.type === "thead");
+  const columnCount = elements(elements(header?.props.children)[0]?.props.children).length
+    || elements(rows[0]?.props.children).length;
   const changePage = (next: number) => setPosition({ identity, page: next });
   return <>
-    {pageActions?.(sorted.slice(page * 25, (page + 1) * 25).map(row => row.props["data-row-id"]).filter((id): id is string => id !== undefined))}
+    {pageActions?.(visibleRows.map(row => row.props["data-row-id"]).filter((id): id is string => id !== undefined))}
     <table {...props}>
       {sections.map(section => {
-        if (section.type === "tbody") return cloneElement(section, {}, sorted.slice(page * 25, (page + 1) * 25));
+        if (section.type === "tbody") return cloneElement(section, {}, visibleRows.map(row => {
+          const id = row.props["data-row-id"];
+          const details = id === undefined ? null : rowDetails?.(id);
+          // Detail rows travel with their parent and never affect sorting, page
+          // sizes, or bulk-selection IDs.
+          return <Fragment key={row.key}>{row}{details && <tr className="table-detail-row">
+            <td colSpan={columnCount}>{details}</td>
+          </tr>}</Fragment>;
+        }));
         if (section.type !== "thead") return section;
         return cloneElement(section, {}, elements(section.props.children).map(row => cloneElement(row, {}, elements(row.props.children).map((cell, column) => {
           if (cell.props["data-sortable"] === false) return cell;

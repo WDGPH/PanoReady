@@ -64,6 +64,7 @@ nav:
       - Architecture diagrams: architecture-diagrams.md
       - Canonical runtime: canonical-runtime.md
       - Proposed import contracts: canonical-import-contracts.md
+      - Autofix sequencing: autofix-sequencing.md
       - Development: development.md
       - Deployment: deployment.md
       - Release checklist: releasing.md
