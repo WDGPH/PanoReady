@@ -16,6 +16,28 @@ const session: ValidateSession = {
 };
 const noop = () => {};
 
+it.each(["automatic", "manual"] as const)("keeps phone values in the comparison rather than the %s Issue description", view => {
+  const phoneSession: ValidateSession = {
+    fileName: "phone.xml", originalXml: "", fixes: [],
+    initialResult: {
+      schoolCount: 1, studentCount: 1, gate: "REVIEW_REQUIRED",
+      records: [{ id: "school0:student0", xmlPath: "", fields: { GuardianPhoneNumber: "2045550100" } }],
+      issues: [{
+        id: "phone-0", recordId: "school0:student0", field: "GuardianPhoneNumber", ruleId: "PHONE_FORMAT",
+        message: 'Diagnostic includes private value "2045550100" and proposed value "204-555-0100".',
+        severity: "warning", autoFixable: true, suggestedFix: "204-555-0100",
+      }],
+    },
+  };
+  const html = renderToStaticMarkup(<FixView session={phoneSession} view={view} onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
+  expect(html).toContain(">Guardian phone number is not in the required XXX-XXX-XXXX format.</td>");
+  expect(html).not.toContain("Diagnostic includes private value");
+  if (view === "automatic") {
+    expect(html).toContain(">2045550100</td>");
+    expect(html).toContain(">204-555-0100</td>");
+  } else expect(html).toContain('value="2045550100"');
+});
+
 it.each(["automatic"] as const)("shows individually selectable Guardian removals in the %s table", view => {
   const html = renderToStaticMarkup(<FixView session={session} view={view} onApply={noop} onBack={noop} onClearFilter={noop} onContinue={noop} onAutoApply={noop} onBusyChange={noop} />);
   expect(html).toContain('data-row-id="guardian-0"');
