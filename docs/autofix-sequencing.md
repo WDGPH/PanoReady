@@ -79,6 +79,8 @@ Do not add a second ordering list in the UI, incrementally mutate the real XML d
 
 ## Adding a non-address rule
 
+Issue descriptions in the review tables come from `lib/issueDescription.ts`. Add generic problem wording keyed by rule and field; never interpolate record values, names, school details, or proposed replacements. Values belong in the comparison table. The fallback for an unknown rule must remain generic. Address step copy uses the same descriptions, with structural repair summaries in `workflows/stix/validation/addressRepairCopy.ts`. Detailed validation diagnostics remain separate from these display descriptions.
+
 Use the existing whole-file phases in `lib/validator.ts` and the independent checks in `lib/fieldValidation.ts`. Keep a diagnostic without a defensible correction non-automatic. A simple automatic suggestion needs its exact source value and replacement; the batch guard checks stale and conflicting writes before application.
 
 Non-address rules do not yet participate in repeated local assessment. If a new non-address fix depends on another fix, define its dependency and tests before extending sequencing to that domain. Do not assume the final full-file recheck makes competing precomputed writes safe.

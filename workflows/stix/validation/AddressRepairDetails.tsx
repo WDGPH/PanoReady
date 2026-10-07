@@ -1,5 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import type { AddressAutofixPlan } from "@/lib/types";
+import { issueDescription } from "@/lib/issueDescription";
 import { addressFieldLabel, addressRepairStepTitle } from "./addressRepairCopy";
 import styles from "./AddressRepairDetails.module.css";
 
@@ -23,7 +24,7 @@ export default function AddressRepairDetails({ plan, id, recordLabel }: {
     </ol>
     {plan.remaining.length > 0 && <aside className={styles.remaining} aria-label="Remaining address issues">
       <h3><TriangleAlert size={14} aria-hidden="true" /> Still needs review</h3>
-      <ul>{plan.remaining.map((finding, index) => <li key={index}>{finding.message}</li>)}</ul>
+      <ul>{plan.remaining.map((finding, index) => <li key={index}>{issueDescription(finding)}</li>)}</ul>
     </aside>}
   </section>;
 }

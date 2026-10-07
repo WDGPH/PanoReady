@@ -1,5 +1,6 @@
 "use client";
 import { isOenIdentityFinding } from "@/lib/identityRules";
+import { issueDescription } from "@/lib/issueDescription";
 import WorkflowHeading from "@/components/WorkflowHeading";
 import WorkflowNavigation from "@/components/WorkflowNavigation";
 import SeverityFilter from "@/components/SeverityFilter";
@@ -470,7 +471,7 @@ export default function FixView({
                       {record ? <StudentEntry record={record} /> : recordLabel}
                     </td>
                     <td style={{ fontSize: 12 }}>
-                      {issue.message}
+                      {issue.addressPlan ? issue.message : issueDescription(issue)}
                       {group.automatic && issue.addressPlan && issue.addressPlan.steps.length < 2
                         && !issue.addressPlan.stoppedReason && issue.addressPlan.remaining.length > 0 && <p className="repair-remaining">
                           {issue.addressPlan.remaining.length} address issue{issue.addressPlan.remaining.length === 1 ? " remains" : "s remain"} after this correction.
