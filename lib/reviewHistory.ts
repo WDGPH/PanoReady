@@ -1,9 +1,12 @@
+import { assertAutomaticBatchCurrent } from "./automaticBatch";
+import { defaultRules } from "./rulesets";
 import type { ReviewAction, ValidateSession } from "./types";
 import { applyValidationFixes, validateXml } from "./validator";
 
 /** Publish the XML, findings, audit entries and history only after validation succeeds. */
 export function applyReviewChanges(session: ValidateSession, label: ReviewAction["label"]): ValidateSession {
   const changes = session.fixes.slice(session.appliedFixCount ?? 0);
+  if (label === "Automatic fixes") assertAutomaticBatchCurrent(changes, session.revalidatedResult ?? session.initialResult, session.validationRules ?? defaultRules);
   const finalXml = applyValidationFixes(session.finalXml ?? session.originalXml, changes);
   const revalidatedResult = validateXml(finalXml, session.validationRules);
   return {

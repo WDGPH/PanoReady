@@ -13,6 +13,7 @@ import type {
   StudentRecord,
   GateState,
   AppliedFix,
+  AddressFindingReference,
   RulesProfile,
 } from "./types";
 import defaultRules from "../config/rules.stix.default.json";
@@ -398,7 +399,15 @@ export function generateIssueReportCsv(
   issues: ValidationIssue[],
   appliedFixes: AppliedFix[]
 ): string {
-  const fixedIds = new Set(appliedFixes.map((f) => f.issueId));
+  const plans = appliedFixes.flatMap(fix => fix.addressPlan ? [fix.addressPlan] : []);
+  const addressRepairIds = new Set(appliedFixes.filter(fix => fix.addressPlan).map(fix => fix.repairId));
+  const fixedIds = new Set(appliedFixes.filter(fix => !fix.repairId || !addressRepairIds.has(fix.repairId)).map(fix => fix.issueId));
+  const findingKey = (finding: AddressFindingReference) => JSON.stringify([
+    finding.recordId, finding.studentName, finding.schoolNumber, finding.ruleId, finding.field, finding.message,
+  ]);
+  // A combined repair can resolve several original findings, not just its row's
+  // anchor. Leave remaining findings unmarked and ignore unstable issue IDs.
+  const resolvedAddressFindings = new Set(plans.flatMap(plan => (plan.resolvedFindings ?? []).map(findingKey)));
   const escape = (v: unknown) => {
     const s = String(v ?? "");
     return s.includes(",") || s.includes('"') || s.includes("\n")
@@ -418,7 +427,7 @@ export function generateIssueReportCsv(
     i.message,
     i.suggestedFix ?? "",
     i.autoFixable ? "yes" : "no",
-    fixedIds.has(i.id) ? "yes" : "no",
+    (fixedIds.has(i.id) || resolvedAddressFindings.has(findingKey(i))) ? "yes" : "no",
   ]);
   return [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
 }
