@@ -1,17 +1,17 @@
 # Deployment
 
-One GitHub Pages artifact publishes two independent builds:
+One GitHub Pages artifact for the application publishes two independent builds:
 
 - `/PanoReady/` redirects to `/PanoReady/stable/` (preserving query and fragment).
 - `/PanoReady/stable/` serves the highest `vX.Y.Z` tag reachable from `main`.
 - `/PanoReady/latest/` serves the current `main` commit.
-- Each channel includes its own `/docs/`; the old `/PanoReady/docs/` entry redirects to stable documentation.
+- Documentation is published separately at `/docs/panoready/` by the documentation hub. Application help links select the matching released manual or `latest`.
 
 Prerelease tags are excluded. A release tag must be on main's history. The footer shows the release version and eight-character source commit SHA; commits beyond the highest reachable release show `+`, for example `v0.1.0+ · abc12345`. Each channel also publishes `build.json` with the full SHA.
 
-GitHub Pages replaces the entire site on deployment, so both channels are built and uploaded together. Publishing runs share a concurrency group, including public-version verification. The build resolves both channels' source commits and versions before building, then records them in the Actions summary. Each snapshot installs its own npm lockfile and Python requirements (with hash verification when provided by the release) in separate directories/environments, with separate Next.js asset paths. Dependency versions can differ without runtime collisions. Both builds must succeed before anything is published; an old dependency becoming unavailable can therefore block publication. Browser storage is still shared by origin: custom rulesets stored by one channel are visible to the other. Persistent data formats must remain compatible or use channel-specific keys.
+GitHub Pages replaces the entire site on deployment, so both channels are built and uploaded together. Publishing runs share a concurrency group, including public-version verification. The build resolves both channels' source commits and versions before building, then records them in the Actions summary. Each snapshot installs its own npm lockfile in a separate directory, with separate Next.js asset paths. Documentation dependencies are installed only by documentation checks and the hub. Dependency versions can differ without runtime collisions. Both builds must succeed before anything is published; an old dependency becoming unavailable can therefore block publication. Browser storage is still shared by origin: custom rulesets stored by one channel are visible to the other. Persistent data formats must remain compatible or use channel-specific keys.
 
-The existing `v0.1.0` release predates configurable paths and version labels. The build script adapts only its deployment configuration and footer in a temporary checkout; it does not change the tag or application logic. That old tag pins only the direct documentation dependencies, so its transitive Python dependencies are not fully reproducible. Newer releases retain their hashed requirements. Future releases use the environment variables directly.
+The existing `v0.1.0` release predates configurable paths and version labels. The build script adapts its deployment configuration, help link, and footer in a temporary checkout; it does not change the tag or application logic. Future releases use the environment variables directly.
 
 **URL casing:** the repository is currently `PanoReady`, so its project Pages path is `/PanoReady/`. Exact lowercase `/panoready/` requires renaming the repository or configuring an alias in the organization's `wdgph.github.io` site. Changing the build path alone cannot create that alias. After a rename, update `PAGES_BASE_PATH` in the workflow and public links.
 
@@ -33,9 +33,12 @@ Test `/` and `/reports` on the deployed instance, then process a synthetic XML f
 
 ## Publish on GitHub Pages
 
-The `GitHub Pages` workflow rebuilds both channels on pushes to `main`, version-tag pushes, and manual runs from `main` or a version tag. Pull requests build stable and the proposed merge commit without deploying. At least one reachable `vX.Y.Z` release tag is required. Tag-triggered builds check that the triggering tag is a stable release on main's history before installing dependencies. An off-main or prerelease tag fails explicitly. Pushing an older valid release tag still publishes the highest reachable release; it does not downgrade stable.
+The `Application Pages` workflow (`app-pages.yml`) rebuilds both channels on pushes to `main`, version-tag pushes, and manual runs from `main` or a version tag. Pull requests build stable and the proposed merge commit without deploying. At least one reachable `vX.Y.Z` release tag is required. Tag-triggered builds check that the triggering tag is a stable release on main's history before installing dependencies. An off-main or prerelease tag fails explicitly. Pushing an older valid release tag still publishes the highest reachable release; it does not downgrade stable.
 
-A repository administrator must select **GitHub Actions** under **Settings → Pages → Build and deployment → Source**. The `github-pages` environment must allow branch `main` and tags matching `v*.*.*` as separate rules; tag-triggered deployments otherwise fail the environment policy even when the tag points to main. Check any environment approval rules if deployment waits for approval.
+Before deployment, the workflow checks the public hub manifest for the selected
+stable version and full source SHA. Its manual must be active, not withdrawn or a
+preview. If the check fails, the previous application remains deployed. Rerun
+Application Pages after the corresponding release import has been published.
 
 After GitHub accepts the deployment, the workflow requests both public `build.json` files and compares their channel, version, and full SHA with the build job's expected values. Requests use unique query strings and ask caches to revalidate. Temporary errors or stale responses are retried up to twelve times, with ten seconds between attempts and a fifteen-second timeout per request. A verification failure marks the run failed and reports expected and observed values; the site has already been published and is not rolled back. A successful check proves the two sampled manifests match. It does not prove browser rendering, every CDN edge, or replacement of code in an already-open browser tab.
 
@@ -46,12 +49,13 @@ To build locally:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-docs.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
 mkdocs build --strict
 mkdocs serve
 ```
 
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed. The Pages workflow instead passes `--site-dir out/docs` so the documentation is included below the application.
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed. The `Check documentation` workflow builds the source manual strictly without publishing it. The hub owns documentation styling, search, versions, and publication; application releases keep their own Pages workflow. The application artifact includes redirect-only paths for the old documentation
+URLs; it contains no rendered manual or documentation assets.
 
 Internal pages and anchors are checked using [MkDocs link validation](https://www.mkdocs.org/user-guide/configuration/#validation). External URLs still need review when publishing.
 

@@ -1,0 +1,91 @@
+name: Application Pages
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      builds: ${{ steps.sites.outputs.builds }}
+      source-sha: ${{ steps.sites.outputs.source-sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # Published output must not depend on caches written by other jobs.
+          package-manager-cache: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Test Pages release selection and verification
+        run: python -m unittest discover -s scripts -p 'test_*.py'
+      - name: Build stable and latest applications
+        id: sites
+        env:
+          PREVIEW: ${{ github.event_name == 'pull_request' }}
+          PAGES_BASE_PATH: /PanoReady
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          latest_ref=origin/main
+          if [ "$PREVIEW" = "true" ]; then latest_ref=HEAD; fi
+          release_args=()
+          if [ -n "$RELEASE_TAG" ]; then release_args=(--release-tag "$RELEASE_TAG"); fi
+          python scripts/build-pages.py --latest-ref "$latest_ref" --base-path "$PAGES_BASE_PATH" "${release_args[@]}"
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: pages-out
+
+  deploy:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    timeout-minutes: 15
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Read verification tooling from the build job's checkout.
+      pages: write # Create the Pages deployment.
+      id-token: write # Authenticate deployment with a short-lived OIDC token.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out verification tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.build.outputs.source-sha }}
+      - name: Require matching public release documentation
+        env:
+          EXPECTED_BUILDS: ${{ needs.build.outputs.builds }}
+        run: python scripts/verify-docs.py --expected "$EXPECTED_BUILDS"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Verify public stable and latest versions
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_BUILDS: ${{ needs.build.outputs.builds }}
+        run: python scripts/verify-pages.py --url "$PAGE_URL" --expected "$EXPECTED_BUILDS"

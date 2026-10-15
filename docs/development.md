@@ -62,11 +62,11 @@ This runs ESLint, generates Next.js route types, checks TypeScript, runs the reg
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-docs.txt
-mkdocs serve
+python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
+python -m mkdocs serve
 ```
 
-Use `mkdocs build --strict` before submitting documentation changes. The `site/` output is generated and ignored by Git.
+Use `python -m mkdocs build --strict` before submitting documentation changes. The `site/` output is generated and ignored by Git.
 
 ## Contribution principles
 
@@ -128,3 +128,17 @@ Restart the development server after changing commits or tags to refresh it.
 Without a reachable release tag the version reads `unversioned`; without Git metadata
 the SHA reads `unknown`. Builds from source archives can supply
 `NEXT_PUBLIC_BUILD_VERSION` and `NEXT_PUBLIC_BUILD_SHA` explicitly, as Pages does.
+
+## Documentation hub notifications
+
+The public manual is published by [WDGPH/docs](https://github.com/WDGPH/docs).
+Keep documentation sources and strict source checks here; shared styling and
+versioned publication belong to the hub. Application hosting remains separate.
+
+When `DOCS_HUB_NOTIFY_ENABLED` is true, the dedicated workflow uses
+`DOCS_HUB_TRIGGER_TOKEN` only in its dispatch step, without checking out source
+or building the app. Application and documentation builds do not receive it.
+Main updates dispatch `publish.yml` on hub `main` with `source_repo=WDGPH/PanoReady`
+and `deploy=true`; semantic tag creation, updates, and deletion dispatch
+`refresh-releases.yml`. Manual notification requests both. There is no polling.
+The hub still controls deployment and release-lock review.

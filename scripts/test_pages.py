@@ -21,6 +21,7 @@ def load_script(name):
 
 builder = load_script("build-pages")
 verifier = load_script("verify-pages")
+docs_verifier = load_script("verify-docs")
 
 
 class ReleaseSelectionTests(unittest.TestCase):
@@ -83,6 +84,7 @@ class ReleaseSelectionTests(unittest.TestCase):
             channel = target / snapshot["channel"]
             channel.mkdir()
             (channel / "build.json").write_text(json.dumps(snapshot))
+            builder.documentation_redirects(Path("absent-source-docs"), channel / "docs", "https://wdgph.github.io/docs/panoready/" + (snapshot["version"] if snapshot["channel"] == "stable" else "latest") + "/")
 
         with patch.object(builder, "build", side_effect=fake_build), patch("sys.argv", [
             "build-pages.py", "--latest-ref", "main", "--output", str(output),
@@ -95,6 +97,77 @@ class ReleaseSelectionTests(unittest.TestCase):
             self.assertEqual(json.loads((output / build["channel"] / "build.json").read_text()), build)
         self.assertIn(self.first, Path("summary").read_text())
         self.assertIn("/PanoReady/stable/", (output / "index.html").read_text())
+        self.assertIn("https://wdgph.github.io/docs/panoready/v1.0.0/", (output / "docs/index.html").read_text())
+        self.assertTrue((output / "404.html").is_file())
+        for route in ("about", "reports"):
+            self.assertIn(f"/PanoReady/stable/{route}/", (output / route / "index.html").read_text())
+
+
+class ApplicationPackagingTests(unittest.TestCase):
+    def test_build_packages_application_without_documentation_dependencies(self):
+        snapshot = {"channel": "stable", "version": "v0.4.1", "sha": "a" * 40}
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            output = Path(tmp) / "output"
+            source.mkdir()
+            output.mkdir()
+            (source / "next.config.ts").write_text('const path = process.env.PAGES_BASE_PATH;')
+            (source / "components").mkdir()
+            (source / "components/NavBar.tsx").write_text('<a href="https://wdgph.github.io/PanoReady/docs/">Docs</a>')
+            (source / "workflows/stix").mkdir(parents=True)
+            (source / "workflows/stix/STIXIntake.tsx").write_text('NEXT_PUBLIC_BUILD_VERSION')
+
+            def simulate_command(args, **kwargs):
+                if args[:3] == ["npm", "run", "build"]:
+                    (source / "out").mkdir()
+                    (source / "out/index.html").write_text('application')
+
+            with patch.object(builder.tempfile, "TemporaryDirectory") as temporary, patch.object(builder.subprocess, "Popen") as archive, patch.object(builder.subprocess, "run", side_effect=simulate_command) as run:
+                temporary.return_value.__enter__.return_value = str(source)
+                archive.return_value.wait.return_value = 0
+                builder.build(snapshot, output, "/PanoReady")
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual([command for command in commands if command[0] != "tar"], [["npm", "ci"], ["npm", "run", "build"]])
+            self.assertEqual((output / "stable/index.html").read_text(), 'application')
+            self.assertIn("https://wdgph.github.io/docs/panoready/v0.4.1/", (output / "stable/docs/index.html").read_text())
+            self.assertFalse((output / "stable/docs/assets").exists())
+            self.assertIn('https://wdgph.github.io/docs/panoready/v0.4.1/', (source / "components/NavBar.tsx").read_text())
+
+
+class DocumentationCompatibilityTests(unittest.TestCase):
+    def test_redirects_include_public_deep_paths_without_private_names_or_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "docs"
+            for name in ("index.md", "guide/setup.md", "private/secret.md", "internal/notes.md", "official-template-internals.md"):
+                path = source / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("Documentation source that must not be copied")
+            output = Path(tmp) / "redirects"
+            builder.documentation_redirects(source, output, "https://wdgph.github.io/docs/panoready/latest/")
+            self.assertIn("https://wdgph.github.io/docs/panoready/latest/guide/setup/", (output / "guide/setup/index.html").read_text())
+            self.assertEqual(sorted(p.relative_to(output).as_posix() for p in output.rglob("*.html")),
+                             ["guide/setup/index.html", "index.html"])
+
+    def test_matching_active_manual_is_required_before_application_publication(self):
+        builds = [{"channel": "stable", "version": "v1.2.3", "sha": "a" * 40},
+                  {"channel": "latest", "version": "v1.2.3+", "sha": "b" * 40}]
+        version = {"version": "v1.2.3", "sha": "a" * 40, "status": "current"}
+        manifest = {"preview": False, "projects": {"panoready": {"repository": "WDGPH/PanoReady", "versions": [version]}}}
+        with patch.object(docs_verifier.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(manifest).encode())) as fetch, contextlib.redirect_stdout(io.StringIO()):
+            docs_verifier.verify(builds)
+        self.assertEqual(fetch.call_args.kwargs["timeout"], 15)
+        for replacement in ([], [dict(version, sha="c" * 40)], [dict(version, status="withdrawn")]):
+            with self.subTest(replacement=replacement):
+                manifest["projects"]["panoready"]["versions"] = replacement
+                with patch.object(docs_verifier.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(manifest).encode())):
+                    with self.assertRaisesRegex(RuntimeError, "publication stopped"):
+                        docs_verifier.verify(builds)
+
+    def test_unavailable_hub_stops_publication_without_a_fallback_manual(self):
+        builds = [{"channel": "stable", "version": "v1.2.3", "sha": "a" * 40}]
+        with patch.object(docs_verifier.urllib.request, "urlopen", side_effect=OSError("offline")):
+            with self.assertRaisesRegex(RuntimeError, "publication stopped"):
+                docs_verifier.verify(builds)
 
 
 class PublicVerificationTests(unittest.TestCase):
