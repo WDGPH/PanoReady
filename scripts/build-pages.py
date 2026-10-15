@@ -1,5 +1,6 @@
-"""Build isolated release/main snapshots into one GitHub Pages artifact."""
+"""Build isolated release/main applications into one GitHub Pages artifact."""
 import argparse
+import html
 import json
 import os
 from pathlib import Path
@@ -7,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from urllib.parse import quote
 
 
 def run(*args, cwd=None, env=None):
@@ -41,7 +43,7 @@ def snapshots(latest_ref, release_tag=None):
     ]
 
 
-def prepare(source, base_path):
+def prepare(source, base_path, docs_url):
     # v0.1.0 predates the deployment environment variables. Patch only the
     # deployment path and presentation in the disposable release checkout.
     config = source / "next.config.ts"
@@ -53,7 +55,12 @@ def prepare(source, base_path):
         raise RuntimeError("Unsupported release Next.js configuration")
     nav = source / "components/NavBar.tsx"
     text = nav.read_text()
-    text = text.replace('href="https://wdgph.github.io/PanoReady/docs/"', 'href={`${process.env.NEXT_PUBLIC_PAGES_BASE_PATH || "/PanoReady"}/docs/`}')
+    # Historical application snapshots linked to their cohosted manual.
+    for old_link in (
+        'href="https://wdgph.github.io/PanoReady/docs/"',
+        'href={`${process.env.NEXT_PUBLIC_PAGES_BASE_PATH || "/PanoReady"}/docs/`}',
+    ):
+        text = text.replace(old_link, f'href={json.dumps(docs_url)}')
     nav.write_text(text)
     intake = source / "workflows/stix/STIXIntake.tsx"
     text = intake.read_text()
@@ -75,30 +82,64 @@ def build(snapshot, output, base):
         if archive.wait() != 0:
             raise RuntimeError("git archive failed")
         path = f"{base}/{channel}"
-        prepare(source, path)
+        docs_url = f"https://wdgph.github.io/docs/panoready/{label if channel == 'stable' else 'latest'}/"
+        prepare(source, path, docs_url)
         env = dict(os.environ, GITHUB_PAGES="true", PAGES_BASE_PATH=path,
-                   NEXT_PUBLIC_PAGES_BASE_PATH=path,
+                   NEXT_PUBLIC_PAGES_BASE_PATH=path, NEXT_PUBLIC_DOCS_URL=docs_url,
                    NEXT_PUBLIC_BUILD_VERSION=label, NEXT_PUBLIC_BUILD_SHA=sha[:8])
         subprocess.run(["npm", "ci"], cwd=tmp, check=True)
         subprocess.run(["npm", "run", "build"], cwd=tmp, env=env, check=True)
-        # Each snapshot gets its own Python dependencies as well as npm packages.
-        subprocess.run(["python", "-m", "venv", str(source / ".docs-venv")], check=True)
-        python = str(source / ".docs-venv/bin/python")
-        requirements = (source / "requirements-docs.txt").read_text()
-        hash_flags = ["--require-hashes"] if "--hash=" in requirements else []
-        subprocess.run([python, "-m", "pip", "install", *hash_flags, "--only-binary=:all:", "-r", "requirements-docs.txt"], cwd=tmp, check=True)
-        config = source / "mkdocs.yml"
-        config.write_text(re.sub(r"(?m)^site_url:.*$", f"site_url: https://wdgph.github.io{path}/docs/", config.read_text()))
-        subprocess.run([python, "-m", "mkdocs", "build", "--strict", "--site-dir", "out/docs"], cwd=tmp, check=True)
         (source / "out/build.json").write_text(json.dumps(snapshot) + "\n")
         shutil.copytree(source / "out", output / channel)
+        documentation_redirects(source / "docs", output / channel / "docs", docs_url)
+
+
+def documentation_redirects(source, output, destination):
+    """Retain public manual paths without installing or rendering documentation."""
+    output.mkdir(parents=True)
+    paths = {""}
+    for page in source.rglob("*.md"):
+        relative = page.relative_to(source)
+        if any(part in {"private", "internal"} or part.startswith(".") for part in relative.parts):
+            continue
+        if relative.name == "official-template-internals.md":
+            continue
+        path = relative.parent if relative.name == "index.md" else relative.with_suffix("")
+        paths.add(path.as_posix().removeprefix(".").strip("/"))
+    for path in paths:
+        target = output / path / "index.html"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        url = destination + (quote(path) + "/" if path else "")
+        target.write_text(redirect(url))
+
+
+def legacy_documentation_fallback(base, stable_version):
+    """Route retired docs bookmarks while leaving unknown application paths alone."""
+    root = "https://wdgph.github.io/docs/panoready/"
+    routes = [(base + "/latest/docs", root + "latest/"),
+              (base + "/stable/docs", root + stable_version + "/"),
+              (base + "/docs", root + stable_version + "/")]
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Page not found</title>
+<meta name="robots" content="noindex">
+<script>
+for (const [prefix, target] of {json.dumps(routes)}) {{
+  if (location.pathname === prefix || location.pathname.startsWith(prefix + "/")) {{
+    const path = location.pathname.slice(prefix.length).replace(/^\\/+/, "");
+    location.replace(target + path + location.search + location.hash);
+    break;
+  }}
+}}
+</script></head><body><h1>Page not found</h1>
+<p><a href="{html.escape(base, quote=True)}/stable/">Open PanoReady</a></p></body></html>'''
 
 
 def redirect(destination):
+    safe = html.escape(destination, quote=True)
+    encoded = json.dumps(destination).replace("<", "\\u003c")
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PanoReady</title>
-<meta http-equiv="refresh" content="0;url={destination}">
-<script>location.replace({json.dumps(destination)} + location.search + location.hash)</script>
-</head><body><a href="{destination}">Open PanoReady</a></body></html>'''
+<meta http-equiv="refresh" content="0;url={safe}">
+<script>location.replace({encoded} + location.search + location.hash)</script>
+</head><body><a href="{safe}">Open PanoReady</a></body></html>'''
 
 
 def main():
@@ -116,11 +157,14 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     for snapshot in builds:
         build(snapshot, output, args.base_path)
-    # Preserve the old application and documentation entry points.
-    for route in ("", "about", "reports", "docs"):
+    # Preserve application entry points. Documentation is published by the hub.
+    for route in ("", "about", "reports"):
         target = output / route
         target.mkdir(exist_ok=True)
         (target / "index.html").write_text(redirect(f"{args.base_path}/stable/{route + '/' if route else ''}"))
+    shutil.copytree(output / "stable/docs", output / "docs")
+    stable = next(build for build in builds if build["channel"] == "stable")
+    (output / "404.html").write_text(legacy_documentation_fallback(args.base_path, stable["version"]))
     (output / ".nojekyll").touch()
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as stream:

@@ -7,8 +7,6 @@ Use this checklist when preparing a public release. Files in the repository cann
 - Confirm the MIT licence, copyright holder, and third-party systems and standards notice are correct for the code being released.
 - Review tracked files and Git history for credentials, student records, operational inputs, third-party reference assets, and other material that cannot be redistributed. Synthetic examples belong in tests; operational workbooks and reference documents do not.
 - Confirm the security-reporting link works and enable private vulnerability reporting in repository settings. Confirm the Code of Conduct contact route reaches someone responsible for the project.
-- Enable GitHub Pages with GitHub Actions as the source.
-- Protect `main` with pull-request review and required CI checks: `check (22)`, `check (24)`, and the documentation workflow's `build` job. Select their actual names after the first successful run.
 - Enable dependency alerts and review Dependabot updates.
 
 ## Validate the release
@@ -19,7 +17,7 @@ From a clean checkout, use the supported Node version and run:
 npm ci
 npm run check
 npm audit
-python -m pip install -r requirements-docs.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
 mkdocs build --strict
 ```
 
@@ -31,7 +29,9 @@ Manually check both workflows with synthetic inputs. Cover XML and workbook inta
 
 Update `package.json` and its lockfile version, update `CHANGELOG.md` with changes and known limitations, and tag the reviewed commit as `vX.Y.Z`. Publish a GitHub release from that tag after the checks pass. The package remains `private: true` because this is an application, not an npm package; this does not affect its MIT license.
 
-The tag must be on main's history. Confirm the Pages workflow succeeds, including its public-version verification, and compare the stable version and source commit in its Actions summary with the intended release. Record the application URL separately from the documentation URL and check both sites in a browser; manifest verification does not check rendering.
+The tag must be on main's history. Application publication and the hub's release-lock pull request run independently. The stable application's help link points to its exact tagged manual, which becomes available only after the hub import pull request has passed its complete build, merged, and deployed. The application publisher verifies that the matching manual is public before deploying; a missing, replaced, or withdrawn manual stops publication.
+
+After application deployment, confirm the Application Pages workflow succeeds, including its public-version verification, and compare the stable version and source commit in its Actions summary with the intended release. Record the application URL separately from the documentation URL and check both sites in a browser; manifest verification does not check rendering.
 
 ## Dependency maintenance
 

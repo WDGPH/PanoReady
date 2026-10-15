@@ -3,7 +3,7 @@
 [![Current version](https://img.shields.io/github/v/release/WDGPH/PanoReady?sort=semver&label=version)](https://github.com/WDGPH/PanoReady/releases/latest)
 [![Browser privacy](https://github.com/WDGPH/PanoReady/actions/workflows/browser-privacy.yml/badge.svg?branch=main)](https://github.com/WDGPH/PanoReady/actions/workflows/browser-privacy.yml)
 [![Offline operation](https://github.com/WDGPH/PanoReady/actions/workflows/offline-operation.yml/badge.svg?branch=main)](https://github.com/WDGPH/PanoReady/actions/workflows/offline-operation.yml)
-[![Docs](https://img.shields.io/badge/Docs-User_guide-blue)](https://wdgph.github.io/PanoReady/stable/docs/)
+[![Docs](https://img.shields.io/badge/docs-PHIZ-blue)](https://wdgph.github.io/docs/panoready/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/WDGPH/PanoReady)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -29,7 +29,7 @@ The [main site address](https://wdgph.github.io/PanoReady/) takes you to stable.
 
 You can open STIX XML files or supported Excel workbooks (`.xlsm`). Downloads include XML and reports, with an optional password-protected ZIP for XML files.
 
-Start with the [getting started guide](https://wdgph.github.io/PanoReady/stable/docs/getting-started/) or try the [sample file](public/samples/stix-validation-demo.stix), which contains made-up records. See the [user guide](https://wdgph.github.io/PanoReady/stable/docs/) for detailed instructions. If you use latest, use its [matching guide](https://wdgph.github.io/PanoReady/latest/docs/).
+Start with the [getting started guide](https://wdgph.github.io/docs/panoready/stable/getting-started/) or try the [sample file](public/samples/stix-validation-demo.stix), which contains made-up records. See the [user guide](https://wdgph.github.io/docs/panoready/stable/) for detailed instructions. If you use latest, use its [matching guide](https://wdgph.github.io/docs/panoready/latest/).
 
 ## Follow releases
 
