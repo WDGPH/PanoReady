@@ -86,6 +86,7 @@ jobs:
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
       - name: Verify public stable and latest versions
         env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          # GitHub can report an HTTP page_url for the custom domain. Verify its HTTPS URL.
+          PAGE_URL: https://panoready.phiz.ca/
           EXPECTED_BUILDS: ${{ needs.build.outputs.builds }}
         run: python scripts/verify-pages.py --url "$PAGE_URL" --expected "$EXPECTED_BUILDS"
