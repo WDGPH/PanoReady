@@ -95,11 +95,12 @@ class ReleaseSelectionTests(unittest.TestCase):
         for build in expected:
             self.assertEqual(json.loads((output / build["channel"] / "build.json").read_text()), build)
         self.assertIn(self.first, Path("summary").read_text())
-        self.assertIn("/PanoReady/stable/", (output / "index.html").read_text())
-        for path in ("docs", "stable/docs", "latest/docs", "404.html"):
+        self.assertIn("https://panoready.phiz.ca/stable/", (output / "index.html").read_text())
+        for path in ("docs", "stable/docs", "latest/docs", "PanoReady/docs", "PanoReady/stable/docs", "PanoReady/latest/docs", "404.html"):
             self.assertFalse((output / path).exists())
         for route in ("about", "reports"):
-            self.assertIn(f"/PanoReady/stable/{route}/", (output / route / "index.html").read_text())
+            self.assertIn(f"https://panoready.phiz.ca/stable/{route}/", (output / route / "index.html").read_text())
+        self.assertIn("https://panoready.phiz.ca/latest/reports/", (output / "PanoReady/latest/reports/index.html").read_text())
 
 
 class ApplicationPackagingTests(unittest.TestCase):
@@ -118,13 +119,14 @@ class ApplicationPackagingTests(unittest.TestCase):
 
             def simulate_command(args, **kwargs):
                 if args[:3] == ["npm", "run", "build"]:
+                    self.assertEqual(kwargs["env"]["PAGES_BASE_PATH"], "/stable")
                     (source / "out").mkdir()
                     (source / "out/index.html").write_text('application')
 
             with patch.object(builder.tempfile, "TemporaryDirectory") as temporary, patch.object(builder.subprocess, "Popen") as archive, patch.object(builder.subprocess, "run", side_effect=simulate_command) as run:
                 temporary.return_value.__enter__.return_value = str(source)
                 archive.return_value.wait.return_value = 0
-                builder.build(snapshot, output, "/PanoReady")
+                builder.build(snapshot, output, "")
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual([command for command in commands if command[0] != "tar"], [["npm", "ci"], ["npm", "run", "build"]])
             self.assertEqual((output / "stable/index.html").read_text(), 'application')

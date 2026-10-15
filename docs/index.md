@@ -4,7 +4,7 @@ PanoReady is a browser-based utility with two workflows for preparing and compar
 
 **Your record data stays on your device.** File parsing and generated outputs are handled in the browser; source files are not uploaded to a PanoReady server.
 
-[Open PanoReady](https://wdgph.github.io/PanoReady/){ .md-button .md-button--primary }
+[Open PanoReady](https://panoready.phiz.ca/){ .md-button .md-button--primary }
 [Get started](getting-started.md){ .md-button }
 [View on GitHub](https://github.com/WDGPH/PanoReady){ .md-button }
 

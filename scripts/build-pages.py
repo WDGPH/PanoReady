@@ -105,11 +105,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--latest-ref", default="origin/main")
     parser.add_argument("--release-tag", help="Require the triggering stable release tag to be reachable from latest-ref")
-    parser.add_argument("--base-path", default="/PanoReady")
+    parser.add_argument("--base-path", default="", help="Empty for the custom-domain root; otherwise /repository")
     parser.add_argument("--output", default="pages-out")
     args = parser.parse_args()
-    if not re.fullmatch(r"/[A-Za-z0-9_-]+", args.base_path):
-        parser.error("base-path must be a single repository path")
+    if args.base_path and not re.fullmatch(r"/[A-Za-z0-9_-]+", args.base_path):
+        parser.error("base-path must be empty or a single repository path")
     builds = snapshots(args.latest_ref, args.release_tag)
     print(json.dumps(builds, indent=2), flush=True)
     output = Path(args.output).resolve()
@@ -120,7 +120,16 @@ def main():
     for route in ("", "about", "reports"):
         target = output / route
         target.mkdir(exist_ok=True)
-        (target / "index.html").write_text(redirect(f"{args.base_path}/stable/{route + '/' if route else ''}"))
+        (target / "index.html").write_text(redirect(f"https://panoready.phiz.ca{args.base_path}/stable/{route + '/' if route else ''}"))
+    # GitHub redirects old project URLs to the custom domain. Also repair links
+    # that retained /PanoReady after the domain switch, for application pages only.
+    if not args.base_path:
+        for channel in ("", "stable", "latest"):
+            for route in ("", "about", "reports"):
+                target = output / "PanoReady" / channel / route
+                target.mkdir(parents=True, exist_ok=True)
+                destination = f"https://panoready.phiz.ca/{channel or 'stable'}/{route + '/' if route else ''}"
+                (target / "index.html").write_text(redirect(destination))
     (output / ".nojekyll").touch()
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as stream:

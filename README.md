@@ -13,14 +13,14 @@ Built by [Wellington-Dufferin-Guelph Public Health](https://wdgpublichealth.ca/)
 
 ## Use PanoReady
 
-**[Open PanoReady — stable version](https://wdgph.github.io/PanoReady/stable/)**. No installation is needed.
+**[Open PanoReady — stable version](https://panoready.phiz.ca/stable/)**. No installation is needed.
 
 | Version | When to use it |
 |---|---|
-| [Stable](https://wdgph.github.io/PanoReady/stable/) | The most recent release. Choose this for everyday use. |
-| [Latest](https://wdgph.github.io/PanoReady/latest/) | Includes changes since the last release. Use it to try upcoming improvements; behaviour may change before release. |
+| [Stable](https://panoready.phiz.ca/stable/) | The most recent release. Choose this for everyday use. |
+| [Latest](https://panoready.phiz.ca/latest/) | Includes changes since the last release. Use it to try upcoming improvements; behaviour may change before release. |
 
-The [main site address](https://wdgph.github.io/PanoReady/) takes you to stable. The version is shown at the bottom of the app.
+The [main site address](https://panoready.phiz.ca/) takes you to stable. The version is shown at the bottom of the app.
 
 ## What you can do
 
