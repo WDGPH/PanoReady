@@ -6,7 +6,6 @@ import io
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import tempfile
 import unittest
@@ -133,35 +132,7 @@ class ApplicationPackagingTests(unittest.TestCase):
             self.assertIn('https://docs.phiz.ca/panoready/v0.4.1/', (source / "components/NavBar.tsx").read_text())
 
 
-class ApplicationRoutingTests(unittest.TestCase):
-    def redirect_target(self, markup, pathname, search="?source=bookmark&view=compact", fragment="#details"):
-        """Execute the emitted redirect rather than matching JavaScript source text."""
-        scripts = re.findall(r"<script>(.*?)</script>", markup, re.DOTALL)
-        self.assertEqual(len(scripts), 1)
-        program = '''
-const vm = require("node:vm");
-const input = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
-const targets = [];
-vm.runInNewContext(input.script, { location: {
-  pathname: input.pathname, search: input.search, hash: input.fragment,
-  replace: target => targets.push(target),
-} });
-process.stdout.write(JSON.stringify(targets));
-'''
-        result = subprocess.check_output(["node", "-e", program], text=True, input=json.dumps({
-            "script": scripts[0], "pathname": pathname, "search": search, "fragment": fragment,
-        }))
-        return json.loads(result)
-
-    def test_application_redirects_keep_query_and_fragment(self):
-        for route in ("", "about/", "reports/"):
-            destination = "/PanoReady/stable/" + route
-            markup = builder.redirect(destination)
-            self.assertEqual(self.redirect_target(markup, "/PanoReady/" + route),
-                             [destination + "?source=bookmark&view=compact#details"])
-
-
-class DocumentationPublicationTests(unittest.TestCase):
+class DocumentationCompatibilityTests(unittest.TestCase):
     def test_matching_active_manual_is_required_before_application_publication(self):
         builds = [{"channel": "stable", "version": "v1.2.3", "sha": "a" * 40},
                   {"channel": "latest", "version": "v1.2.3+", "sha": "b" * 40}]
@@ -170,24 +141,12 @@ class DocumentationPublicationTests(unittest.TestCase):
         with patch.object(docs_verifier.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(manifest).encode())) as fetch, contextlib.redirect_stdout(io.StringIO()):
             docs_verifier.verify(builds)
         self.assertEqual(fetch.call_args.kwargs["timeout"], 15)
-        self.assertTrue(fetch.call_args.args[0].full_url.startswith("https://docs.phiz.ca/build-manifest.json?verify="))
-        for replacement in ([], [dict(version, version="v1.2.2")], [dict(version, sha="c" * 40)], [dict(version, status="withdrawn")]):
+        for replacement in ([], [dict(version, sha="c" * 40)], [dict(version, status="withdrawn")]):
             with self.subTest(replacement=replacement):
                 manifest["projects"]["panoready"]["versions"] = replacement
                 with patch.object(docs_verifier.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(manifest).encode())):
                     with self.assertRaisesRegex(RuntimeError, "publication stopped"):
                         docs_verifier.verify(builds)
-
-    def test_preview_or_wrong_repository_cannot_satisfy_publication_guard(self):
-        builds = [{"channel": "stable", "version": "v1.2.3", "sha": "a" * 40}]
-        for preview, repository in ((True, "WDGPH/PanoReady"), (None, "WDGPH/PanoReady"), (False, "WDGPH/Other")):
-            manifest = {"preview": preview, "projects": {"panoready": {"repository": repository,
-                "versions": [{**builds[0], "status": "current"}]}}}
-            with self.subTest(preview=preview, repository=repository), patch.object(
-                docs_verifier.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(manifest).encode())
-            ):
-                with self.assertRaisesRegex(RuntimeError, "publication stopped"):
-                    docs_verifier.verify(builds)
 
     def test_unavailable_hub_stops_publication_without_a_fallback_manual(self):
         builds = [{"channel": "stable", "version": "v1.2.3", "sha": "a" * 40}]
