@@ -1,6 +1,6 @@
 site_name: PanoReady
 site_description: Browser-based validation, repair, and comparison workflows for STIX school enrolment data.
-site_url: https://wdgph.github.io/docs/panoready/latest/
+site_url: https://docs.phiz.ca/panoready/latest/
 repo_url: https://github.com/WDGPH/PanoReady
 repo_name: WDGPH/PanoReady
 edit_uri: edit/main/docs/
