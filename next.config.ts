@@ -46,8 +46,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_VERSION: buildVersion,
     NEXT_PUBLIC_BUILD_SHA: head ? head.slice(0, 8) : "unknown",
   },
-  // GitHub Pages serves this project below /PanoReady and cannot run a Node.js
-  // server. Keep the normal server build for every other environment.
+  // Pages builds supply a channel base path and require a static export.
+  // Keep the normal server build for every other environment.
   output: isGitHubPages ? "export" : undefined,
   basePath: isGitHubPages ? pagesBasePath : undefined,
   trailingSlash: isGitHubPages,

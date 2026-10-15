@@ -1,6 +1,6 @@
 # Getting started
 
-PanoReady runs in a modern web browser and processes source records locally. Use the [deployed application](https://wdgph.github.io/PanoReady/), or follow [Development](development.md) to run it locally. The [documentation hub](https://docs.phiz.ca/panoready/) provides released and development guides.
+PanoReady runs in a modern web browser and processes source records locally. Use the [deployed application](https://panoready.phiz.ca/), or follow [Development](development.md) to run it locally. The [documentation hub](https://docs.phiz.ca/panoready/) provides released and development guides.
 
 ## Choose an input
 

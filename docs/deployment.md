@@ -2,9 +2,9 @@
 
 One GitHub Pages artifact for the application publishes two independent builds:
 
-- `/PanoReady/` redirects to `/PanoReady/stable/` (preserving query and fragment).
-- `/PanoReady/stable/` serves the highest `vX.Y.Z` tag reachable from `main`.
-- `/PanoReady/latest/` serves the current `main` commit.
+- `https://panoready.phiz.ca/` redirects to `/stable/` (preserving query and fragment).
+- `/stable/` serves the highest `vX.Y.Z` tag reachable from `main`.
+- `/latest/` serves the current `main` commit.
 - Documentation is published separately at [docs.phiz.ca/panoready/](https://docs.phiz.ca/panoready/) by the documentation hub. Application help links select the matching released manual or `latest`.
 
 Prerelease tags are excluded. A release tag must be on main's history. The footer shows the release version and eight-character source commit SHA; commits beyond the highest reachable release show `+`, for example `v0.1.0+ · abc12345`. Each channel also publishes `build.json` with the full SHA.
@@ -13,7 +13,13 @@ GitHub Pages replaces the entire site on deployment, so both channels are built 
 
 The existing `v0.1.0` release predates configurable paths and version labels. The build script adapts its deployment configuration, help link, and footer in a temporary checkout; it does not change the tag or application logic. Future releases use the environment variables directly.
 
-**URL casing:** the repository is currently `PanoReady`, so its project Pages path is `/PanoReady/`. Exact lowercase `/panoready/` requires renaming the repository or configuring an alias in the organization's `wdgph.github.io` site. Changing the build path alone cannot create that alias. After a rename, update `PAGES_BASE_PATH` in the workflow and public links.
+The custom domain serves the artifact at its root, so `PAGES_BASE_PATH` is empty
+in the Pages workflow. Each application is still built with its channel prefix
+(`/stable` or `/latest`) for routing and assets. GitHub Pages redirects the old
+`wdgph.github.io/PanoReady/` addresses to the custom domain. Explicit application
+aliases also repair `/PanoReady/`, `/PanoReady/about/`, `/PanoReady/reports/`, and
+their stable/latest equivalents on the new domain. All aliases use HTTPS and
+preserve query strings and fragments; retired documentation paths remain 404.
 
 ## Run the application
 
@@ -42,7 +48,7 @@ Application Pages after the corresponding release import has been published.
 
 After GitHub accepts the deployment, the workflow requests both public `build.json` files and compares their channel, version, and full SHA with the build job's expected values. Requests use unique query strings and ask caches to revalidate. Temporary errors or stale responses are retried up to twelve times, with ten seconds between attempts and a fifteen-second timeout per request. A verification failure marks the run failed and reports expected and observed values; the site has already been published and is not rolled back. A successful check proves the two sampled manifests match. It does not prove browser rendering, every CDN edge, or replacement of code in an already-open browser tab.
 
-For a fork, update the GitHub Pages base path in `next.config.ts`; update `site_url`, `repo_url`, `repo_name`, and `edit_uri` in `mkdocs.yml`; and update repository links in the README and policies. Set up Pages in the fork as well.
+For a fork, update the Pages workflow base path and the application URL in `scripts/build-pages.py`; update `site_url`, `repo_url`, `repo_name`, and `edit_uri` in `mkdocs.yml`; and update repository links in the README and policies. Set up Pages in the fork as well.
 
 To build locally:
 
@@ -68,8 +74,8 @@ Internal pages and anchors are checked using [MkDocs link validation](https://ww
 
 Check the Actions summary and both public manifests before triggering another build:
 
-- [Stable build metadata](https://wdgph.github.io/PanoReady/stable/build.json)
-- [Latest build metadata](https://wdgph.github.io/PanoReady/latest/build.json)
+- [Stable build metadata](https://panoready.phiz.ca/stable/build.json)
+- [Latest build metadata](https://panoready.phiz.ca/latest/build.json)
 
 Use a unique query such as `?check=20260930T120000Z` to avoid reusing a cached diagnostic response. Compare the full commit SHA, as different release tags can point to the same commit. The root application URL redirects to stable, so an untagged main change appears in latest while stable keeps its released version.
 

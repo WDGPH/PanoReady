@@ -45,7 +45,7 @@ jobs:
         id: sites
         env:
           PREVIEW: ${{ github.event_name == 'pull_request' }}
-          PAGES_BASE_PATH: /PanoReady
+          PAGES_BASE_PATH: ""
           RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           latest_ref=origin/main

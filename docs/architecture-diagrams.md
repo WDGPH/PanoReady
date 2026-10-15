@@ -335,7 +335,7 @@ flowchart LR
     end
 
     subgraph Pages["GitHub Pages (GITHUB_PAGES=true)"]
-        StaticBuild["next build --webpack\noutput: 'export'"] --> StaticFiles["Static files\nbasePath /PanoReady"]
+        StaticBuild["next build --webpack\noutput: 'export'"] --> StaticFiles["Static files\nbasePath /stable or /latest"]
         StaticFiles --> CDN["GitHub Pages CDN"]
     end
 
