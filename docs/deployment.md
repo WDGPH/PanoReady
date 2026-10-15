@@ -5,7 +5,7 @@ One GitHub Pages artifact for the application publishes two independent builds:
 - `/PanoReady/` redirects to `/PanoReady/stable/` (preserving query and fragment).
 - `/PanoReady/stable/` serves the highest `vX.Y.Z` tag reachable from `main`.
 - `/PanoReady/latest/` serves the current `main` commit.
-- Documentation is published separately at `/docs/panoready/` by the documentation hub. Application help links select the matching released manual or `latest`.
+- Documentation is published separately at [docs.phiz.ca/panoready/](https://docs.phiz.ca/panoready/) by the documentation hub. Application help links select the matching released manual or `latest`.
 
 Prerelease tags are excluded. A release tag must be on main's history. The footer shows the release version and eight-character source commit SHA; commits beyond the highest reachable release show `+`, for example `v0.1.0+ · abc12345`. Each channel also publishes `build.json` with the full SHA.
 
@@ -35,7 +35,7 @@ Test `/` and `/reports` on the deployed instance, then process a synthetic XML f
 
 The `Application Pages` workflow (`app-pages.yml`) rebuilds both channels on pushes to `main`, version-tag pushes, and manual runs from `main` or a version tag. Pull requests build stable and the proposed merge commit without deploying. At least one reachable `vX.Y.Z` release tag is required. Tag-triggered builds check that the triggering tag is a stable release on main's history before installing dependencies. An off-main or prerelease tag fails explicitly. Pushing an older valid release tag still publishes the highest reachable release; it does not downgrade stable.
 
-Before deployment, the workflow checks the public hub manifest for the selected
+Before deployment, the workflow checks the [public hub manifest](https://docs.phiz.ca/build-manifest.json) for the selected
 stable version and full source SHA. Its manual must be active, not withdrawn or a
 preview. If the check fails, the previous application remains deployed. Rerun
 Application Pages after the corresponding release import has been published.
@@ -54,8 +54,13 @@ mkdocs build --strict
 mkdocs serve
 ```
 
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed. The `Check documentation` workflow builds the source manual strictly without publishing it. The hub owns documentation styling, search, versions, and publication; application releases keep their own Pages workflow. The application artifact includes redirect-only paths for the old documentation
-URLs; it contains no rendered manual or documentation assets.
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`. Open <http://127.0.0.1:8000> for the preview. Generated HTML is in `site/` and is not committed. The `Check documentation` workflow builds the source manual strictly without publishing it. The hub owns documentation styling, search, versions, and publication; application releases keep their own Pages workflow. The application artifact contains only the stable and latest applications and their
+application entry-point redirects. It does not include the retired documentation,
+documentation assets, or documentation redirects. Old `/PanoReady/docs/`,
+`/PanoReady/stable/docs/`, and `/PanoReady/latest/docs/` URLs can return 404 after
+the next application deployment. Use [the documentation hub](https://docs.phiz.ca/panoready/)
+for manuals. Keep application Pages enabled: retiring the old manual does not
+retire the stable and latest applications.
 
 Internal pages and anchors are checked using [MkDocs link validation](https://www.mkdocs.org/user-guide/configuration/#validation). External URLs still need review when publishing.
 

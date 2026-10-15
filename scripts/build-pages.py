@@ -8,7 +8,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-from urllib.parse import quote
 
 
 def run(*args, cwd=None, env=None):
@@ -82,7 +81,7 @@ def build(snapshot, output, base):
         if archive.wait() != 0:
             raise RuntimeError("git archive failed")
         path = f"{base}/{channel}"
-        docs_url = f"https://wdgph.github.io/docs/panoready/{label if channel == 'stable' else 'latest'}/"
+        docs_url = f"https://docs.phiz.ca/panoready/{label if channel == 'stable' else 'latest'}/"
         prepare(source, path, docs_url)
         env = dict(os.environ, GITHUB_PAGES="true", PAGES_BASE_PATH=path,
                    NEXT_PUBLIC_PAGES_BASE_PATH=path, NEXT_PUBLIC_DOCS_URL=docs_url,
@@ -91,46 +90,6 @@ def build(snapshot, output, base):
         subprocess.run(["npm", "run", "build"], cwd=tmp, env=env, check=True)
         (source / "out/build.json").write_text(json.dumps(snapshot) + "\n")
         shutil.copytree(source / "out", output / channel)
-        documentation_redirects(source / "docs", output / channel / "docs", docs_url)
-
-
-def documentation_redirects(source, output, destination):
-    """Retain public manual paths without installing or rendering documentation."""
-    output.mkdir(parents=True)
-    paths = {""}
-    for page in source.rglob("*.md"):
-        relative = page.relative_to(source)
-        if any(part in {"private", "internal"} or part.startswith(".") for part in relative.parts):
-            continue
-        if relative.name == "official-template-internals.md":
-            continue
-        path = relative.parent if relative.name == "index.md" else relative.with_suffix("")
-        paths.add(path.as_posix().removeprefix(".").strip("/"))
-    for path in paths:
-        target = output / path / "index.html"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        url = destination + (quote(path) + "/" if path else "")
-        target.write_text(redirect(url))
-
-
-def legacy_documentation_fallback(base, stable_version):
-    """Route retired docs bookmarks while leaving unknown application paths alone."""
-    root = "https://wdgph.github.io/docs/panoready/"
-    routes = [(base + "/latest/docs", root + "latest/"),
-              (base + "/stable/docs", root + stable_version + "/"),
-              (base + "/docs", root + stable_version + "/")]
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Page not found</title>
-<meta name="robots" content="noindex">
-<script>
-for (const [prefix, target] of {json.dumps(routes)}) {{
-  if (location.pathname === prefix || location.pathname.startsWith(prefix + "/")) {{
-    const path = location.pathname.slice(prefix.length).replace(/^\\/+/, "");
-    location.replace(target + path + location.search + location.hash);
-    break;
-  }}
-}}
-</script></head><body><h1>Page not found</h1>
-<p><a href="{html.escape(base, quote=True)}/stable/">Open PanoReady</a></p></body></html>'''
 
 
 def redirect(destination):
@@ -162,9 +121,6 @@ def main():
         target = output / route
         target.mkdir(exist_ok=True)
         (target / "index.html").write_text(redirect(f"{args.base_path}/stable/{route + '/' if route else ''}"))
-    shutil.copytree(output / "stable/docs", output / "docs")
-    stable = next(build for build in builds if build["channel"] == "stable")
-    (output / "404.html").write_text(legacy_documentation_fallback(args.base_path, stable["version"]))
     (output / ".nojekyll").touch()
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as stream:

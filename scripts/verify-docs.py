@@ -5,7 +5,7 @@ import json
 import urllib.request
 import uuid
 
-HUB_MANIFEST = "https://wdgph.github.io/docs/build-manifest.json"
+HUB_MANIFEST = "https://docs.phiz.ca/build-manifest.json"
 
 
 def verify(builds):

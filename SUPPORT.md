@@ -2,7 +2,7 @@
 
 Use [GitHub Issues](https://github.com/WDGPH/PanoReady/issues) for reproducible bugs and focused feature requests. Before opening an issue:
 
-1. Review the [documentation](https://wdgph.github.io/docs/panoready/).
+1. Review the [documentation](https://docs.phiz.ca/panoready/).
 2. Search existing issues for the same problem.
 3. Reproduce the issue with synthetic data.
 
