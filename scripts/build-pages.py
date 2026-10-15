@@ -101,6 +101,36 @@ def redirect(destination):
 </head><body><a href="{safe}">Open PanoReady</a></body></html>'''
 
 
+def add_social_preview(output):
+    """Brand every published page, including tagged snapshots and entry redirects."""
+    origin = "https://panoready.phiz.ca"
+    image_url = origin + "/social-preview.png"
+    shutil.copyfile(Path(__file__).resolve().parents[1] / "assets/social-preview.png",
+                    output / "social-preview.png")
+    title = "PanoReady | Panorama Import Toolbox"
+    description = "Tools for preparing data for Panorama. Validate school-enrolment files, review automatic corrections, and compare changes in your browser."
+    alt = "Yellow P flag above the PanoReady wordmark on a dark olive background."
+    for page in output.rglob("*.html"):
+        route = page.relative_to(output).as_posix().removesuffix("index.html")
+        fields = {
+            "og:type": "website", "og:site_name": "PanoReady",
+            "og:title": title, "og:description": description,
+            "og:url": origin + "/" + route,
+            "og:image": image_url, "og:image:type": "image/png",
+            "og:image:width": "1200", "og:image:height": "630", "og:image:alt": alt,
+            "twitter:card": "summary_large_image", "twitter:title": title,
+            "twitter:description": description, "twitter:image": image_url, "twitter:image:alt": alt,
+        }
+        tags = "\n".join(
+            f'<meta {"property" if key.startswith("og:") else "name"}="{key}" content="{html.escape(value, quote=True)}">'
+            for key, value in fields.items()
+        )
+        markup = page.read_text()
+        # Put metadata before the refresh on entry-point pages. App metadata is
+        # added to the final HTML so historical tags need no source changes.
+        page.write_text(markup.replace("</title>", "</title>\n" + tags, 1))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--latest-ref", default="origin/main")
@@ -131,6 +161,7 @@ def main():
                 destination = f"https://panoready.phiz.ca/{channel or 'stable'}/{route + '/' if route else ''}"
                 (target / "index.html").write_text(redirect(destination))
     (output / ".nojekyll").touch()
+    add_social_preview(output)
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
             stream.write(f"builds={json.dumps(builds)}\n")
