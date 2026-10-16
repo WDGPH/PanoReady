@@ -488,6 +488,28 @@ Flags student records where the combination of `FirstName + LastName + BirthDate
 
 ---
 
+## Issue Categories
+
+Each finding's rule ID maps to one issue category in `lib/issueCategories.ts`. STIX and PHIX keep separate mappings that share the same category list. Rule IDs without a mapping fall back to `other`. The STIX validation overview includes the category on each issue-type row.
+
+| Category | Label | Covers |
+|---|---|---|
+| `file-structure` | File Structure | PHIX files that cannot be parsed, have no header, or contain no data rows |
+| `metadata` | File Metadata | STIX submission-level fields: header metadata, school and board numbers, full-upload flag, file contact phone type, empty student list |
+| `required` | Required Fields | Missing required values, including guardian requirements |
+| `date` | Dates | Birth date and date-administered format, range, and ordering |
+| `identity` | Identity & Duplicates | OEN and health card number format, duplicate and dual-enrolment records |
+| `vaccine` | Vaccine / Immunizing Agent | PHIX trade name and immunizing agent values and conflicts |
+| `coded-value` | Coded Values | Allowed-value lists not covered by a more specific category, such as gender, grade, province, language, relationship, site, route, provider role, organization, and service delivery location |
+| `address` | Address & Postal Code | Street type and direction, rural route and alternate delivery, city/province consistency, postal-code format and repair |
+| `contact` | Contact | Record and submitter phone numbers, phone types, and submitter email |
+| `text-constraint` | Text Constraints | Field length and free-text character policy |
+| `other` | Other | Rules without a category mapping |
+
+Allowed-value rules for a field with a specific category use that category instead of `coded-value`. For example, street type is `address`, phone type is `contact`, and trade name is `vaccine`.
+
+---
+
 ## Custom Rulesets
 
 The allowed values, field lengths, patterns, and aliases that drive these rules are configurable. You can create board-specific rulesets without code changes by using the **Validation ruleset** control in **Validate & Fix**.

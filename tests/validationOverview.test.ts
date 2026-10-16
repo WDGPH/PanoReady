@@ -61,7 +61,7 @@ describe("validation overview", () => {
   });
   it("adds a category field to each types entry", () => {
     const summary = summarizeValidation(result);
-    expect(summary.types.find(row => row.ruleId === "FIELD_LENGTH")?.category).toBe("field-length");
+    expect(summary.types.find(row => row.ruleId === "FIELD_LENGTH")?.category).toBe("text-constraint");
     expect(summary.types.find(row => row.ruleId === "METADATA_REQUIRED")?.category).toBe("metadata");
   });
 });
