@@ -11,7 +11,7 @@
   "bugs": {
     "url": "https://github.com/WDGPH/PanoReady/issues"
   },
-  "homepage": "https://wdgph.github.io/PanoReady/",
+  "homepage": "https://panoready.phiz.ca/",
   "engines": {
     "node": ">=22.0.0"
   },

@@ -62,23 +62,59 @@ This runs ESLint, generates Next.js route types, checks TypeScript, runs the reg
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-docs.txt
-mkdocs serve
+python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
+python -m mkdocs serve
 ```
 
-Use `mkdocs build --strict` before submitting documentation changes. The `site/` output is generated and ignored by Git.
+Use `python -m mkdocs build --strict` before submitting documentation changes. The `site/` output is generated and ignored by Git.
 
 ## Contribution principles
 
 Automatic data fixes must be deterministic and explainable. Changes that transmit record data, add analytics, or persist it beyond existing browser-local behaviour require explicit privacy and security review. See the repository's [contribution guide](https://github.com/WDGPH/PanoReady/blob/main/CONTRIBUTING.md).
 
+## Adding rules and automatic fixes
+
+Read [Rule order and automatic address repairs](autofix-sequencing.md) for the executable order, the distinction between findings and combined corrections, and the procedure for adding and testing a rule. Keep address rules in the shared registry so assessment and repair planning use the same definitions.
+
 ## Tests and dependency updates
 
 `npm test` runs the Vitest suite. Tests use synthetic values and cover the canonical model, field definitions, address repair, phone and postal-code handling, ruleset import, and validator integration.
 
-Add regression tests when changing data behaviour. UI changes also need a browser check; there is no automated end-to-end browser suite yet.
+Add regression tests when changing data behaviour. UI changes also need browser checks; see the automated coverage and its limits below.
 
 Run `npm audit` when updating dependencies and review the findings. Commit `package-lock.json` with dependency changes. See [release maintenance](releasing.md#dependency-maintenance) for the SheetJS distribution source.
+
+## Browser and offline checks
+
+Playwright exercises the production static export at `/PanoReady/` using synthetic
+records. The **Browser privacy** workflow checks XML validation, automatic and manual
+corrections, comparison decisions, report downloads, encrypted ZIP output, reset,
+and reload. It fails on attempted requests outside the built static files, request
+bodies or URL parameters, WebSockets, record/password markers in console output or
+navigation, and persistent browser state. Negative controls deliberately attempt
+traffic and storage writes to verify that the guards detect them.
+
+The **Offline operation** workflow runs the same tests in a prepared Docker image
+with `--network none`. Dependencies and the site are built before disconnecting;
+the browser then loads the export from a server on the container's loopback address.
+This tests operation without external connectivity, not reopening the hosted site
+from a browser cache after disconnecting.
+
+These checks cover Chromium and the listed XML flows with the built-in profile.
+Custom profiles intentionally saved by users already use localStorage; profile
+persistence and workbook imports are outside this suite. Passing checks are
+regression evidence for these flows, not a comprehensive security audit or proof
+that JavaScript heap memory has been erased. Downloads explicitly requested by
+the user remain on disk. Traces contain synthetic test data only.
+
+```bash
+npx playwright install --with-deps chromium # Once per environment
+npm run e2e                               # Build and test the static export
+npm run e2e:offline                       # Requires Docker
+```
+
+The Playwright package and [Docker image](https://playwright.dev/docs/docker) are
+pinned to the same version; update them together. Workflow status badges reflect `main`.
 
 Read `AGENTS.md` and the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing framework code. Historical planning notes are kept in `notes/`, outside the published site. Private workbook inspection notes are excluded from Git and the documentation build.
 
@@ -92,3 +128,17 @@ Restart the development server after changing commits or tags to refresh it.
 Without a reachable release tag the version reads `unversioned`; without Git metadata
 the SHA reads `unknown`. Builds from source archives can supply
 `NEXT_PUBLIC_BUILD_VERSION` and `NEXT_PUBLIC_BUILD_SHA` explicitly, as Pages does.
+
+## Documentation hub notifications
+
+The public manual is published by [WDGPH/docs](https://github.com/WDGPH/docs).
+Keep documentation sources and strict source checks here; shared styling and
+versioned publication belong to the hub. Application hosting remains separate.
+
+When `DOCS_HUB_NOTIFY_ENABLED` is true, the dedicated workflow uses
+`DOCS_HUB_TRIGGER_TOKEN` only in its dispatch step, without checking out source
+or building the app. Application and documentation builds do not receive it.
+Main updates dispatch `publish.yml` on hub `main` with `source_repo=WDGPH/PanoReady`
+and `deploy=true`; semantic tag creation, updates, and deletion dispatch
+`refresh-releases.yml`. Manual notification requests both. There is no polling.
+The hub still controls deployment and release-lock review.

@@ -7,19 +7,13 @@ import { ageOnDate, analyzeCalendarDate, validRealDate } from "./calendarDate";
  */
 
 import { isOenIdentityFinding } from "./identityRules";
-import { standardizeUnit } from "./cleaner";
-import { normalizeCanadianPostalCode } from "./postalCode";
-import {
-  analyzePhoneNumber,
-  isActiveCanadianGeographicNpa,
-  type PhoneNumberAnalysis,
-} from "./phoneNumber";
 import type {
   ValidationIssue,
   ValidationResult,
   StudentRecord,
   GateState,
   AppliedFix,
+  AddressFindingReference,
   RulesProfile,
 } from "./types";
 import defaultRules from "../config/rules.stix.default.json";
@@ -31,15 +25,9 @@ import {
   type CanonicalSchool,
   type CanonicalMetadata,
 } from "./canonical";
-import {
-  ADDRESS_REPAIR_FIELDS,
-  analyzeAlternateDeliveryInStreetFields,
-  isCanonicalRuralRoute,
-  analyzeStreetNameSuffix,
-  analyzeStreetNumberRepair,
-  analyzeStreetNumberUnitPrefix,
-  analyzeUnitOverflow,
-} from "./addressRepair";
+import { isAddressField, assessAddress } from "./addressRules";
+import { allowedValuesForField, canonicalPhoneFindings } from "./fieldValidation";
+export { fieldValueMeetsRules } from "./fieldValidation";
 import { FREE_TEXT_FIELDS, SCHOOL_FIELDS } from "./fields";
 import { freeTextCharacterFindings } from "./freeTextCharacters";
 
@@ -73,156 +61,10 @@ function issue(
   issues.push({ id: value.id ?? `${value.ruleId}-${issues.length}`, ...value, autoFixable });
 }
 
-function allowedValuesForField(field: string, rules: RulesProfile): string[] | undefined {
-  return {
-    Grade: rules.allowedGradeValues,
-    Gender: rules.allowedGenderValues,
-    Province: rules.allowedProvinceValues,
-    Language: rules.allowedLanguageValues,
-    CountryOfOrigin: rules.allowedCountryValues,
-    StreetType: rules.allowedStreetTypeValues,
-    StreetDirection: rules.allowedStreetDirectionValues,
-    GuardianRelationship: rules.allowedRelationshipValues,
-    Guardian2Relationship: rules.allowedRelationshipValues,
-    PhoneType: rules.allowedPhoneTypeValues,
-    GuardianPhoneType: rules.allowedPhoneTypeValues,
-    Guardian2PhoneType: rules.allowedPhoneTypeValues,
-  }[field];
-}
-
-type CanonicalPhoneFinding = {
-  severity: "error" | "warning" | "info";
-  message: string;
-  autoFixable: boolean;
-  suggestedFix?: string;
-  ruleId: string;
-};
-
-const SAFE_TRAILING_PHONE_NOTE = /[\s\-*/(),.!]*(?:(?:please\s+)?call\b[\s\-*/(),.!]*)?\b(?:1st|first|2nd|second|3rd|third)\b[\s\-*/(),.!]*(?:call\b[\s\-*/(),.!]*)?$|[\s\-*/(),.!]*\bcell\b[\s\-*/(),.!]*$/i;
-
-function legacyCanonicalPhoneFix(raw: string): string | undefined {
-  const withoutNote = raw.replace(SAFE_TRAILING_PHONE_NOTE, "");
-  const extension = withoutNote.match(/\bex\s*(\d{1,5})\s*$/i)?.[1] ?? "";
-  const base = extension ? withoutNote.replace(/\bex\s*\d{1,5}\s*$/i, "") : withoutNote;
-  if (base === raw && !extension) return undefined;
-  let digits = base.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
-  if (digits.length !== 10 || !/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return undefined;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${extension ? `x${extension}` : ""}`;
-}
-
-function invalidPhoneFinding(
-  raw: string,
-  label: string,
-  analysis: Extract<PhoneNumberAnalysis, { status: "invalid" }>,
-): CanonicalPhoneFinding {
-  const shared = { severity: "error" as const, autoFixable: false };
-  switch (analysis.reason) {
-    case "multiple-numbers": return { ...shared, message: `${label} "${raw}" contains multiple phone numbers. Only one number in XXX-XXX-XXXX format is accepted.`, ruleId: "PHONE_FORMAT" };
-    case "appended-text": return { ...shared, message: `${label} "${raw}" contains unrecognized text or notes. Enter one phone number, optionally followed by lowercase x and 1-5 extension digits.`, ruleId: "PHONE_FORMAT" };
-    case "too-few-digits": return { ...shared, message: `${label} "${raw}" has too few digits (${analysis.digitCount}). Phone numbers must be 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
-    case "too-many-digits": return { ...shared, message: `${label} "${raw}" has too many digits. Phone numbers must be exactly 10 digits in XXX-XXX-XXXX format.`, ruleId: "PHONE_FORMAT" };
-    case "invalid-npa": return { ...shared, message: `${label} "${raw}" has an invalid NANP area code (${analysis.npa}). Its first digit must be 2-9.`, ruleId: "PHONE_NPA_STRUCTURE" };
-    case "invalid-nxx": return { ...shared, message: `${label} "${raw}" has an invalid NANP exchange code (${analysis.nxx}). Its first digit must be 2-9.`, ruleId: "PHONE_NXX_STRUCTURE" };
-    case "extension-missing": return { ...shared, message: `${label} "${raw}" has an extension marker but no extension. Enter lowercase x followed by 1-5 digits, or remove the marker.`, ruleId: "PHONE_EXTENSION_FORMAT" };
-    case "extension-too-long": return { ...shared, message: `${label} "${raw}" has an extension longer than the maximum of 5 digits. Confirm and enter 1-5 digits after lowercase x.`, ruleId: "PHONE_EXTENSION_FORMAT" };
-    case "extension-invalid": return { ...shared, message: `${label} "${raw}" has an invalid extension. Use lowercase x followed by 1-5 digits.`, ruleId: "PHONE_EXTENSION_FORMAT" };
-  }
-}
-
-function canonicalPhoneFindings(
-  raw: string,
-  label: string,
-  rules: RulesProfile,
-): CanonicalPhoneFinding[] {
-  const legacyFix = legacyCanonicalPhoneFix(raw);
-  if (legacyFix) {
-    return [{
-      severity: "error",
-      message: `${label} "${raw}" can be safely normalized to "${legacyFix}".`,
-      suggestedFix: legacyFix,
-      autoFixable: true,
-      ruleId: "PHONE_FORMAT",
-    }];
-  }
-  const analysis = analyzePhoneNumber(raw);
-  const placeholders = new Set(rules.phoneConfig?.placeholderNumbers ?? []);
-  if (analysis.status === "invalid") {
-    const findings = [invalidPhoneFinding(raw, label, analysis)];
-    if (analysis.baseValue && placeholders.has(analysis.baseValue)) {
-      findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
-    }
-    return findings;
-  }
-
-  const findings: CanonicalPhoneFinding[] = [];
-  if (analysis.status === "normalized") {
-    findings.push({
-      severity: "error",
-      message: analysis.extension !== undefined
-        ? `${label} "${raw}" can be safely normalized to "${analysis.value}" (lowercase x followed by 1-5 digits).`
-        : `${label} "${raw}" is not in the required XXX-XXX-XXXX format.`,
-      suggestedFix: analysis.value,
-      autoFixable: true,
-      ruleId: analysis.extension !== undefined ? "PHONE_EXTENSION_NORMALIZE" : "PHONE_FORMAT",
-    });
-  }
-  if (placeholders.has(analysis.baseValue)) {
-    findings.push({ severity: "error", message: `${label} "${raw}" appears to be a placeholder number.`, autoFixable: false, ruleId: "PHONE_PLACEHOLDER" });
-  }
-  const canadianAreaCodeCheck = rules.phoneConfig?.canadianAreaCodeCheck ?? "off";
-  if (canadianAreaCodeCheck !== "off" && !isActiveCanadianGeographicNpa(analysis.npa)) {
-    findings.push({
-      severity: canadianAreaCodeCheck,
-      message: `Area code ${analysis.npa} is not a currently active Canadian geographic area code. Confirm that this non-Canadian number is intended.`,
-      autoFixable: false,
-      ruleId: "PHONE_CANADIAN_AREA_CODE",
-    });
-  }
-  return findings;
-}
-
-function postalCodeFinding(raw: string, rules: RulesProfile): CanonicalPhoneFinding | null {
-  const normalized = normalizeCanadianPostalCode(raw);
-  const usesBuiltInRule = rules.postalCodePattern === defaultRules.postalCodePattern;
-  if (!usesBuiltInRule) {
-    const pattern = new RegExp(rules.postalCodePattern, "i");
-    const trimmed = raw.trim();
-    if (pattern.test(trimmed)) {
-      return raw === trimmed ? null : { severity: "info", message: `PostalCode "${raw}" has surrounding whitespace; normalize it to "${trimmed}".`, suggestedFix: trimmed, autoFixable: true, ruleId: "POSTAL_CODE_NORMALIZE" };
-    }
-    if (normalized.status === "invalid" || !pattern.test(normalized.value)) {
-      return { severity: "warning", message: `PostalCode "${raw}" does not match the active postal-code pattern.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
-    }
-  }
-  if (normalized.status === "valid") return null;
-  if (normalized.status === "normalized") return { severity: "info", message: `PostalCode "${raw}" can be safely normalized to "${normalized.value}".`, suggestedFix: normalized.value, autoFixable: true, ruleId: "POSTAL_CODE_NORMALIZE" };
-  if (normalized.status === "repaired") return { severity: "warning", message: `PostalCode "${raw}" contains an O/I/L transcription in a numeric position; repair it to "${normalized.value}".`, suggestedFix: normalized.value, autoFixable: true, ruleId: "POSTAL_CODE_REPAIR" };
-  return { severity: "warning", message: `PostalCode "${raw}" is not a valid Canadian postal-code structure. Expected canonical form A1A1A1.`, autoFixable: false, ruleId: "POSTAL_CODE_FORMAT" };
-}
-
-/**
- * Check the independent rules for one non-empty field value. Cross-record and
- * cross-field findings still require the normal recheck after fixes are applied.
- */
-export function fieldValueMeetsRules(field: string, value: string, rules: RulesProfile): boolean {
-  if (!value) return !rules.requiredFields.includes(field);
-  if (value.length > (rules.fieldLengths[field] ?? Infinity)) return false;
-  const allowed = allowedValuesForField(field, rules);
-  if (allowed && !allowed.includes(value)) return false;
-  if (field === "PostalCode" && postalCodeFinding(value, rules)) return false;
-  if (["Phone", "ContactPhone", "MetadataContactPhone", "GuardianPhoneNumber", "Guardian2PhoneNumber"].includes(field)
-    && canonicalPhoneFindings(value, field, rules).length) return false;
-  if (field === "BirthDate" && (!validRealDate(value) || value > new Date().toISOString().slice(0, 10))) return false;
-  if (field === "OEN" && !/^\d{9}$/.test(value)) return false;
-  if (field === "RuralRoute" && !isCanonicalRuralRoute(value)) return false;
-  if (field === "BoardNumber" && !/^(?:B\d{5}|D[A-Z]{2}\d{3})$/.test(value)) return false;
-  return true;
-}
-
 /** Namespace-aware validation of the canonical STIX model. */
 export function validateXml(xmlText: string, rules: RulesProfile = defaultRules as RulesProfile): ValidationResult {
   const issues: ValidationIssue[] = [];
+  const addressCharacters = new Map<string, ReturnType<typeof assessAddress>>();
   const effectiveRules: RulesProfile = {
     ...rules,
     freeTextCharacterChecks: { ...defaultRules.freeTextCharacterChecks, ...rules.freeTextCharacterChecks },
@@ -299,64 +141,13 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
       const studentName = [fields.FirstName, fields.LastName].filter(Boolean).join(" ") || `Student #${studentIndex + 1}`;
       const base = { recordId, studentName, schoolNumber: school.schoolNumber, layer: "CANONICAL" as const };
       records.push({ id: recordId, xmlPath: `SchoolUpload/School[${school.schoolNumber || schoolIndex}]/Students/Student[${studentIndex}]`, fields });
-      // Only a standalone finding when StreetNumber is within its length limit — an over-length
-      // value gets this same proposal attached to the blocking FIELD_LENGTH error instead.
-      const unitPrefixProposal = (fields.StreetNumber ?? "").length <= (rules.fieldLengths.StreetNumber ?? Infinity)
-        ? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-unit-prefix`)
-        : undefined;
-      if (unitPrefixProposal) {
-        issue(issues, {
-          ...base, severity: "warning", field: "StreetNumber", ruleId: "STREET_NUMBER_UNIT_PREFIX",
-          message: unitPrefixProposal.explanation, autoFixable: false, repairProposal: unitPrefixProposal,
-        });
-      }
-      const alternateDeliveryProposal = analyzeAlternateDeliveryInStreetFields(fields, `${recordId}-address-alternate-delivery`);
-      if (alternateDeliveryProposal) {
-        issue(issues, {
-          ...base,
-          severity: "warning",
-          field: alternateDeliveryProposal.sourceField,
-          ruleId: alternateDeliveryProposal.deliveryType === "ruralRoute"
-            ? "RURAL_ROUTE_IN_STREET_FIELD"
-            : "ALTERNATE_DELIVERY_IN_STREET_FIELD",
-          message: alternateDeliveryProposal.explanation,
-          autoFixable: alternateDeliveryProposal.confidence === "safe",
-          repairProposal: alternateDeliveryProposal,
-        });
-      }
-      if (fields.RuralRoute && !isCanonicalRuralRoute(fields.RuralRoute)) {
-        issue(issues, {
-          ...base,
-          severity: "error",
-          field: "RuralRoute",
-          currentValue: fields.RuralRoute,
-          ruleId: "RURAL_ROUTE_FORMAT",
-          message: `RuralRoute "${fields.RuralRoute}" must use RR followed by one space and a 1–4 digit route number, such as RR 4. Do not use # or punctuation.`,
-          autoFixable: false,
-        });
-      }
+      const addressFindings = assessAddress(fields, effectiveRules, recordId);
+      addressCharacters.set(recordId, addressFindings.filter(finding => finding.ruleId.startsWith("FREE_TEXT_")));
+      for (const finding of addressFindings.filter(finding => !finding.ruleId.startsWith("FREE_TEXT_"))) issue(issues, { ...base, ...finding });
 
-      const streetNameSuffixProposal = analyzeStreetNameSuffix(
-        fields,
-        rules.allowedStreetTypeValues,
-        rules.allowedStreetDirectionValues,
-        recordId + "-address-street-name-suffix",
-      );
-      if (streetNameSuffixProposal) {
-        const safe = streetNameSuffixProposal.confidence === "safe";
-        issue(issues, {
-          ...base,
-          severity: "warning",
-          field: "StreetName",
-          ruleId: "STREET_TYPE_IN_STREET_NAME",
-          message: streetNameSuffixProposal.explanation,
-          autoFixable: safe,
-          repairProposal: streetNameSuffixProposal,
-        });
-      }
-
-      for (const field of rules.requiredFields.filter((required) => !schoolFields.has(required))) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
+      for (const field of rules.requiredFields.filter((required) => !schoolFields.has(required) && !isAddressField(required))) if (!(fields[field] ?? "").trim()) issue(issues, { ...base, severity: "error", field, ruleId: "REQUIRED_FIELD", message: `${field} is required but missing or empty.` });
       for (const [field, allowed] of Object.entries(allowedByField)) {
+        if (isAddressField(field)) continue;
         const value = fields[field];
         if (value && !allowed.includes(value)) {
           const aliasMap = aliasByField[field];
@@ -415,57 +206,10 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
           seenOens.set(fields.OEN, occurrences);
         }
       }
-      if (fields.PostalCode) {
-        const finding = postalCodeFinding(fields.PostalCode, rules);
-        if (finding) issue(issues, { ...base, field: "PostalCode", currentValue: fields.PostalCode, ...finding });
-      }
-      const manualAddressProposal = (field: string, val: string, limit: number) => ({
-        kind: "address" as const,
-        id: `${recordId}-address-manual-${field}`,
-        confidence: "manual" as const,
-        title: `Review ${field} manually`,
-        explanation: `${field} "${val}" exceeds its ${limit}-character limit and can't be safely auto-split. Review the complete address and edit the fields directly.`,
-        changes: [],
-      });
       for (const [field, limit] of Object.entries(rules.fieldLengths)) {
+        if (isAddressField(field)) continue;
         const val = fields[field] ?? "";
-        if (field === "PostalCode") continue;
-        if (val.length <= limit) continue;
-        if (field === "Unit") {
-          const [standardized, changed] = standardizeUnit(val);
-          const canFix = changed && standardized.length <= limit;
-          const repairProposal = canFix ? undefined : (analyzeUnitOverflow(fields, rules.fieldLengths.StreetNumber ?? limit, `${recordId}-address-unit-overflow`) ?? manualAddressProposal(field, val, limit));
-          issue(issues, {
-            ...base,
-            severity: "error",
-            field,
-            ruleId: "FIELD_LENGTH",
-            message: repairProposal?.explanation ?? `${field} exceeds its ${limit}-character limit.`,
-            suggestedFix: canFix ? standardized : undefined,
-            autoFixable: canFix,
-            repairProposal,
-          });
-        } else if (field === "StreetNumber") {
-          const repairProposal = analyzeStreetNumberRepair(fields, limit, `${recordId}-address-street-number`)
-            ?? analyzeStreetNumberUnitPrefix(fields, `${recordId}-address-street-number-unit-prefix`)
-            ?? manualAddressProposal(field, val, limit);
-          const safe = repairProposal.confidence === "safe";
-          issue(issues, {
-            ...base,
-            severity: "error",
-            field,
-            ruleId: "FIELD_LENGTH",
-            message: repairProposal.explanation,
-            suggestedFix: safe ? repairProposal.changes.find((change) => change.field === field)?.proposedValue : undefined,
-            autoFixable: safe,
-            repairProposal,
-          });
-        } else if ((ADDRESS_REPAIR_FIELDS as readonly string[]).includes(field)) {
-          const manualProposal = manualAddressProposal(field, val, limit);
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: manualProposal.explanation, autoFixable: false, repairProposal: manualProposal });
-        } else {
-          issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
-        }
+        if (val.length > limit) issue(issues, { ...base, severity: "error", field, ruleId: "FIELD_LENGTH", message: `${field} exceeds its ${limit}-character limit.`, suggestedFix: val.slice(0, limit), autoFixable: true });
       }
       for (const field of ["Phone", "GuardianPhoneNumber", "Guardian2PhoneNumber"]) {
         const value = fields[field];
@@ -507,6 +251,12 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
   for (const record of records) {
     const studentName = [record.fields.FirstName, record.fields.LastName].filter(Boolean).join(" ");
     for (const field of FREE_TEXT_FIELDS) {
+      if (isAddressField(field)) {
+        for (const finding of addressCharacters.get(record.id) ?? []) {
+          if (finding.field === field) issue(issues, { ...finding, recordId: record.id, studentName, schoolNumber: record.fields.SchoolNumber, layer: "CANONICAL" });
+        }
+        continue;
+      }
       if (field === "SchoolName" || !record.fields[field] || claimedFields.has(`${record.id}\u0000${field}`)) continue;
       for (const finding of freeTextCharacterFindings(record.fields[field], field, effectiveRules)) {
         issue(issues, {
@@ -649,7 +399,15 @@ export function generateIssueReportCsv(
   issues: ValidationIssue[],
   appliedFixes: AppliedFix[]
 ): string {
-  const fixedIds = new Set(appliedFixes.map((f) => f.issueId));
+  const plans = appliedFixes.flatMap(fix => fix.addressPlan ? [fix.addressPlan] : []);
+  const addressRepairIds = new Set(appliedFixes.filter(fix => fix.addressPlan).map(fix => fix.repairId));
+  const fixedIds = new Set(appliedFixes.filter(fix => !fix.repairId || !addressRepairIds.has(fix.repairId)).map(fix => fix.issueId));
+  const findingKey = (finding: AddressFindingReference) => JSON.stringify([
+    finding.recordId, finding.studentName, finding.schoolNumber, finding.ruleId, finding.field, finding.message,
+  ]);
+  // A combined repair can resolve several original findings, not just its row's
+  // anchor. Leave remaining findings unmarked and ignore unstable issue IDs.
+  const resolvedAddressFindings = new Set(plans.flatMap(plan => (plan.resolvedFindings ?? []).map(findingKey)));
   const escape = (v: unknown) => {
     const s = String(v ?? "");
     return s.includes(",") || s.includes('"') || s.includes("\n")
@@ -669,7 +427,7 @@ export function generateIssueReportCsv(
     i.message,
     i.suggestedFix ?? "",
     i.autoFixable ? "yes" : "no",
-    fixedIds.has(i.id) ? "yes" : "no",
+    (fixedIds.has(i.id) || resolvedAddressFindings.has(findingKey(i))) ? "yes" : "no",
   ]);
   return [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
 }

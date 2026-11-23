@@ -38,6 +38,7 @@ export default function IssuesView({ advancedOptions, onBack, session, onFix, on
         <StatCard label="Affected students" value={summary.affected} sub={`of ${summary.students.toLocaleString()} students (${percentage(summary.affected, summary.students)})`} />
         <StatCard label="Auto-fixable issues" value={summary.automatic} sub={`of ${summary.total.toLocaleString()} issues (${percentage(summary.automatic, summary.total)})`} />
       </div>
+      <p className="cleaning-description">Counts describe findings in the current file. Automatic fixes may combine several findings and subsequent repairs into one address preview.</p>
       <section className="fix-group" style={{ borderTop: 0 }} aria-label="By issue type">
         {exclusions.length > 0 && <details className="review-exclusions">
           <summary>Review exclusions: {exclusions.filter(entry => "ruleId" in entry).length} issue types · {exclusions.filter(entry => "schoolNumber" in entry).length} schools</summary>

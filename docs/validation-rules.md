@@ -196,7 +196,7 @@ resolution workflow is outside the current scope.
 
 ### Rule: `postal-code`
 
-**Severity:** info or warning
+**Severity:** info, warning, or error
 **Field:** `PostalCode`
 
 The built-in rule validates Canadian postal-code structure and produces the
@@ -226,13 +226,19 @@ connector. For example, `N1G / 2W1` safely normalizes to `N1G2W1`. A connector
 in any other position, repeated punctuation, or arbitrary punctuation remains
 invalid; PanoReady does not globally strip punctuation.
 
-The validator reports one of three issue outcomes:
+The validator reports one of four issue outcomes:
 
 | Outcome | Severity | Auto-fix | Example |
 |---|---|---|---|
 | Formatting/case normalization | info | Yes | `n1g 2w1` → `N1G2W1` |
 | Numeric-position transcription repair | warning | Yes | `NIG2W1` → `N1G2W1` |
 | Unresolved invalid structure | warning | No | `N1/G2W1` |
+| U.S. ZIP / ZIP+4 shape | error | No | `12345` or `12345-6789` |
+
+A five-digit numeric value or a five-digit value followed by a hyphen and four
+digits matches the standard U.S. ZIP / ZIP+4 shape. These values produce a
+blocking `POSTAL_CODE_US_ZIP` error and must be replaced with a Canadian postal
+code. PanoReady does not convert U.S. ZIP codes automatically.
 
 Only `O → 0`, `I → 1`, and `L → 1` are repaired, and only in positions that
 must be numeric. PanoReady does not truncate, stitch, reverse a digit into a
@@ -365,8 +371,9 @@ Field values must not exceed the maximum length for that field.
 
 **Auto-fix:** No. Values exceeding the limit must be shortened manually.
 
-`PostalCode` is intentionally handled by its dedicated structural rule rather
-than this generic length rule. Invalid postal codes are never auto-truncated.
+`PostalCode` and `PoBoxNumber` are handled by their dedicated format rules rather
+than this generic length rule. Invalid postal codes and box numbers are never
+auto-truncated.
 
 ---
 
@@ -382,6 +389,53 @@ canonical value so the same input does not also receive a generic whitespace
 issue.
 
 **Auto-fix:** Yes. The suggested fix is the trimmed value (whitespace removed from both ends).
+
+---
+
+### Rule: `ALTERNATE_DELIVERY_IN_STREET_FIELD`
+
+**Severity:** warning
+
+**Fields:** `StreetName`, `StreetNumber`
+
+Detects complete numeric PO Box references entered in a street field, including
+`PO Box 42`, `P.O. Box #42`, `Post Office Box 42`, and `Box 42`. Detection runs
+before the generic character policy.
+
+**Auto-fix:** Yes when `PoBoxNumber` is empty or identifies the same number and
+the proposed values meet their field rules. The fix stores only the digits in
+`PoBoxNumber`. Leading zeroes are preserved. A complete box reference clears
+the source field. A leading reference followed by whitespace or a hyphen and
+a civic-address fragment (street number followed by street text) preserves
+that fragment in the source field. For example, `PO BOX 57 918 Example Grove`
+becomes box number `57` with `918 Example Grove` retained in `StreetName`, and
+`P.O Box 68-427 Sample Way` becomes box number `68` with `427 Sample Way` retained.
+The retained fragment can then be reviewed as part of the street address.
+Conflicting destinations, references in both street fields, letters in the box
+number, additional delivery references, station information, and unrecognized
+trailing text remain manual review. A numeric range without street text, such
+as `PO Box 57-918`, is not automatically split.
+
+---
+
+### Rule: `PO_BOX_NUMBER_FORMAT`
+
+**Severity:** warning; error when the configured length limit is exceeded
+
+**Field:** `PoBoxNumber`
+
+A populated field must contain only the box number in digits, such as `42` or
+`0042`. Do not include `PO Box`, a `#`, spaces, letters, or other address text.
+The optional field may be empty. Manual field editing uses the same validation
+and marks an invalid draft **Check value**. The formatted address preview adds
+`PO Box` for readability; the field and exported value contain only the number.
+
+**Auto-fix:** Yes for a complete recognizable numeric value: `PO Box 0042`,
+`P.O. Box #0042`, `Post Office Box 0042`, `Box 0042`, and `#0042` become `0042`.
+Numbers are never truncated or converted to integers. Values containing other
+text or numbers exceeding the configured limit remain manual review. This rule
+owns the field, so generic character cleanup cannot remove punctuation to turn
+an ambiguous value into a different box number.
 
 ---
 
@@ -407,7 +461,7 @@ in the remaining text, remains manual review.
 
 ### Rule: `RURAL_ROUTE_FORMAT`
 
-**Severity:** error
+**Severity:** warning
 
 **Field:** `RuralRoute`
 
@@ -415,12 +469,16 @@ A populated rural-route field must contain the uppercase identifier `RR`, one
 space, and a route number containing one to four digits—for example, `RR 4`. A
 `#`, periods, expanded wording, station information, additional spaces, five or
 more route-number digits, and other text are not accepted in this canonical
-field. An empty value remains valid because the field is optional.
+field. An empty value remains valid because the field is optional. This is a
+data-quality finding and does not block submission.
 
 The same rule is applied while editing an address during manual review, so an
 invalid draft is marked **Check value** before it is applied.
 
-**Auto-fix:** No. Confirm and enter the canonical rural-route identifier.
+**Auto-fix:** Yes when a one-to-four digit route number can be parsed
+unambiguously, including a bare number in the `RuralRoute` field (for example,
+`2` becomes `RR 2` and `R.R. #01` becomes `RR 1`). Longer route numbers and
+values containing other text remain manual review.
 
 **Rule source:** [Canada Post — Addressing guidelines: Civic address](https://www.canadapost-postescanada.ca/cpc/en/support/articles/addressing-guidelines/civic-address.page)
 
@@ -522,8 +580,10 @@ See [docs/rulesets.md](rulesets.md) for a full field-by-field reference, includi
 
 | Rule | Auto-fixable | Fix applied |
 |---|---|---|
+| `ALTERNATE_DELIVERY_IN_STREET_FIELD` | Yes when unambiguous | Move the numeric PO Box reference to `PoBoxNumber`, without a prefix |
+| `PO_BOX_NUMBER_FORMAT` | Yes when the complete number is unambiguous | Remove a recognized prefix or number marker; preserve leading zeroes |
 | `RURAL_ROUTE_IN_STREET_FIELD` | Yes when unambiguous | Move to `RuralRoute` and normalize to `RR n` |
-| `RURAL_ROUTE_FORMAT` | No | Enter `RR n` without `#` or punctuation |
+| `RURAL_ROUTE_FORMAT` | Yes when a 1–4 digit number is unambiguous | Normalize to `RR n`; other values need manual review |
 | `FREE_TEXT_APOSTROPHE` | Yes | Apostrophe removed |
 | `FREE_TEXT_QUOTATION` | Yes | Quotation mark removed |
 | `FREE_TEXT_ACCENT` | Yes | Unaccented Latin letter |

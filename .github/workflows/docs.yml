@@ -1,67 +1,30 @@
-name: GitHub Pages
+name: Check documentation
 
 on:
   push:
     branches: [main]
-    tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
 
 permissions: {}
-
-concurrency:
-  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
-  cancel-in-progress: false
 
 jobs:
   build:
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          # Published output must not depend on caches written by other jobs.
-          package-manager-cache: false
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Build stable and latest sites
-        env:
-          PREVIEW: ${{ github.event_name == 'pull_request' }}
-          PAGES_BASE_PATH: /PanoReady
-        run: |
-          latest_ref=origin/main
-          if [ "$PREVIEW" = "true" ]; then latest_ref=HEAD; fi
-          python scripts/build-pages.py --latest-ref "$latest_ref" --base-path "$PAGES_BASE_PATH"
-      - name: Upload Pages artifact
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: pages-out
-
-  deploy:
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    timeout-minutes: 15
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write # Create the Pages deployment.
-      id-token: write # Authenticate deployment with a short-lived OIDC token.
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Install documentation dependencies
+        run: >-
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
+      - name: Build documentation
+        run: python -m mkdocs build --strict

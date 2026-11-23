@@ -30,4 +30,13 @@ describe("field value status", () => {
       expect(fieldValueMeetsRules("RuralRoute", value, defaultRules), value).toBe(false);
     }
   });
+
+  it("requires only digits in a populated PO box number", () => {
+    for (const value of ["", "42", "0042"]) {
+      expect(fieldValueMeetsRules("PoBoxNumber", value, defaultRules), value).toBe(true);
+    }
+    for (const value of ["PO Box 42", "P.O. Box 42", "#42", "42A", "4_2", "4 2", " 42 "]) {
+      expect(fieldValueMeetsRules("PoBoxNumber", value, defaultRules), value).toBe(false);
+    }
+  });
 });

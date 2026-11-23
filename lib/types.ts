@@ -240,6 +240,24 @@ export type ValidationIssue = {
   repairProposal?: AddressRepairProposal;
 };
 
+/** Match an assessment finding without depending on its position-based issue ID. */
+export type AddressFindingReference = Pick<ValidationIssue, "recordId" | "studentName" | "schoolNumber" | "ruleId" | "field" | "message">;
+
+/** A simulated address sequence, kept separate from assessment findings. */
+export type AddressAutofixPlan = {
+  recordId: string;
+  before: Record<string, string>;
+  rulesSnapshot: string;
+  changes: RepairChange[];
+  steps: { ruleId: string; field: string; severity: ValidationSeverity; explanation: string; changes: RepairChange[] }[];
+  remaining: { ruleId: string; field?: string; severity: ValidationSeverity; message: string }[];
+  stoppedReason?: string;
+  /** Original findings resolved by the final preview, for the issue report. */
+  resolvedFindings?: AddressFindingReference[];
+};
+
+export type AutomaticFixItem = ValidationIssue & { addressPlan?: AddressAutofixPlan };
+
 export type AppliedFix = {
   issueId: string;
   recordId: string;
@@ -250,6 +268,8 @@ export type AppliedFix = {
   appliedAt: number;
   /** Links multiple field changes applied from one repair card. */
   repairId?: string;
+  /** Stored once on the first net change for preview checks and review history. */
+  addressPlan?: AddressAutofixPlan;
 };
 
 export type StudentRecord = {

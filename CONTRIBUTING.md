@@ -40,7 +40,7 @@ For documentation changes, also run:
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --require-hashes --only-binary=:all: -r requirements-docs.txt
-mkdocs build --strict
+python -m mkdocs build --strict
 ```
 
 The documentation dependency inputs are in `requirements-docs.in`; the generated
@@ -53,6 +53,8 @@ uvx --python 3.12 --from pip-tools==7.6.1 pip-compile --generate-hashes --pip-ar
 
 Review dependency changes before merging. Manual upgrades do not automatically
 apply Dependabot's seven-day cooldown.
+
+Documentation publication and notification setup are described in [Development](docs/development.md#documentation-hub-notifications).
 
 For workflow changes, run `uvx zizmor==1.30.1 --offline .github/workflows` locally.
 The **Workflow security / Audit GitHub Actions** CI check also runs online audits

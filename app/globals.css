@@ -1526,3 +1526,23 @@ h1, h2, h3 {
 .manual-review-cell--address > .btn { width: calc(100% / 3 - 16px); margin-inline: 8px; min-height: 30px; padding: 5px 8px; font-size: 12px; line-height: 1.4; }
 
 .manual-review-cell input[type="checkbox"] { width: 24px; height: 24px; border-radius: 6px; }
+
+/* Expanded explanations sit below their parent correction, outside its cells. */
+.fix-table > tbody > .table-detail-row > td { padding: 0; }
+.repair-details-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 3px 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.repair-details-toggle:hover { color: var(--color-text-primary); text-decoration: underline; }
+.repair-details-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }
+.repair-details-toggle svg { flex-shrink: 0; transform: rotate(-90deg); }
+.repair-details-toggle[aria-expanded="true"] svg { transform: rotate(0); }
+
+.repair-remaining { margin: 6px 0 0; color: var(--color-text-secondary); font-size: 12px; }
