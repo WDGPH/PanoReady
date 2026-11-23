@@ -552,7 +552,7 @@ Each finding's rule ID maps to one issue category in `lib/issueCategories.ts`. S
 
 | Category | Label | Covers |
 |---|---|---|
-| `file-structure` | File Structure | PHIX files that cannot be parsed, have no header, or contain no data rows |
+| `file-structure` | File Structure | STIX files with invalid XML or an unsupported namespace; PHIX files that cannot be parsed, have no header, or contain no data rows |
 | `metadata` | File Metadata | STIX submission-level fields: header metadata, school and board numbers, full-upload flag, file contact phone type, empty student list |
 | `required` | Required Fields | Missing required values, including guardian requirements |
 | `date` | Dates | Birth date and date-administered format, range, and ordering |

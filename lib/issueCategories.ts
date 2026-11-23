@@ -29,6 +29,8 @@ export const CATEGORY_LABELS: Record<IssueCategory, string> = {
 // IssueCategory type. Both fall back to "other" for unmapped rule IDs.
 
 const stixCategories: Record<string, IssueCategory> = {
+  // file-structure
+  XML_PARSE_OR_NAMESPACE: "file-structure",
   // required
   EMPTY_GUARDIAN: "required", GUARDIAN_RELATIONSHIP_REQUIRED: "required", REQUIRED_FIELD: "required",
   // date
@@ -42,11 +44,13 @@ const stixCategories: Record<string, IssueCategory> = {
   PHONE_PLACEHOLDER: "contact", PHONE_EXTENSION_FORMAT: "contact", PHONE_EXTENSION_NORMALIZE: "contact",
   PHONE_CANADIAN_AREA_CODE: "contact",
   PHONETYPE_ALLOWED_VALUE: "contact", GUARDIANPHONETYPE_ALLOWED_VALUE: "contact", GUARDIAN2PHONETYPE_ALLOWED_VALUE: "contact",
-  // address — street, rural route and postal code
+  // address — street, PO box, rural route and postal code
   STREET_NUMBER_UNIT_PREFIX: "address", STREET_TYPE_IN_STREET_NAME: "address",
-  ALTERNATE_DELIVERY_IN_STREET_FIELD: "address", RURAL_ROUTE_IN_STREET_FIELD: "address", RURAL_ROUTE_FORMAT: "address",
+  ALTERNATE_DELIVERY_IN_STREET_FIELD: "address", PO_BOX_NUMBER_FORMAT: "address",
+  RURAL_ROUTE_IN_STREET_FIELD: "address", RURAL_ROUTE_FORMAT: "address",
   STREETTYPE_ALLOWED_VALUE: "address", STREETDIRECTION_ALLOWED_VALUE: "address",
   POSTAL_CODE_NORMALIZE: "address", POSTAL_CODE_REPAIR: "address", POSTAL_CODE_FORMAT: "address",
+  POSTAL_CODE_US_ZIP: "address",
   // text-constraint — field length and free-text character policy
   FIELD_LENGTH: "text-constraint",
   FREE_TEXT_APOSTROPHE: "text-constraint", FREE_TEXT_QUOTATION: "text-constraint",

@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { issueCategory, CATEGORY_LABELS } from "../lib/issueCategories";
 import type { IssueCategory } from "../lib/issueCategories";
+import { ALLOWED_VALUE_FIELDS } from "../lib/fieldValidation";
+import { ISSUE_TYPE_LABELS } from "../workflows/stix/validation/overview";
 
 describe("issueCategories", () => {
   it("maps STIX rule IDs to the correct category", () => {
+    expect(issueCategory("XML_PARSE_OR_NAMESPACE", "stix")).toBe("file-structure");
     expect(issueCategory("REQUIRED_FIELD", "stix")).toBe("required");
     expect(issueCategory("FIELD_LENGTH", "stix")).toBe("text-constraint");
     expect(issueCategory("BIRTHDATE_FORMAT", "stix")).toBe("date");
     expect(issueCategory("OEN_DUPLICATE", "stix")).toBe("identity");
     expect(issueCategory("POSTAL_CODE_FORMAT", "stix")).toBe("address");
+    expect(issueCategory("POSTAL_CODE_US_ZIP", "stix")).toBe("address");
+    expect(issueCategory("PO_BOX_NUMBER_FORMAT", "stix")).toBe("address");
     expect(issueCategory("PHONE_FORMAT", "stix")).toBe("contact");
     expect(issueCategory("PHONETYPE_ALLOWED_VALUE", "stix")).toBe("contact");
     // file-level contact phone type is metadata, not the same as per-record PHONETYPE_ALLOWED_VALUE
@@ -40,6 +45,16 @@ describe("issueCategories", () => {
     expect(issueCategory("PHIX_FIELD_LENGTH", "phix")).toBe("text-constraint");
     expect(issueCategory("PHIX_SDL_ALLOWED_VALUE", "phix")).toBe("coded-value");
     expect(issueCategory("PHIX_ORGANIZATION_ALLOWED_VALUE", "phix")).toBe("coded-value");
+  });
+  it("maps every known STIX rule ID", () => {
+    const ruleIds = [
+      ...Object.keys(ISSUE_TYPE_LABELS),
+      // built at runtime from the field name, so they have no label
+      ...ALLOWED_VALUE_FIELDS.map(field => `${field.toUpperCase()}_ALLOWED_VALUE`),
+      // fixed rule IDs without a label; add any new unlabelled rule here
+      "FULL_UPLOAD_ALLOWED_VALUE", "PHONE_TYPE_ALLOWED_VALUE", "XML_PARSE_OR_NAMESPACE",
+    ];
+    expect(ruleIds.filter(ruleId => issueCategory(ruleId, "stix") === "other")).toEqual([]);
   });
   it("falls back to 'other' for unmapped rule IDs", () => {
     expect(issueCategory("UNKNOWN_RULE", "stix")).toBe("other");

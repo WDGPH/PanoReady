@@ -6,8 +6,14 @@ import { isCanonicalPoBoxNumber, isCanonicalRuralRoute } from "./addressRepair";
 import type { RulesProfile } from "./types";
 import defaultRules from "../config/rules.stix.default.json";
 
+/** Fields with a configured allowed-value list. The order sets the order of their findings. */
+export const ALLOWED_VALUE_FIELDS = [
+  "Grade", "Gender", "Province", "Language", "CountryOfOrigin", "StreetType", "StreetDirection",
+  "GuardianRelationship", "Guardian2Relationship", "PhoneType", "GuardianPhoneType", "Guardian2PhoneType",
+] as const;
+
 export function allowedValuesForField(field: string, rules: RulesProfile): string[] | undefined {
-  return {
+  const allowed: Record<(typeof ALLOWED_VALUE_FIELDS)[number], string[]> = {
     Grade: rules.allowedGradeValues,
     Gender: rules.allowedGenderValues,
     Province: rules.allowedProvinceValues,
@@ -20,7 +26,8 @@ export function allowedValuesForField(field: string, rules: RulesProfile): strin
     PhoneType: rules.allowedPhoneTypeValues,
     GuardianPhoneType: rules.allowedPhoneTypeValues,
     Guardian2PhoneType: rules.allowedPhoneTypeValues,
-  }[field];
+  };
+  return (allowed as Record<string, string[] | undefined>)[field];
 }
 
 type CanonicalPhoneFinding = {
