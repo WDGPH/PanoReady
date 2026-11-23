@@ -1,3 +1,5 @@
+import type { RequiredField } from "./fields";
+
 export type IssueCategory =
   | "file-structure"
   | "metadata"
@@ -27,6 +29,7 @@ export const CATEGORY_LABELS: Record<IssueCategory, string> = {
 
 // Rule IDs are workflow-specific; each workflow maps its own IDs to the shared
 // IssueCategory type. Both fall back to "other" for unmapped rule IDs.
+// Generic STIX rules run on many fields, so the field can set their category.
 
 export const stixCategories: Record<string, IssueCategory> = {
   // file-structure
@@ -68,6 +71,37 @@ export const stixCategories: Record<string, IssueCategory> = {
   GUARDIANRELATIONSHIP_ALLOWED_VALUE: "coded-value", GUARDIAN2RELATIONSHIP_ALLOWED_VALUE: "coded-value",
 };
 
+const stixFieldRules = new Set([
+  "REQUIRED_FIELD", "FIELD_LENGTH",
+  "FREE_TEXT_APOSTROPHE", "FREE_TEXT_QUOTATION", "FREE_TEXT_ACCENT", "FREE_TEXT_SPECIAL_CHARACTER",
+]);
+
+// null means the field has no group, so the generic rules keep their own category
+const stixFieldCategories: Record<RequiredField, IssueCategory | null> = {
+  // names and class
+  FirstName: null, MiddleName: null, LastName: null,
+  AliasFirstName: null, AliasMiddleName: null, AliasLastName: null,
+  GuardianFirstName: null, GuardianLastName: null, Guardian2FirstName: null, Guardian2LastName: null,
+  Class: null,
+  // coded fields — a missing code is "required" and an unlisted code is "coded-value"
+  // (Province is an address field, but its allowed-value rule is "coded-value")
+  Grade: null, Gender: null, Language: null, CountryOfOrigin: null, Province: null,
+  GuardianRelationship: null, Guardian2Relationship: null,
+  // identity
+  OEN: "identity",
+  // date
+  BirthDate: "date",
+  // metadata
+  SchoolNumber: "metadata", SchoolName: "metadata",
+  // contact
+  Phone: "contact", PhoneType: "contact", GuardianPhoneNumber: "contact", GuardianPhoneType: "contact",
+  Guardian2PhoneNumber: "contact", Guardian2PhoneType: "contact",
+  // address
+  Unit: "address", StreetNumber: "address", StreetNumberSuffix: "address", StreetName: "address",
+  StreetType: "address", StreetDirection: "address", RuralRoute: "address", PoBoxNumber: "address",
+  City: "address", PostalCode: "address",
+};
+
 export const phixCategories: Record<string, IssueCategory> = {
   // file-structure
   PHIX_PARSE_FAILURE: "file-structure", PHIX_MISSING_HEADER: "file-structure", PHIX_NO_DATA: "file-structure",
@@ -106,6 +140,10 @@ export const phixCategories: Record<string, IssueCategory> = {
   PHIX_FIELD_LENGTH: "text-constraint",
 };
 
-export function issueCategory(ruleId: string, workflow: "stix" | "phix"): IssueCategory {
+export function issueCategory(ruleId: string, workflow: "stix" | "phix", field = ""): IssueCategory {
+  if (workflow === "stix" && stixFieldRules.has(ruleId)) {
+    const category = stixFieldCategories[field as RequiredField];
+    if (category) return category;
+  }
   return (workflow === "stix" ? stixCategories : phixCategories)[ruleId] ?? "other";
 }
