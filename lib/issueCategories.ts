@@ -28,7 +28,7 @@ export const CATEGORY_LABELS: Record<IssueCategory, string> = {
 // Rule IDs are workflow-specific; each workflow maps its own IDs to the shared
 // IssueCategory type. Both fall back to "other" for unmapped rule IDs.
 
-const stixCategories: Record<string, IssueCategory> = {
+export const stixCategories: Record<string, IssueCategory> = {
   // file-structure
   XML_PARSE_OR_NAMESPACE: "file-structure",
   // required
@@ -68,7 +68,7 @@ const stixCategories: Record<string, IssueCategory> = {
   GUARDIANRELATIONSHIP_ALLOWED_VALUE: "coded-value", GUARDIAN2RELATIONSHIP_ALLOWED_VALUE: "coded-value",
 };
 
-const phixCategories: Record<string, IssueCategory> = {
+export const phixCategories: Record<string, IssueCategory> = {
   // file-structure
   PHIX_PARSE_FAILURE: "file-structure", PHIX_MISSING_HEADER: "file-structure", PHIX_NO_DATA: "file-structure",
   // required

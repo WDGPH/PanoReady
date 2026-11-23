@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { issueCategory, CATEGORY_LABELS } from "../lib/issueCategories";
-import type { IssueCategory } from "../lib/issueCategories";
+import { issueCategory, CATEGORY_LABELS, phixCategories, stixCategories } from "../lib/issueCategories";
 import { ALLOWED_VALUE_FIELDS } from "../lib/fieldValidation";
 import { ISSUE_TYPE_LABELS } from "../workflows/stix/validation/overview";
 
@@ -64,11 +63,11 @@ describe("issueCategories", () => {
     expect(issueCategory("PHIX_PARSE_FAILURE", "stix")).toBe("other");
     expect(issueCategory("REQUIRED_FIELD", "phix")).toBe("other");
   });
-  it("CATEGORY_LABELS has an entry for every IssueCategory", () => {
-    const categories: IssueCategory[] = [
-      "file-structure", "metadata", "required", "date", "identity", "vaccine",
-      "coded-value", "address", "contact", "text-constraint", "other",
-    ];
-    for (const cat of categories) expect(CATEGORY_LABELS[cat]).toBeTruthy();
+  it("has a non-empty label for every category", () => {
+    for (const [category, label] of Object.entries(CATEGORY_LABELS)) expect(label.trim(), category).not.toBe("");
+  });
+  it("uses every category except 'other' in at least one mapping", () => {
+    const used = new Set<string>([...Object.values(stixCategories), ...Object.values(phixCategories)]);
+    for (const category of Object.keys(CATEGORY_LABELS)) if (category !== "other") expect(used.has(category), category).toBe(true);
   });
 });
