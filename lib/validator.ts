@@ -26,7 +26,7 @@ import {
   type CanonicalMetadata,
 } from "./canonical";
 import { isAddressField, assessAddress } from "./addressRules";
-import { allowedValuesForField, canonicalPhoneFindings } from "./fieldValidation";
+import { ALLOWED_VALUE_FIELDS, allowedValuesForField, canonicalPhoneFindings } from "./fieldValidation";
 export { fieldValueMeetsRules } from "./fieldValidation";
 import { FREE_TEXT_FIELDS, SCHOOL_FIELDS } from "./fields";
 import { freeTextCharacterFindings } from "./freeTextCharacters";
@@ -118,10 +118,7 @@ export function validateXml(xmlText: string, rules: RulesProfile = defaultRules 
 
   const seenOens = new Map<string, { studentName: string; schoolId: string; schoolNumber: string; schoolName: string }[]>();
   const seenIdentity = new Map<string, { studentName: string; schoolNumber: string; schoolName: string }>();
-  const allowedByField = Object.fromEntries([
-    "Grade", "Gender", "Province", "Language", "CountryOfOrigin", "StreetType", "StreetDirection",
-    "GuardianRelationship", "Guardian2Relationship", "PhoneType", "GuardianPhoneType", "Guardian2PhoneType",
-  ].map(field => [field, allowedValuesForField(field, rules)!]));
+  const allowedByField = Object.fromEntries(ALLOWED_VALUE_FIELDS.map(field => [field, allowedValuesForField(field, rules)!]));
   const aliasByField: Record<string, Record<string, string> | undefined> = { Grade: rules.gradeAliases, Gender: rules.genderAliases };
   const schoolFields = new Set<string>(SCHOOL_FIELDS);
   for (let schoolIndex = 0; schoolIndex < upload.schools.length; schoolIndex++) {

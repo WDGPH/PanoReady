@@ -548,23 +548,25 @@ Flags student records where the combination of `FirstName + LastName + BirthDate
 
 ## Issue Categories
 
-Each finding's rule ID maps to one issue category in `lib/issueCategories.ts`. STIX and PHIX keep separate mappings that share the same category list. Rule IDs without a mapping fall back to `other`. The STIX validation overview includes the category on each issue-type row.
+Each finding's rule ID maps to one issue category in `lib/issueCategories.ts`. STIX and PHIX keep separate mappings that share the same category list. Rule IDs without a mapping fall back to `other`. For the generic rules, the field can set the category, as described below the table. Each finding has one category. The STIX validation overview includes the category on each issue-type row.
 
 | Category | Label | Covers |
 |---|---|---|
-| `file-structure` | File Structure | PHIX files that cannot be parsed, have no header, or contain no data rows |
-| `metadata` | File Metadata | STIX submission-level fields: header metadata, school and board numbers, full-upload flag, file contact phone type, empty student list |
-| `required` | Required Fields | Missing required values, including guardian requirements |
-| `date` | Dates | Birth date and date-administered format, range, and ordering |
-| `identity` | Identity & Duplicates | OEN and health card number format, duplicate and dual-enrolment records |
-| `vaccine` | Vaccine / Immunizing Agent | PHIX trade name and immunizing agent values and conflicts |
+| `file-structure` | File Structure | STIX files with invalid XML or an unsupported namespace; PHIX files that cannot be parsed, have no header, or contain no data rows |
+| `metadata` | File Metadata | STIX submission-level fields: header metadata, school and board numbers, full-upload flag, file contact phone type, empty student list; generic STIX rules on school fields |
+| `required` | Required Fields | Missing required values, including guardian requirements. Missing values use the field's group instead when it has one |
+| `date` | Dates | Birth date and date-administered format, range, and ordering; generic rules on date fields |
+| `identity` | Identity & Duplicates | OEN and health card number format, duplicate and dual-enrolment records; generic rules on OEN and health card number |
+| `vaccine` | Vaccine / Immunizing Agent | PHIX trade name and immunizing agent values and conflicts; generic PHIX rules on those fields |
 | `coded-value` | Coded Values | Allowed-value lists not covered by a more specific category, such as gender, grade, province, language, relationship, site, route, provider role, organization, and service delivery location |
-| `address` | Address & Postal Code | Street type and direction, rural route and alternate delivery, city/province consistency, postal-code format and repair |
-| `contact` | Contact | Record and submitter phone numbers, phone types, and submitter email |
-| `text-constraint` | Text Constraints | Field length and free-text character policy |
+| `address` | Address & Postal Code | Street type and direction, rural route and alternate delivery, city/province consistency, postal-code format and repair; generic rules on address fields except province |
+| `contact` | Contact | Record and submitter phone numbers, phone types, and submitter email; generic rules on those fields |
+| `text-constraint` | Text Constraints | Field length and free-text character policy, except on fields that have a group |
 | `other` | Other | Rules without a category mapping |
 
 Allowed-value rules for a field with a specific category use that category instead of `coded-value`. For example, street type is `address`, phone type is `contact`, and trade name is `vaccine`.
+
+The generic STIX rules `REQUIRED_FIELD`, `FIELD_LENGTH`, and `FREE_TEXT_*`, and the generic PHIX rules `PHIX_REQUIRED_FIELD` and `PHIX_FIELD_LENGTH`, run on many fields. When the field has a group in `lib/issueCategories.ts`, the finding uses the group's category instead of the rule's own. For example, an overlong `StreetName` is `address`, and an overlong `FirstName` is `text-constraint`. Coded fields, including province, have no group: a missing code is `required`, and an unlisted code is `coded-value`. PHIX headers match in any letter case.
 
 ---
 

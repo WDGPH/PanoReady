@@ -60,8 +60,10 @@ describe("validation overview", () => {
     expect(summarizeValidation({ ...result, issues: [issue] }).automatic).toBe(expected);
   });
   it("adds a category field to each types entry", () => {
-    const summary = summarizeValidation(result);
-    expect(summary.types.find(row => row.ruleId === "FIELD_LENGTH")?.category).toBe("text-constraint");
+    const summary = summarizeValidation({ ...result, issues: [...result.issues, { ...finding("5", "c"), field: "FirstName" }] });
+    // FIELD_LENGTH is a generic rule, so the field can set its category
+    expect(summary.types.find(row => row.ruleId === "FIELD_LENGTH" && row.field === "Unit")?.category).toBe("address");
+    expect(summary.types.find(row => row.ruleId === "FIELD_LENGTH" && row.field === "FirstName")?.category).toBe("text-constraint");
     expect(summary.types.find(row => row.ruleId === "METADATA_REQUIRED")?.category).toBe("metadata");
   });
 });

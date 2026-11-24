@@ -16,7 +16,7 @@ export function matchesReviewFilter(issue: ValidationIssue, filter: ReviewFilter
     && (filter.severity === undefined || issue.severity === filter.severity);
 }
 
-const labels: Record<string, string> = {
+export const ISSUE_TYPE_LABELS: Record<string, string> = {
   EMPTY_GUARDIAN: "Empty Guardian placeholder", GUARDIAN_RELATIONSHIP_REQUIRED: "Missing Guardian relationship",
   REQUIRED_FIELD: "Missing required field", FIELD_LENGTH: "Value too long", ALLOWED_VALUE: "Invalid code",
   POSTAL_CODE_NORMALIZE: "Postal code normalization", POSTAL_CODE_REPAIR: "Postal code repair", POSTAL_CODE_FORMAT: "Invalid postal code", POSTAL_CODE_US_ZIP: "U.S. ZIP code in postal code field",
@@ -36,7 +36,7 @@ const labels: Record<string, string> = {
   SCHOOL_NUMBER_LENGTH: "Invalid school number", BOARD_NUMBER_FORMAT: "Invalid board number", IDENTITY_REVIEW: "Possible shared student identity",
 };
 export function issueTypeLabel(ruleId: string, field = "") {
-  const label = labels[ruleId] ?? ruleId.toLowerCase().replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase());
+  const label = ISSUE_TYPE_LABELS[ruleId] ?? ruleId.toLowerCase().replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase());
   return field ? `${label} · ${field.replace(/([a-z])([A-Z])/g, "$1 $2")}` : label;
 }
 
@@ -68,7 +68,7 @@ export function summarizeValidation(result: ValidationResult, inventory: { schoo
   return {
     ...count(result.issues), students: records.size,
     schools: [...schools.values()].map(({ issues, ...entry }) => ({ ...entry, ...count(issues) })).sort((a, b) => b.errors - a.errors || b.total - a.total || a.schoolNumber.localeCompare(b.schoolNumber)),
-    types: [...types.values()].map(({ issues, ...entry }) => ({ ...entry, category: issueCategory(entry.ruleId, "stix"), ...count(issues) })).sort((a, b) => b.total - a.total || a.ruleId.localeCompare(b.ruleId)),
+    types: [...types.values()].map(({ issues, ...entry }) => ({ ...entry, category: issueCategory(entry.ruleId, "stix", entry.field), ...count(issues) })).sort((a, b) => b.total - a.total || a.ruleId.localeCompare(b.ruleId)),
   };
 }
 

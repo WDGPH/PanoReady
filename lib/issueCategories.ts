@@ -1,3 +1,5 @@
+import type { RequiredField } from "./fields";
+
 export type IssueCategory =
   | "file-structure"
   | "metadata"
@@ -27,8 +29,11 @@ export const CATEGORY_LABELS: Record<IssueCategory, string> = {
 
 // Rule IDs are workflow-specific; each workflow maps its own IDs to the shared
 // IssueCategory type. Both fall back to "other" for unmapped rule IDs.
+// Generic rules run on many fields, so the field can set their category.
 
-const stixCategories: Record<string, IssueCategory> = {
+export const stixCategories: Record<string, IssueCategory> = {
+  // file-structure
+  XML_PARSE_OR_NAMESPACE: "file-structure",
   // required
   EMPTY_GUARDIAN: "required", GUARDIAN_RELATIONSHIP_REQUIRED: "required", REQUIRED_FIELD: "required",
   // date
@@ -42,11 +47,13 @@ const stixCategories: Record<string, IssueCategory> = {
   PHONE_PLACEHOLDER: "contact", PHONE_EXTENSION_FORMAT: "contact", PHONE_EXTENSION_NORMALIZE: "contact",
   PHONE_CANADIAN_AREA_CODE: "contact",
   PHONETYPE_ALLOWED_VALUE: "contact", GUARDIANPHONETYPE_ALLOWED_VALUE: "contact", GUARDIAN2PHONETYPE_ALLOWED_VALUE: "contact",
-  // address — street, rural route and postal code
+  // address — street, PO box, rural route and postal code
   STREET_NUMBER_UNIT_PREFIX: "address", STREET_TYPE_IN_STREET_NAME: "address",
-  ALTERNATE_DELIVERY_IN_STREET_FIELD: "address", RURAL_ROUTE_IN_STREET_FIELD: "address", RURAL_ROUTE_FORMAT: "address",
+  ALTERNATE_DELIVERY_IN_STREET_FIELD: "address", PO_BOX_NUMBER_FORMAT: "address",
+  RURAL_ROUTE_IN_STREET_FIELD: "address", RURAL_ROUTE_FORMAT: "address",
   STREETTYPE_ALLOWED_VALUE: "address", STREETDIRECTION_ALLOWED_VALUE: "address",
   POSTAL_CODE_NORMALIZE: "address", POSTAL_CODE_REPAIR: "address", POSTAL_CODE_FORMAT: "address",
+  POSTAL_CODE_US_ZIP: "address",
   // text-constraint — field length and free-text character policy
   FIELD_LENGTH: "text-constraint",
   FREE_TEXT_APOSTROPHE: "text-constraint", FREE_TEXT_QUOTATION: "text-constraint",
@@ -64,7 +71,38 @@ const stixCategories: Record<string, IssueCategory> = {
   GUARDIANRELATIONSHIP_ALLOWED_VALUE: "coded-value", GUARDIAN2RELATIONSHIP_ALLOWED_VALUE: "coded-value",
 };
 
-const phixCategories: Record<string, IssueCategory> = {
+const stixFieldRules = new Set([
+  "REQUIRED_FIELD", "FIELD_LENGTH",
+  "FREE_TEXT_APOSTROPHE", "FREE_TEXT_QUOTATION", "FREE_TEXT_ACCENT", "FREE_TEXT_SPECIAL_CHARACTER",
+]);
+
+// null means the field has no group, so the generic rules keep their own category
+const stixFieldCategories: Record<RequiredField, IssueCategory | null> = {
+  // names and class
+  FirstName: null, MiddleName: null, LastName: null,
+  AliasFirstName: null, AliasMiddleName: null, AliasLastName: null,
+  GuardianFirstName: null, GuardianLastName: null, Guardian2FirstName: null, Guardian2LastName: null,
+  Class: null,
+  // coded fields — a missing code is "required" and an unlisted code is "coded-value"
+  // (Province is an address field, but its allowed-value rule is "coded-value")
+  Grade: null, Gender: null, Language: null, CountryOfOrigin: null, Province: null,
+  GuardianRelationship: null, Guardian2Relationship: null,
+  // identity
+  OEN: "identity",
+  // date
+  BirthDate: "date",
+  // metadata
+  SchoolNumber: "metadata", SchoolName: "metadata",
+  // contact
+  Phone: "contact", PhoneType: "contact", GuardianPhoneNumber: "contact", GuardianPhoneType: "contact",
+  Guardian2PhoneNumber: "contact", Guardian2PhoneType: "contact",
+  // address
+  Unit: "address", StreetNumber: "address", StreetNumberSuffix: "address", StreetName: "address",
+  StreetType: "address", StreetDirection: "address", RuralRoute: "address", PoBoxNumber: "address",
+  City: "address", PostalCode: "address",
+};
+
+export const phixCategories: Record<string, IssueCategory> = {
   // file-structure
   PHIX_PARSE_FAILURE: "file-structure", PHIX_MISSING_HEADER: "file-structure", PHIX_NO_DATA: "file-structure",
   // required
@@ -102,6 +140,31 @@ const phixCategories: Record<string, IssueCategory> = {
   PHIX_FIELD_LENGTH: "text-constraint",
 };
 
-export function issueCategory(ruleId: string, workflow: "stix" | "phix"): IssueCategory {
-  return (workflow === "stix" ? stixCategories : phixCategories)[ruleId] ?? "other";
+const phixFieldRules = new Set(["PHIX_REQUIRED_FIELD", "PHIX_FIELD_LENGTH"]);
+
+// PHIX fields are upper-case CSV headers; a header that is not listed has no group.
+// Coded headers, including PROVINCE, have no group for the same reason as the STIX coded fields.
+const phixFieldCategories: Record<string, IssueCategory> = {
+  // identity
+  "HEALTH CARD NUMBER": "identity",
+  // date
+  "DATE OF BIRTH": "date", "DATE ADMINISTERED": "date", "EXPIRY DATE": "date", "LOT EXPIRY DATE": "date",
+  // vaccine
+  "IMMUNIZING AGENT": "vaccine", "TRADE NAME": "vaccine",
+  // contact
+  "SUBMITTER PHONE NUMBER 1": "contact", "SUBMITTER PHONE NUMBER 2": "contact", "PHONE TYPE": "contact",
+  "SUBMITTER EMAIL": "contact",
+  // address
+  "UNIT NUMBER": "address", "STREET NUMBER": "address", "STREET NAME": "address", "STREET TYPE": "address",
+  "STREET DIRECTION": "address", "PO BOX": "address", "STN": "address", "RPO": "address", "RURAL ROUTE": "address",
+  "ADDRESS LINE 1": "address", "ADDRESS LINE 2": "address", "CITY": "address", "POSTAL CODE": "address",
+};
+
+function fieldCategory(ruleId: string, workflow: "stix" | "phix", field: string): IssueCategory | null | undefined {
+  if (workflow === "stix") return stixFieldRules.has(ruleId) ? stixFieldCategories[field as RequiredField] : null;
+  return phixFieldRules.has(ruleId) ? phixFieldCategories[field.toUpperCase()] : null;
+}
+
+export function issueCategory(ruleId: string, workflow: "stix" | "phix", field = ""): IssueCategory {
+  return fieldCategory(ruleId, workflow, field) ?? (workflow === "stix" ? stixCategories : phixCategories)[ruleId] ?? "other";
 }
