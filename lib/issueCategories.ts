@@ -160,14 +160,11 @@ const phixFieldCategories: Record<string, IssueCategory> = {
   "ADDRESS LINE 1": "address", "ADDRESS LINE 2": "address", "CITY": "address", "POSTAL CODE": "address",
 };
 
+function fieldCategory(ruleId: string, workflow: "stix" | "phix", field: string): IssueCategory | null | undefined {
+  if (workflow === "stix") return stixFieldRules.has(ruleId) ? stixFieldCategories[field as RequiredField] : null;
+  return phixFieldRules.has(ruleId) ? phixFieldCategories[field.toUpperCase()] : null;
+}
+
 export function issueCategory(ruleId: string, workflow: "stix" | "phix", field = ""): IssueCategory {
-  if (workflow === "stix" && stixFieldRules.has(ruleId)) {
-    const category = stixFieldCategories[field as RequiredField];
-    if (category) return category;
-  }
-  if (workflow === "phix" && phixFieldRules.has(ruleId)) {
-    const category = phixFieldCategories[field.toUpperCase()];
-    if (category) return category;
-  }
-  return (workflow === "stix" ? stixCategories : phixCategories)[ruleId] ?? "other";
+  return fieldCategory(ruleId, workflow, field) ?? (workflow === "stix" ? stixCategories : phixCategories)[ruleId] ?? "other";
 }
