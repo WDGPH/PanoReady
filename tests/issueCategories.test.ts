@@ -85,6 +85,44 @@ describe("issueCategories", () => {
       expect(issueCategory("REQUIRED_FIELD", "stix", field), field).toBe(unlisted === "coded-value" ? "required" : unlisted);
     }
   });
+  it.each(["PHIX_REQUIRED_FIELD", "PHIX_FIELD_LENGTH"])("uses the header's category for the generic PHIX rule %s", ruleId => {
+    const own = issueCategory(ruleId, "phix");
+    const grouped: Record<string, string[]> = {
+      identity: ["HEALTH CARD NUMBER"],
+      date: ["DATE OF BIRTH", "DATE ADMINISTERED", "EXPIRY DATE", "LOT EXPIRY DATE"],
+      vaccine: ["IMMUNIZING AGENT", "TRADE NAME"],
+      contact: ["SUBMITTER PHONE NUMBER 1", "SUBMITTER PHONE NUMBER 2", "PHONE TYPE", "SUBMITTER EMAIL"],
+      address: [
+        "UNIT NUMBER", "STREET NUMBER", "STREET NAME", "STREET TYPE", "STREET DIRECTION", "PO BOX", "STN", "RPO",
+        "RURAL ROUTE", "ADDRESS LINE 1", "ADDRESS LINE 2", "CITY", "POSTAL CODE",
+      ],
+    };
+    for (const [category, headers] of Object.entries(grouped)) for (const header of headers) {
+      expect(issueCategory(ruleId, "phix", header), header).toBe(category);
+      // rulesets can spell a header in any letter case
+      expect(issueCategory(ruleId, "phix", header.toLowerCase()), header).toBe(category);
+    }
+    for (const header of ["FIRST NAME", "GENDER", "PROVINCE", "ADDRESS TYPE", "DOSAGE", "LOT NUMBER", "PROVIDER ID", "OTHER DETAILS", "NOT A HEADER", ""]) {
+      expect(issueCategory(ruleId, "phix", header), header).toBe(own);
+    }
+  });
+  it.each([
+    ["STREET TYPE", "PHIX_STREET_TYPE_ALLOWED_VALUE"], ["STREET DIRECTION", "PHIX_STREET_DIRECTION_ALLOWED_VALUE"],
+    ["PHONE TYPE", "PHIX_PHONE_TYPE_ALLOWED_VALUE"], ["TRADE NAME", "PHIX_TRADE_NAME_ALLOWED_VALUE"],
+    ["IMMUNIZING AGENT", "PHIX_IMMUNIZING_AGENT_ALLOWED_VALUE"], ["PROVINCE", "PHIX_PROVINCE_ALLOWED_VALUE"],
+    ["GENDER", "PHIX_GENDER_ALLOWED_VALUE"], ["ADDRESS TYPE", "PHIX_ADDRESS_TYPE_ALLOWED_VALUE"],
+  ])("does not split missing and unlisted PHIX values, except for coded fields (%s)", (header, ruleId) => {
+    const unlisted = issueCategory(ruleId, "phix", header);
+    expect(issueCategory("PHIX_REQUIRED_FIELD", "phix", header)).toBe(unlisted === "coded-value" ? "required" : unlisted);
+  });
+  it("does not mix STIX fields and PHIX headers", () => {
+    expect(issueCategory("PHIX_REQUIRED_FIELD", "phix", "BirthDate")).toBe("required");
+    expect(issueCategory("REQUIRED_FIELD", "stix", "DATE OF BIRTH")).toBe("required");
+    expect(issueCategory("PHIX_REQUIRED_FIELD", "stix", "DATE OF BIRTH")).toBe("other");
+    expect(issueCategory("REQUIRED_FIELD", "phix", "DATE OF BIRTH")).toBe("other");
+    // PHIX rules that already name what they check ignore the header
+    expect(issueCategory("PHIX_GENDER_ALLOWED_VALUE", "phix", "STREET NAME")).toBe("coded-value");
+  });
   it("falls back to 'other' for unmapped rule IDs", () => {
     expect(issueCategory("UNKNOWN_RULE", "stix")).toBe("other");
     expect(issueCategory("UNKNOWN_RULE", "phix")).toBe("other");

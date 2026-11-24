@@ -29,7 +29,7 @@ export const CATEGORY_LABELS: Record<IssueCategory, string> = {
 
 // Rule IDs are workflow-specific; each workflow maps its own IDs to the shared
 // IssueCategory type. Both fall back to "other" for unmapped rule IDs.
-// Generic STIX rules run on many fields, so the field can set their category.
+// Generic rules run on many fields, so the field can set their category.
 
 export const stixCategories: Record<string, IssueCategory> = {
   // file-structure
@@ -140,9 +140,33 @@ export const phixCategories: Record<string, IssueCategory> = {
   PHIX_FIELD_LENGTH: "text-constraint",
 };
 
+const phixFieldRules = new Set(["PHIX_REQUIRED_FIELD", "PHIX_FIELD_LENGTH"]);
+
+// PHIX fields are upper-case CSV headers; a header that is not listed has no group.
+// Coded headers, including PROVINCE, have no group for the same reason as the STIX coded fields.
+const phixFieldCategories: Record<string, IssueCategory> = {
+  // identity
+  "HEALTH CARD NUMBER": "identity",
+  // date
+  "DATE OF BIRTH": "date", "DATE ADMINISTERED": "date", "EXPIRY DATE": "date", "LOT EXPIRY DATE": "date",
+  // vaccine
+  "IMMUNIZING AGENT": "vaccine", "TRADE NAME": "vaccine",
+  // contact
+  "SUBMITTER PHONE NUMBER 1": "contact", "SUBMITTER PHONE NUMBER 2": "contact", "PHONE TYPE": "contact",
+  "SUBMITTER EMAIL": "contact",
+  // address
+  "UNIT NUMBER": "address", "STREET NUMBER": "address", "STREET NAME": "address", "STREET TYPE": "address",
+  "STREET DIRECTION": "address", "PO BOX": "address", "STN": "address", "RPO": "address", "RURAL ROUTE": "address",
+  "ADDRESS LINE 1": "address", "ADDRESS LINE 2": "address", "CITY": "address", "POSTAL CODE": "address",
+};
+
 export function issueCategory(ruleId: string, workflow: "stix" | "phix", field = ""): IssueCategory {
   if (workflow === "stix" && stixFieldRules.has(ruleId)) {
     const category = stixFieldCategories[field as RequiredField];
+    if (category) return category;
+  }
+  if (workflow === "phix" && phixFieldRules.has(ruleId)) {
+    const category = phixFieldCategories[field.toUpperCase()];
     if (category) return category;
   }
   return (workflow === "stix" ? stixCategories : phixCategories)[ruleId] ?? "other";
